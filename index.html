@@ -30,9 +30,19 @@
 
             <nav class="sidebar-main-nav" id="sidebar-main-nav" style="padding: 1rem 0;">
                 
+                <!-- MENU DASHBOARD -->
+                <div style="margin-bottom: 0.5rem;">
+                    <button id="nav-dashboard-btn" class="sidebar-nav-btn active" onclick="document.getElementById('tab-dashboard').click();">
+                        <div style="display:flex; align-items:center; gap:0.75rem;">
+                            <i class='bx bx-grid-alt'></i>
+                            <span class="nav-text">Dashboard</span>
+                        </div>
+                    </button>
+                </div>
+
                 <!-- MENU CALENDÁRIO -->
                 <div style="margin-bottom: 0.5rem;">
-                    <button id="nav-day-btn" class="sidebar-nav-btn active" style="justify-content: space-between;" onclick="document.getElementById('tab-day').click();">
+                    <button id="nav-day-btn" class="sidebar-nav-btn" style="justify-content: space-between;" onclick="document.getElementById('tab-day').click();">
                         <div style="display:flex; align-items:center; gap:0.75rem;">
                             <i class='bx bx-calendar'></i>
                             <span class="nav-text">Calendário</span>
@@ -73,11 +83,8 @@
 
             </nav>
 
-            <div class="sidebar-footer">
-                <button id="settings-btn" class="sidebar-action-btn" title="Configurações">
-                    <i class='bx bx-cog'></i>
-                    <span class="btn-text">Configurações</span>
-                </button>
+            <div class="sidebar-footer" style="display: none;">
+                <!-- Footer removido para evitar quebra de layout -->
             </div>
         </aside>
 
@@ -86,23 +93,124 @@
             <header class="main-header">
                 <div class="header-left">
                     <div class="header-tabs">
-                        <button id="tab-day" class="tab-btn active"><i class='bx bx-calendar-event'></i> Diário</button>
+                        <button id="tab-dashboard" class="tab-btn active"><i class='bx bx-grid-alt'></i> Dashboard</button>
+                        <button id="tab-day" class="tab-btn"><i class='bx bx-calendar-event'></i> Diário</button>
                         <button id="tab-kanban" class="tab-btn"><i class='bx bx-purchase-tag'></i> Marca</button>
                     </div>
                 </div>
                 <div class="header-actions">
-                    <span id="connection-status" class="status-badge offline">Desconectado</span>
+                    <div class="user-dropdown">
+                        <button class="user-dropdown-btn" id="user-dropdown-btn">
+                            <div class="user-avatar" id="header-user-avatar">U</div>
+                            <span class="user-name" id="header-user-name">Usuário</span>
+                            <i class='bx bx-chevron-down'></i>
+                        </button>
+                        <div class="user-dropdown-menu" id="user-dropdown-menu">
+                            <button id="profile-btn-header" class="dropdown-item" onclick="openProfileModal()">
+                                <i class='bx bx-user'></i> Meu Perfil
+                            </button>
+                            <button id="settings-btn-header" class="dropdown-item admin-only" onclick="openSettingsModal()">
+                                <i class='bx bx-cog'></i> Configurações
+                            </button>
+                            <button class="dropdown-item text-danger" onclick="logout()">
+                                <i class='bx bx-log-out'></i> Sair
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </header>
 
-            <!-- VIEW: DIÁRIA -->
-            <div id="view-day" class="view-container active">
-                <div class="view-header">
+            <!-- VIEW: DASHBOARD -->
+            <div id="view-dashboard" class="view-container active">
+                <div class="dashboard-header-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; width: 100%;">
                     <div class="view-title-group">
-                        <h1 id="current-day-title">Selecione um dia</h1>
-                        <span id="current-day-subtitle" class="subtitle"></span>
+                        <h1 class="dashboard-title" style="font-size: 1.6rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem; margin: 0;"><i class='bx bx-grid-alt' style="color: var(--accent-color);"></i> Painel de Operações</h1>
+                        <span class="subtitle" style="color: var(--text-secondary); font-size: 0.9rem;">Visão rápida e inteligente das tarefas e do dia</span>
                     </div>
-                    <button id="delete-day-btn" class="delete-day-btn" style="display: none;" onclick="deleteDay()" title="Excluir todas as tarefas deste dia"><i class='bx bx-trash'></i></button>
+                    <!-- Filtros Rápidos -->
+                    <div class="dashboard-quick-filters" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <select id="db-filter-priority" class="db-filter-select" onchange="renderDashboard()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <option value="Todos">Todas Prioridades</option>
+                            <option value="high">Alta Prioridade</option>
+                            <option value="medium">Média Prioridade</option>
+                            <option value="low">Baixa Prioridade</option>
+                        </select>
+                        <select id="db-filter-assignee" class="db-filter-select" onchange="renderDashboard()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <option value="Todos">Todos Responsáveis</option>
+                        </select>
+                        <select id="db-filter-brand" class="db-filter-select" onchange="renderDashboard()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <option value="Todos">Todas Marcas</option>
+                        </select>
+                        <select id="db-filter-period" class="db-filter-select" onchange="renderDashboard()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <option value="today">Hoje</option>
+                            <option value="tomorrow">Amanhã</option>
+                            <option value="week" selected>Esta Semana</option>
+                            <option value="month">Este Mês</option>
+                            <option value="overdue">Atrasadas</option>
+                            <option value="all">Todas as Datas</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Seletor de Dia do Dashboard (Navegação Diária) -->
+                <div class="db-day-selector-card" style="background: rgba(30, 41, 59, 0.45); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 14px; padding: 1.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; width: 100%; margin-bottom: 1.5rem; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);">
+                    <div class="db-day-nav" style="display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 600px;">
+                        <button class="nav-day-arrow" onclick="navigateDashboardDay(-1)" title="Dia Anterior" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;"><i class='bx bx-chevron-left' style="font-size: 1.5rem;"></i></button>
+                        <div style="display: flex; flex-direction: column; text-align: center; gap: 0.25rem;">
+                            <h2 id="db-current-day-title" style="margin: 0; font-size: 1.6rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.5px;">Selecione um dia</h2>
+                            <span id="db-current-day-subtitle" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 500;"></span>
+                        </div>
+                        <button class="nav-day-arrow" onclick="navigateDashboardDay(1)" title="Próximo Dia" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;"><i class='bx bx-chevron-right' style="font-size: 1.5rem;"></i></button>
+                    </div>
+                    <div class="add-task-trigger-container" style="width: 100%; max-width: 600px; margin-top: 0.5rem;">
+                        <button id="db-open-task-modal-btn" class="add-task-trigger-btn" onclick="openTaskModalForDashboardDay()" style="width: 100%; background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.15); color: var(--text-secondary); padding: 0.75rem 1rem; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 500; transition: all 0.2s; font-family: var(--font-family);">
+                            <i class='bx bx-plus' style="font-size: 1.1rem;"></i> Adicionar nova tarefa para este dia...
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Painéis do Dashboard -->
+                <div class="dashboard-main-layout">
+                    <!-- Coluna 1: Atrasadas -->
+                    <div class="db-column flex-2">
+                        <!-- Quadro: Tarefas Atrasadas -->
+                        <div class="db-panel-card panel-overdue">
+                            <div class="db-panel-header">
+                                <h2 class="text-danger"><i class='bx bx-alarm-exclamation'></i> Atenção: Tarefas Atrasadas</h2>
+                                <span class="db-count-badge bg-danger" id="db-overdue-count-badge">0 Vencidas</span>
+                            </div>
+                            <div class="db-tasks-list" id="db-overdue-tasks-list">
+                                <!-- Lista de tarefas atrasadas (injetado via JS) -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Coluna 2: Agenda Timeline -->
+                    <div class="db-column flex-2">
+                        <!-- Quadro: Agenda / Timeline -->
+                        <div class="db-panel-card panel-timeline">
+                            <div class="db-panel-header">
+                                <h2><i class='bx bx-git-commit' style="color: var(--accent-color);"></i> Agenda Rápida (Linha do Tempo)</h2>
+                            </div>
+                            <div class="db-timeline-container" id="db-timeline-list">
+                                <!-- Nós da linha do tempo (Ontem, Hoje, Futuro) -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: DIÁRIA -->
+            <div id="view-day" class="view-container">
+                <div class="view-header">
+                    <div class="view-title-group" style="display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 800px;">
+                        <button class="nav-day-arrow" onclick="navigateDay(-1)" title="Dia Anterior"><i class='bx bx-chevron-left'></i></button>
+                        <div style="display: flex; flex-direction: column; text-align: center;">
+                            <h1 id="current-day-title" style="margin: 0; line-height: 1;">Selecione um dia</h1>
+                            <span id="current-day-subtitle" class="subtitle" style="margin-top: 0.25rem;"></span>
+                        </div>
+                        <button class="nav-day-arrow" onclick="navigateDay(1)" title="Próximo Dia"><i class='bx bx-chevron-right'></i></button>
+                    </div>
                 </div>
 
                 <div class="board-container">
@@ -123,16 +231,38 @@
 
             <!-- VIEW: KANBAN MARCAS -->
             <div id="view-kanban" class="view-container">
-                <div class="view-header" style="justify-content: space-between; align-items: center; display: flex; flex-wrap: wrap; gap: 1rem;">
-                    <div class="view-title-group">
-                        <h1 class="kanban-main-title">Visão Geral de Marcas</h1>
-                        <span class="subtitle">Todas as anotações pendentes agrupadas.</span>
+                <div class="view-header" style="justify-content: space-between; align-items: center; display: flex; flex-wrap: wrap; gap: 1rem; width: 100%;">
+                    <div class="view-title-group" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <h1 class="kanban-main-title" style="margin: 0; font-size: 1.6rem; font-weight: 700; color: var(--text-primary);">Visão Geral de Marcas</h1>
+                        <div class="add-task-trigger-container" style="margin: 0;">
+                            <button class="add-task-trigger-btn" onclick="openTaskModal()" style="background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.15); color: var(--text-secondary); padding: 0.5rem 0.85rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 500; transition: all 0.2s; font-family: var(--font-family);">
+                                <i class='bx bx-plus' style="font-size: 1rem;"></i> Nova Tarefa
+                            </button>
+                        </div>
                     </div>
-                    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap: wrap;">
-                        <select class="assignee-filter-select" onchange="filterByAssignee(this.value)" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); padding:0.4rem; border-radius:8px; cursor:pointer; font-size:0.85rem; outline:none;">
-                            <option value="Todos">Todos os responsáveis</option>
+                    <!-- Filtros da Visão Geral de Marcas (Mesmos do Dashboard) -->
+                    <div class="kanban-quick-filters" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <select id="kanban-filter-priority" class="kanban-filter-select" onchange="renderKanban()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <option value="Todos">Todas Prioridades</option>
+                            <option value="high">Alta Prioridade</option>
+                            <option value="medium">Média Prioridade</option>
+                            <option value="low">Baixa Prioridade</option>
                         </select>
-                        <button class="toggle-completed-btn" onclick="toggleCompletedVisibility()" title="Exibir/Ocultar tarefas concluídas" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); padding:0.4rem 0.9rem; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; font-weight:500; transition:all 0.2s;">
+                        <select id="kanban-filter-assignee" class="assignee-filter-select" onchange="filterByAssignee(this.value)" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <option value="Todos">Todos Responsáveis</option>
+                        </select>
+                        <select id="kanban-filter-brand" class="kanban-brand-filter-select" onchange="filterByKanbanBrand(this.value)" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <!-- Injetado via JS -->
+                        </select>
+                        <select id="kanban-filter-period" class="kanban-filter-select" onchange="renderKanban()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <option value="all" selected>Todas as Datas</option>
+                            <option value="today">Hoje</option>
+                            <option value="tomorrow">Amanhã</option>
+                            <option value="week">Esta Semana</option>
+                            <option value="month">Este Mês</option>
+                            <option value="overdue">Atrasadas</option>
+                        </select>
+                        <button class="toggle-completed-btn" onclick="toggleCompletedVisibility()" title="Exibir/Ocultar tarefas concluídas" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 500; transition: all 0.2s;">
                             <i class='bx bx-hide toggle-completed-icon-class'></i>
                             <span class="toggle-completed-label-class">Ocultar concluídas</span>
                         </button>
@@ -147,27 +277,43 @@
 
             <!-- VIEW: MARCA ESPECÍFICA -->
             <div id="view-brand" class="view-container">
-                <div class="view-header" style="justify-content: space-between; align-items: center; display: flex; flex-wrap: wrap; gap: 1rem;">
-                    <div class="view-title-group">
-                        <h1 id="brand-view-title">Marca</h1>
-                        <span class="subtitle">Anotações desta marca</span>
+                <div class="view-header" style="justify-content: space-between; align-items: center; display: flex; flex-wrap: wrap; gap: 1rem; width: 100%;">
+                    <div class="view-title-group" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <h1 id="brand-view-title" style="margin: 0; font-size: 1.6rem; font-weight: 700; color: var(--text-primary);">Marca</h1>
+                        <div class="add-task-trigger-container" style="margin: 0;">
+                            <button class="add-task-trigger-btn" onclick="openTaskModalForBrand(currentViewBrand)" style="background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.15); color: var(--text-secondary); padding: 0.5rem 0.85rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 500; transition: all 0.2s; font-family: var(--font-family);">
+                                <i class='bx bx-plus' style="font-size: 1rem;"></i> Nova Tarefa
+                            </button>
+                        </div>
                     </div>
-                    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap: wrap;">
-                        <select class="assignee-filter-select" onchange="filterByAssignee(this.value)" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); padding:0.4rem; border-radius:8px; cursor:pointer; font-size:0.85rem; outline:none;">
-                            <option value="Todos">Todos os responsáveis</option>
+                    <!-- Filtros da Visão de Marcas (Mesmos do Dashboard) -->
+                    <div class="brand-quick-filters" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <select id="brand-filter-priority" class="brand-filter-select" onchange="renderBrandTasks()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <option value="Todos">Todas Prioridades</option>
+                            <option value="high">Alta Prioridade</option>
+                            <option value="medium">Média Prioridade</option>
+                            <option value="low">Baixa Prioridade</option>
                         </select>
-                        <button class="toggle-completed-btn" onclick="toggleCompletedVisibility()" title="Exibir/Ocultar tarefas concluídas" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); padding:0.4rem 0.9rem; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; font-weight:500; transition:all 0.2s;">
+                        <select id="brand-filter-assignee" class="assignee-filter-select" onchange="filterByAssignee(this.value)" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <option value="Todos">Todos Responsáveis</option>
+                        </select>
+                        <select id="brand-filter-brand" class="brand-filter-select" onchange="filterByBrandViewBrand(this.value)" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <!-- Injetado via JS -->
+                        </select>
+                        <select id="brand-filter-period" class="brand-filter-select" onchange="renderBrandTasks()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
+                            <option value="today" selected>Dia Selecionado</option>
+                            <option value="week">Esta Semana</option>
+                            <option value="month">Este Mês</option>
+                            <option value="overdue">Atrasadas</option>
+                            <option value="all">Todas as Datas</option>
+                        </select>
+                        <button class="toggle-completed-btn" onclick="toggleCompletedVisibility()" title="Exibir/Ocultar tarefas concluídas" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 500; transition: all 0.2s;">
                             <i class='bx bx-hide toggle-completed-icon-class'></i>
                             <span class="toggle-completed-label-class">Ocultar concluídas</span>
                         </button>
                     </div>
                 </div>
                 <div class="board-container">
-                    <div class="add-task-trigger-container" style="margin-bottom: 1rem;">
-                        <button class="add-task-trigger-btn" onclick="openTaskModalForBrand(currentViewBrand)">
-                            <i class='bx bx-plus'></i> Adicionar nova tarefa para esta marca no dia selecionado...
-                        </button>
-                    </div>
                     
                     <h3 id="brand-tasks-list-title" style="margin-bottom: 0.5rem; font-size: 0.95rem; color: var(--text-secondary); text-transform: uppercase;">Anotações do Dia</h3>
                     <div class="tasks-list" id="brand-tasks-list" style="margin-bottom: 1rem;">
@@ -204,8 +350,12 @@
                 <button class="close-modal-btn" id="close-task-modal-btn"><i class='bx bx-x'></i></button>
             </div>
             <div class="modal-body">
-                    <div class="form-group" style="grid-column: 1 / -1;">
-                        <label for="task-title">Título (Nome do cliente, loja, etc.)</label>
+                <div id="recurrence-notice" style="display: none; grid-column: 1 / -1; padding: 0.5rem 0.85rem; border-radius: 8px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem; align-items: center; gap: 0.4rem;">
+                    <i class='bx bx-info-circle' style="color: var(--accent-color); font-size: 1.1rem;"></i> 
+                    <span>Esta tarefa faz parte de uma recorrência ativa.</span>
+                </div>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label for="task-title">Título (Nome do cliente, loja, etc.)</label>
                         <input type="text" id="task-title" placeholder="Ex: Evoke Store São Paulo" required autocomplete="off">
                     </div>
                     <div class="form-group" style="grid-column: 1 / -1;">
@@ -213,6 +363,10 @@
                         <input type="text" id="task-subtitle" placeholder="Ex: Entrar em contato para renegociar prazo..." required autocomplete="off">
                     </div>
                 <div class="form-row">
+                    <div class="form-group">
+                        <label>Data de Início</label>
+                        <input type="date" id="task-start-date">
+                    </div>
                     <div class="form-group">
                         <label>Data de Término</label>
                         <input type="date" id="task-date">
@@ -245,6 +399,14 @@
                             <option value="low">! Baixa</option>
                             <option value="medium" selected>!! Média</option>
                             <option value="high">!!! Alta</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="task-status">
+                            <option value="pending" selected>A Fazer</option>
+                            <option value="in_progress">Em Andamento</option>
+                            <option value="completed">Concluído</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -309,6 +471,21 @@
         </div>
     </div>
 
+    <!-- Modal: Confirmar Edição de Série -->
+    <div id="save-series-modal" class="modal-overlay hidden" style="z-index: 9999;">
+        <div class="modal-content" style="max-width: 450px; text-align: center; padding: 2.5rem 2rem;">
+            <div style="font-size: 3rem; color: var(--accent-color); margin-bottom: 1rem;"><i class='bx bx-edit-alt'></i></div>
+            <h2 style="margin-bottom: 1rem; color: var(--text-primary);">Editar Tarefa Recorrente</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.95rem; line-height: 1.5;">Esta tarefa faz parte de uma série recorrente. Como você deseja aplicar as alterações realizadas?</p>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <button class="btn-primary" id="confirm-save-only-this" style="padding: 0.9rem; font-size: 0.95rem; justify-content: center; width: 100%; border: none; font-weight: 600; cursor: pointer; color: white;">Salvar apenas esta ocorrência</button>
+                <button class="btn-primary" id="confirm-save-future-series" style="padding: 0.9rem; font-size: 0.95rem; justify-content: center; width: 100%; border: none; font-weight: 600; cursor: pointer; background: var(--accent-hover); color: white;">Salvar para esta e todas as futuras</button>
+                <button class="btn-primary" id="confirm-save-all-series" style="padding: 0.9rem; font-size: 0.95rem; justify-content: center; width: 100%; border: none; font-weight: 600; cursor: pointer; background: #4f46e5; color: white;">Salvar para toda a recorrência</button>
+                <button class="btn-cancel" id="cancel-save-series" style="padding: 0.9rem; margin-top: 0.5rem; justify-content: center; width: 100%;">Cancelar Edição</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Configurações -->
     <div id="settings-modal" class="modal-overlay hidden">
         <div class="modal-content settings-content">
@@ -318,7 +495,34 @@
             </div>
             <div class="modal-body">
                 
-                <div class="settings-section">
+                <!-- Nova seção: Gestão de Usuários -->
+                <div class="settings-section admin-only">
+                    <h3>Gestão de Usuários e Acessos</h3>
+                    
+                    <!-- Formulário de adição/edição de usuário -->
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; align-items: center;">
+                            <input type="email" id="new-user-email" placeholder="E-mail (Identificador)" autocomplete="off" class="settings-input" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
+                            <input type="text" id="new-user-username" placeholder="Nome/Login" autocomplete="off" class="settings-input" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
+                            <input type="password" id="new-user-password" placeholder="Senha" class="settings-input" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
+                            <select id="new-user-role" class="settings-input" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
+                                <option value="user">Usuário Comum</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                            <button class="btn-cancel hidden" id="cancel-edit-user-btn" style="padding: 0.6rem;" onclick="cancelEditUser()"><i class='bx bx-x'></i> Cancelar</button>
+                            <button class="btn-secondary" id="add-system-user-btn" style="padding: 0.6rem 1.5rem;" onclick="addSystemUser()"><i class='bx bx-check'></i> Salvar</button>
+                        </div>
+                        <span id="user-management-error" style="color: var(--danger-color); font-size: 0.8rem; min-height: 1rem; display: block;"></span>
+                    </div>
+
+                    <!-- Lista de usuários cadastrados -->
+                    <ul class="settings-list" id="settings-users-list">
+                    </ul>
+                </div>
+                
+                <div class="settings-section admin-only">
                     <h3>Gestão de Marcas</h3>
                     <div class="settings-add-form">
                         <input type="text" id="new-brand-input" placeholder="Nova Marca (ex: OAKLEY)">
@@ -327,20 +531,39 @@
                     <ul class="settings-list" id="settings-brands-list">
                     </ul>
                 </div>
-
-                <div class="settings-section">
-                    <h3>Gestão de Responsáveis</h3>
-                    <div class="settings-add-form">
-                        <input type="text" id="new-assignee-input" placeholder="Novo Responsável (ex: João)">
-                        <button class="btn-secondary" id="add-assignee-btn"><i class='bx bx-plus'></i> Add</button>
-                    </div>
-                    <ul class="settings-list" id="settings-assignees-list">
-                    </ul>
-                </div>
-
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" id="close-settings-footer-btn">Concluído</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Meu Perfil -->
+    <div id="profile-modal" class="modal-overlay hidden">
+        <div class="modal-content settings-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Meu Perfil</h2>
+                <button class="close-modal-btn" id="close-profile-modal-btn" onclick="closeProfileModal()"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">E-mail (Identificador Fixo)</label>
+                        <input type="email" id="profile-email" class="settings-input" readonly style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.1); color: var(--text-secondary); font-size: 0.85rem; cursor: not-allowed;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">Nome/Login</label>
+                        <input type="text" id="profile-username" class="settings-input" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">Nova Senha</label>
+                        <input type="password" id="profile-password" class="settings-input" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
+                    </div>
+                    <span id="profile-error" style="color: var(--danger-color); font-size: 0.8rem; min-height: 1rem; display: block;"></span>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end;">
+                <button class="btn-primary" onclick="saveProfileChanges()">Salvar Alterações</button>
             </div>
         </div>
     </div>
@@ -362,6 +585,28 @@
                 <button class="btn-cancel" onclick="closeCompletionModal()">Cancelar</button>
                 <button class="btn-primary" style="background-color: var(--success-color);" onclick="confirmTaskCompletion()">Confirmar Conclusão</button>
             </div>
+        </div>
+    </div>
+    <!-- Simple Login Modal -->
+    <div id="simple-login-modal" class="modal-overlay hidden" style="z-index: 9999; backdrop-filter: blur(8px); background: rgba(15,23,42,0.95); position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;">
+        <div class="modal-content" style="max-width: 400px; text-align: center; padding: 2.5rem 2rem;">
+            <i class='bx bx-lock-alt' style="font-size: 48px; color: var(--primary-color); margin-bottom: 1rem;"></i>
+            <h2 style="margin-bottom: 0.5rem;">Acesso Restrito</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">Por favor, informe suas credenciais para acessar o sistema.</p>
+            
+            <div style="text-align: left; margin-bottom: 1rem;">
+                <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.3rem; display: block;">E-mail / Nome</label>
+                <input type="text" id="login-email-input" class="login-input-field" placeholder="seu@email.com ou login" value="kimsurfe@gmail.com" onkeypress="if(event.key === 'Enter') handleSimpleLogin()" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary);">
+            </div>
+
+            <div style="text-align: left; margin-bottom: 1.5rem;">
+                <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.3rem; display: block;">Senha</label>
+                <input type="password" id="login-password-input" class="login-input-field" placeholder="Sua senha" value="010869" onkeypress="if(event.key === 'Enter') handleSimpleLogin()" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary);">
+            </div>
+            
+            <span id="login-error-msg" style="color: var(--danger-color); font-size: 0.85rem; display: block; margin-bottom: 1rem; min-height: 1rem;"></span>
+
+            <button class="btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 1rem;" onclick="handleSimpleLogin()">Entrar no Sistema</button>
         </div>
     </div>
 

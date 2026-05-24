@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minhas Tarefas | Calendário e Kanban</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- BoxIcons para ícones -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    
+    <!-- CSS Customizado -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar / Calendário -->
+        <aside class="calendar-panel" id="calendar-panel">
+            <div class="panel-header">
+                <div class="logo">
+                    <i class='bx bx-check-double'></i>
+                    <span class="logo-text">Painel</span>
+                </div>
+                <button class="toggle-panel-btn" id="toggle-panel-btn" title="Expandir/Retrair"><i class='bx bx-chevron-left'></i></button>
+            </div>
+
+            <nav class="sidebar-main-nav" id="sidebar-main-nav" style="padding: 1rem 0;">
+                
+                <!-- MENU CALENDÁRIO -->
+                <div style="margin-bottom: 0.5rem;">
+                    <button id="nav-day-btn" class="sidebar-nav-btn active" style="justify-content: space-between;" onclick="document.getElementById('tab-day').click();">
+                        <div style="display:flex; align-items:center; gap:0.75rem;">
+                            <i class='bx bx-calendar'></i>
+                            <span class="nav-text">Calendário</span>
+                        </div>
+                        <i class='bx bx-chevron-up' id="sidebar-calendar-chevron" style="font-size:1.2rem; cursor:pointer;" onclick="event.stopPropagation(); toggleSidebarCalendar()"></i>
+                    </button>
+                    <div id="sidebar-calendar-body" style="padding: 0 1rem; margin-bottom: 1rem;">
+                        <div class="calendar-container">
+                            <div class="calendar-header">
+                                <button id="prev-month-btn" class="icon-btn"><i class='bx bx-chevron-left'></i></button>
+                                <h2 id="month-year-display">Mês Ano</h2>
+                                <button id="next-month-btn" class="icon-btn"><i class='bx bx-chevron-right'></i></button>
+                            </div>
+                            <div class="calendar-grid-header">
+                                <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+                            </div>
+                            <div class="calendar-grid" id="calendar-grid"></div>
+                        </div>
+                        <div class="calendar-footer">
+                            <button id="today-btn" class="today-btn">Ir para Hoje</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MENU MARCAS -->
+                <div style="margin-bottom: 0.5rem;">
+                    <button id="nav-brands-btn" class="sidebar-nav-btn" style="justify-content: space-between;" onclick="document.getElementById('tab-kanban').click();">
+                        <div style="display:flex; align-items:center; gap:0.75rem;">
+                            <i class='bx bx-purchase-tag'></i>
+                            <span class="nav-text">Marcas</span>
+                        </div>
+                        <i class='bx bx-chevron-up' id="sidebar-brands-chevron" style="font-size:1.2rem; cursor:pointer;" onclick="event.stopPropagation(); window.toggleSidebarBrandsBtnClick()"></i>
+                    </button>
+                    <div id="sidebar-brands-body" style="padding: 0 1rem;">
+                        <ul class="sidebar-brands-list" id="sidebar-brands-list"></ul>
+                    </div>
+                </div>
+
+            </nav>
+
+            <div class="sidebar-footer">
+                <button id="settings-btn" class="sidebar-action-btn" title="Configurações">
+                    <i class='bx bx-cog'></i>
+                    <span class="btn-text">Configurações</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content / Tarefas & Kanban -->
+        <main class="main-content">
+            <header class="main-header">
+                <div class="header-left">
+                    <div class="header-tabs">
+                        <button id="tab-day" class="tab-btn active"><i class='bx bx-calendar-event'></i> Diário</button>
+                        <button id="tab-kanban" class="tab-btn"><i class='bx bx-purchase-tag'></i> Marca</button>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <span id="connection-status" class="status-badge offline">Desconectado</span>
+                </div>
+            </header>
+
+            <!-- VIEW: DIÁRIA -->
+            <div id="view-day" class="view-container active">
+                <div class="view-header">
+                    <div class="view-title-group">
+                        <h1 id="current-day-title">Selecione um dia</h1>
+                        <span id="current-day-subtitle" class="subtitle"></span>
+                    </div>
+                    <button id="delete-day-btn" class="delete-day-btn" style="display: none;" onclick="deleteDay()" title="Excluir todas as tarefas deste dia"><i class='bx bx-trash'></i></button>
+                </div>
+
+                <div class="board-container">
+                    <div class="add-task-trigger-container">
+                        <button id="open-task-modal-btn" class="add-task-trigger-btn" disabled>
+                            <i class='bx bx-plus'></i> Adicionar nova tarefa para este dia...
+                        </button>
+                    </div>
+
+                    <div class="tasks-list" id="tasks-list">
+                        <div class="empty-state">
+                            <i class='bx bx-calendar-star'></i>
+                            <p>Selecione uma data no calendário para ver ou adicionar tarefas.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: KANBAN MARCAS -->
+            <div id="view-kanban" class="view-container">
+                <div class="view-header" style="justify-content: space-between; align-items: center; display: flex; flex-wrap: wrap; gap: 1rem;">
+                    <div class="view-title-group">
+                        <h1 class="kanban-main-title">Visão Geral de Marcas</h1>
+                        <span class="subtitle">Todas as anotações pendentes agrupadas.</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap: wrap;">
+                        <select class="assignee-filter-select" onchange="filterByAssignee(this.value)" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); padding:0.4rem; border-radius:8px; cursor:pointer; font-size:0.85rem; outline:none;">
+                            <option value="Todos">Todos os responsáveis</option>
+                        </select>
+                        <button class="toggle-completed-btn" onclick="toggleCompletedVisibility()" title="Exibir/Ocultar tarefas concluídas" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); padding:0.4rem 0.9rem; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; font-weight:500; transition:all 0.2s;">
+                            <i class='bx bx-hide toggle-completed-icon-class'></i>
+                            <span class="toggle-completed-label-class">Ocultar concluídas</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="kanban-board-wrapper">
+                    <div class="kanban-board" id="kanban-board">
+                        <!-- Colunas injetadas via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: MARCA ESPECÍFICA -->
+            <div id="view-brand" class="view-container">
+                <div class="view-header" style="justify-content: space-between; align-items: center; display: flex; flex-wrap: wrap; gap: 1rem;">
+                    <div class="view-title-group">
+                        <h1 id="brand-view-title">Marca</h1>
+                        <span class="subtitle">Anotações desta marca</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap: wrap;">
+                        <select class="assignee-filter-select" onchange="filterByAssignee(this.value)" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); padding:0.4rem; border-radius:8px; cursor:pointer; font-size:0.85rem; outline:none;">
+                            <option value="Todos">Todos os responsáveis</option>
+                        </select>
+                        <button class="toggle-completed-btn" onclick="toggleCompletedVisibility()" title="Exibir/Ocultar tarefas concluídas" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); padding:0.4rem 0.9rem; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; font-weight:500; transition:all 0.2s;">
+                            <i class='bx bx-hide toggle-completed-icon-class'></i>
+                            <span class="toggle-completed-label-class">Ocultar concluídas</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="board-container">
+                    <div class="add-task-trigger-container" style="margin-bottom: 1rem;">
+                        <button class="add-task-trigger-btn" onclick="openTaskModalForBrand(currentViewBrand)">
+                            <i class='bx bx-plus'></i> Adicionar nova tarefa para esta marca no dia selecionado...
+                        </button>
+                    </div>
+                    
+                    <h3 id="brand-tasks-list-title" style="margin-bottom: 0.5rem; font-size: 0.95rem; color: var(--text-secondary); text-transform: uppercase;">Anotações do Dia</h3>
+                    <div class="tasks-list" id="brand-tasks-list" style="margin-bottom: 1rem;">
+                    </div>
+
+                    <!-- CALENDÁRIO DA MARCA -->
+                    <div class="brand-calendar-section">
+                        <h3 style="margin-bottom: 0.5rem; font-size: 0.95rem; color: var(--text-secondary); text-transform: uppercase;"><i class='bx bx-calendar'></i> Calendário da Marca</h3>
+                        <div class="calendar-header" style="margin-bottom: 0.5rem;">
+                            <button id="brand-prev-month-btn" class="icon-btn"><i class='bx bx-chevron-left'></i></button>
+                            <h2 id="brand-month-year-display">Mês Ano</h2>
+                            <button id="brand-next-month-btn" class="icon-btn"><i class='bx bx-chevron-right'></i></button>
+                        </div>
+                        
+                        <div class="calendar-grid-header">
+                            <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+                        </div>
+                        
+                        <div class="calendar-grid brand-calendar-grid-large" id="brand-calendar-grid">
+                            <!-- Os dias serão inseridos dinamicamente aqui -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Modal: Nova Tarefa -->
+    <div id="task-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Criar Nova Tarefa</h2>
+                <button class="close-modal-btn" id="close-task-modal-btn"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body">
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="task-title">Título (Nome do cliente, loja, etc.)</label>
+                        <input type="text" id="task-title" placeholder="Ex: Evoke Store São Paulo" required autocomplete="off">
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="task-subtitle">Anotação / O que precisa ser feito</label>
+                        <input type="text" id="task-subtitle" placeholder="Ex: Entrar em contato para renegociar prazo..." required autocomplete="off">
+                    </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Data de Término</label>
+                        <input type="date" id="task-date">
+                    </div>
+                    <div class="form-group">
+                        <label>Recorrência</label>
+                        <select id="task-recurrence" onchange="document.getElementById('task-recurrence-custom-days').style.display = this.value === 'custom_days' ? 'block' : 'none';">
+                            <option value="none" selected>Nenhuma</option>
+                            <option value="daily">Diária</option>
+                            <option value="weekly">Semanal</option>
+                            <option value="monthly">Mensal</option>
+                            <option value="custom_days">Dias da Semana</option>
+                        </select>
+                        <div id="task-recurrence-custom-days" style="display: none; margin-top: 0.5rem; background: rgba(255,255,255,0.03); padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                            <label style="font-size: 0.8rem; margin-bottom: 0.4rem; display: block; color: var(--text-secondary);">Repetir nestes dias:</label>
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                <label class="checkbox-label" style="font-size: 0.8rem;"><input type="checkbox" value="0" class="recurrence-day-cb"> Dom</label>
+                                <label class="checkbox-label" style="font-size: 0.8rem;"><input type="checkbox" value="1" class="recurrence-day-cb"> Seg</label>
+                                <label class="checkbox-label" style="font-size: 0.8rem;"><input type="checkbox" value="2" class="recurrence-day-cb"> Ter</label>
+                                <label class="checkbox-label" style="font-size: 0.8rem;"><input type="checkbox" value="3" class="recurrence-day-cb"> Qua</label>
+                                <label class="checkbox-label" style="font-size: 0.8rem;"><input type="checkbox" value="4" class="recurrence-day-cb"> Qui</label>
+                                <label class="checkbox-label" style="font-size: 0.8rem;"><input type="checkbox" value="5" class="recurrence-day-cb"> Sex</label>
+                                <label class="checkbox-label" style="font-size: 0.8rem;"><input type="checkbox" value="6" class="recurrence-day-cb"> Sáb</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Prioridade</label>
+                        <select id="task-priority">
+                            <option value="low">! Baixa</option>
+                            <option value="medium" selected>!! Média</option>
+                            <option value="high">!!! Alta</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Marca</label>
+                        <select id="task-brand">
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Atribuir a</label>
+                    <div class="checkbox-group" id="task-assignees">
+                        <!-- Responsáveis dinâmicos aqui -->
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Comentários</label>
+                    <textarea id="task-comments" rows="3" placeholder="Detalhes, links, informações adicionais..."></textarea>
+                </div>
+                <div id="task-completion-section" style="display:none; border-top: 1px solid var(--border-color); padding-top: 1.25rem; margin-top: 0.5rem;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 0.75rem;">
+                        <label style="font-size:0.85rem; font-weight:600; color:var(--text-secondary); display:flex; align-items:center; gap:0.4rem;">
+                            <i class='bx bx-check-circle'></i> Conclusão
+                            <span id="task-completed-at-label" style="font-weight:400; opacity:0.6; font-size:0.78rem;"></span>
+                        </label>
+                        <button id="task-toggle-complete-btn" class="btn-cancel" style="padding:0.4rem 0.9rem; font-size:0.85rem; display:flex; align-items:center; gap:0.4rem;">
+                            <i class='bx bx-check'></i> <span id="task-toggle-complete-label">Marcar como Concluída</span>
+                        </button>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-completion-feedback">Feedback / O que foi resolvido</label>
+                        <textarea id="task-completion-feedback" rows="3" placeholder="Descreva o que foi feito, resolvido ou acordado..."></textarea>
+                    </div>
+                    <button id="save-feedback-btn" class="btn-primary" style="width:100%; margin-top:0.5rem; display:flex; align-items:center; justify-content:center; gap:0.5rem; padding:0.6rem;">
+                        <i class='bx bx-save'></i> Salvar Feedback
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: space-between; width: 100%;">
+                <div id="modal-delete-container">
+                    <button class="btn-danger" id="delete-task-modal-btn" style="display: none; padding: 0.75rem 1.5rem; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;"><i class='bx bx-trash'></i> Excluir Tarefa</button>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <button class="btn-cancel" id="cancel-task-btn">Cancelar</button>
+                    <button class="btn-primary" id="save-task-btn">Salvar Tarefa</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Confirmar Exclusão de Série -->
+    <div id="delete-series-modal" class="modal-overlay hidden" style="z-index: 9999;">
+        <div class="modal-content" style="max-width: 450px; text-align: center; padding: 2.5rem 2rem;">
+            <div style="font-size: 3rem; color: var(--danger-color); margin-bottom: 1rem;"><i class='bx bx-error-circle'></i></div>
+            <h2 style="margin-bottom: 1rem; color: var(--text-primary);">Excluir Tarefa Recorrente</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.95rem; line-height: 1.5;">Esta tarefa faz parte de uma série recorrente. Você deseja excluir apenas esta tarefa ou todas as futuras desta mesma série?</p>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <button class="btn-danger" id="confirm-delete-only-this" style="padding: 0.9rem; font-size: 0.95rem; justify-content: center; width: 100%; color: #ffffff;">Apagar SOMENTE ESTA (A de hoje)</button>
+                <button class="btn-danger" id="confirm-delete-all-series" style="padding: 0.9rem; font-size: 0.95rem; justify-content: center; background: #990000; width: 100%; color: #ffffff;">Apagar TODA A SÉRIE (Esta e as futuras)</button>
+                <button class="btn-cancel" id="cancel-delete-series" style="padding: 0.9rem; margin-top: 0.5rem; justify-content: center; width: 100%;">Cancelar Exclusão</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Configurações -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal-content settings-content">
+            <div class="modal-header">
+                <h2>Configurações do Sistema</h2>
+                <button class="close-modal-btn" id="close-settings-modal-btn"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body">
+                
+                <div class="settings-section">
+                    <h3>Gestão de Marcas</h3>
+                    <div class="settings-add-form">
+                        <input type="text" id="new-brand-input" placeholder="Nova Marca (ex: OAKLEY)">
+                        <button class="btn-secondary" id="add-brand-btn"><i class='bx bx-plus'></i> Add</button>
+                    </div>
+                    <ul class="settings-list" id="settings-brands-list">
+                    </ul>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Gestão de Responsáveis</h3>
+                    <div class="settings-add-form">
+                        <input type="text" id="new-assignee-input" placeholder="Novo Responsável (ex: João)">
+                        <button class="btn-secondary" id="add-assignee-btn"><i class='bx bx-plus'></i> Add</button>
+                    </div>
+                    <ul class="settings-list" id="settings-assignees-list">
+                    </ul>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" id="close-settings-footer-btn">Concluído</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Concluir Tarefa / Feedback -->
+    <div id="completion-modal" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 id="completion-modal-title">Concluir Tarefa</h2>
+                <button class="close-modal-btn" onclick="closeCompletionModal()"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Feedback / Resumo da Conclusão</label>
+                    <textarea id="completion-feedback" rows="4" placeholder="Descreva o que foi falado, resolvido ou anotado na conclusão desta tarefa (Opcional)..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeCompletionModal()">Cancelar</button>
+                <button class="btn-primary" style="background-color: var(--success-color);" onclick="confirmTaskCompletion()">Confirmar Conclusão</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK (Compat v8) via CDN -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
