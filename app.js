@@ -30,10 +30,11 @@ const brandDomains = {
     "VANS": "vans.com.br"
 };
 
-const brandCustomLogos = {
+let brandCustomLogos = {
     "MORMAII": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAMAAABF0y+mAAAARVBMVEVHcEwAAAANDg4PEBAODw8KCwwHCAkNDg4PDw8ICQkFBQUMDAwLDQ0MDQ0KCgoHBwcJCQkNDg4ODg4GBgYBAQEODg4NDg7OL+TmAAAAF3RSTlMAAy9SRAoROGrM8qEaJa7XvWCC5P55jAsXFrMAAADKSURBVHgB1RHFgQQxKB4Cceu/1GNeowXcRnBH/JsjlTb2Q+yU9g4CUnyqbIJcautjzvXwlGmFOTMQTqR017lWJ0uBYVmPoGkjS/vhXNujHE+V08EeE3fb94yKVnK+cboArRZzj9nY1tSJWfeB++poV5PCtjJH1xlnvZWqlxOxj1m14XqCvzWxPSdFJCU0J9Xi5kiR0xVwQgAGI+9KgIL5EJqavXz2P0ZPx4yI0UNHGEC5pHd/LwoGmZV3B+PE65gWnTHKyc+9i185f81WCtv3c3ikAAAAAElFTkSuQmCC",
     "STEP DEFEND": "https://raichu-uploads.s3.amazonaws.com/logo_step-defend_u3MTde.png",
-    "VANS": "https://assets.vans.eu/image/upload/v1755503693/default.svg"
+    "VANS": "https://assets.vans.eu/image/upload/v1755503693/default.svg",
+    "BAW": "https://bawclothing.fbitsstatic.net/sf/img/header/logoBawAlta.svg?theme=main&v=202605111448"
 };
 
 function getBrandLogoHTML(brandName, size = 18) {
@@ -502,6 +503,8 @@ function setupGlobalListeners() {
     window.db.collection('settings').doc('brands').onSnapshot((doc) => {
         if(doc.exists) {
             brands = doc.data().list.sort();
+            const remoteLogos = doc.data().logos || {};
+            brandCustomLogos = Object.assign(brandCustomLogos, remoteLogos);
             renderSettingsBrands();
             renderSidebarBrands();
             renderKanban(); 
@@ -590,7 +593,15 @@ function setupGlobalListeners() {
 
 function renderSidebarBrands() {
     sidebarBrandsList.innerHTML = '';
-    brands.forEach(b => {
+    
+    const groupKR = ["EVOKE", "MORMAII", "NEW ERA", "VANS"];
+    const groupMKR = ["MCD", "STANCE", "STEP DEFEND", "BAW"];
+    
+    const krBrands = brands.filter(b => groupKR.includes(b));
+    const mkrBrands = brands.filter(b => groupMKR.includes(b));
+    const otherBrands = brands.filter(b => !groupKR.includes(b) && !groupMKR.includes(b));
+    
+    const createLi = (b) => {
         const li = document.createElement('li');
         li.className = 'sidebar-brand-item';
         if(currentViewBrand === b && viewBrand.classList.contains('active')) {
@@ -598,8 +609,42 @@ function renderSidebarBrands() {
         }
         li.innerHTML = `<div style="display:flex; align-items:center; gap:0.5rem;">${getBrandLogoHTML(b, 18)} <span>${b}</span></div>`;
         li.onclick = () => selectBrandView(b);
-        sidebarBrandsList.appendChild(li);
-    });
+        return li;
+    };
+
+    const createGroup = (title, id, list) => {
+        if(list.length === 0) return;
+        
+        const headerLi = document.createElement('li');
+        headerLi.className = 'sidebar-brands-header';
+        headerLi.style.padding = '0.8rem 0.75rem 0.2rem 1.5rem';
+        headerLi.style.fontSize = '0.75rem';
+        headerLi.style.listStyle = 'none';
+        headerLi.onclick = () => window.toggleBrandSubGroup(id);
+        headerLi.innerHTML = `
+            <span>${title}</span>
+            <i class='bx bx-chevron-up' id="${id}-icon" style="font-size:1.2rem;"></i>
+        `;
+        sidebarBrandsList.appendChild(headerLi);
+        
+        const bodyLi = document.createElement('li');
+        bodyLi.style.listStyle = 'none';
+        bodyLi.id = id;
+        bodyLi.className = 'subgroup-body';
+        
+        const ul = document.createElement('ul');
+        ul.className = 'sidebar-brands-list';
+        ul.style.marginTop = '0';
+        ul.style.paddingLeft = '0';
+        
+        list.forEach(b => ul.appendChild(createLi(b)));
+        bodyLi.appendChild(ul);
+        sidebarBrandsList.appendChild(bodyLi);
+    };
+
+    createGroup('KR', 'grp-kr', krBrands);
+    createGroup('MKR', 'grp-mkr', mkrBrands);
+    createGroup('OUTRAS', 'grp-outras', otherBrands);
 }
 
 function renderSettingsBrands() {
@@ -607,9 +652,120 @@ function renderSettingsBrands() {
     listEl.innerHTML = '';
     brands.forEach(b => {
         const li = document.createElement('li');
-        li.innerHTML = `<span>${b}</span> <button class="btn-delete-item" onclick="deleteBrand('${b}')"><i class='bx bx-trash'></i></button>`;
+        li.style.flexDirection = 'column';
+        li.style.alignItems = 'stretch';
+        li.style.gap = '0';
+        
+        const logoUrl = brandCustomLogos[b] || '';
+        
+        li.innerHTML = `
+            <div class="brand-view-mode" style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    ${getBrandLogoHTML(b, 20)}
+                    <span>${b}</span>
+                </div>
+                <div style="display:flex; gap: 0.5rem;">
+                    <button class="btn-edit-item" onclick="toggleEditBrandMode(this, true)" style="background:transparent; border:none; color:var(--text-secondary); cursor:pointer;"><i class='bx bx-pencil'></i></button>
+                    <button class="btn-delete-item" onclick="deleteBrand('${b}')"><i class='bx bx-trash'></i></button>
+                </div>
+            </div>
+            <div class="brand-edit-mode hidden" style="display:none; flex-direction:column; gap:0.5rem; width:100%; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+                <label style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:-0.25rem;">Nome da Marca</label>
+                <input type="text" class="edit-brand-name" value="${b}" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.4rem; border-radius: 4px; font-size: 0.85rem;">
+                <label style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:-0.25rem;">URL do Logo</label>
+                <input type="text" class="edit-brand-logo" value="${logoUrl}" placeholder="https://..." style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.4rem; border-radius: 4px; font-size: 0.85rem;">
+                <div style="display:flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.25rem;">
+                    <button onclick="toggleEditBrandMode(this, false)" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); cursor:pointer; padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem;">Cancelar</button>
+                    <button onclick="saveEditedBrand(this, '${b}')" style="background:var(--accent-color); border:none; color:#fff; cursor:pointer; padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem;">Salvar</button>
+                </div>
+            </div>
+        `;
         listEl.appendChild(li);
     });
+}
+
+window.toggleEditBrandMode = function(btn, showEdit) {
+    const li = btn.closest('li');
+    const viewMode = li.querySelector('.brand-view-mode');
+    const editMode = li.querySelector('.brand-edit-mode');
+    if (showEdit) {
+        viewMode.style.display = 'none';
+        editMode.style.display = 'flex';
+        editMode.classList.remove('hidden');
+    } else {
+        viewMode.style.display = 'flex';
+        editMode.style.display = 'none';
+        editMode.classList.add('hidden');
+    }
+}
+
+window.saveEditedBrand = async function(btn, oldName) {
+    const li = btn.closest('li');
+    let newName = li.querySelector('.edit-brand-name').value.trim().toUpperCase();
+    const newLogo = li.querySelector('.edit-brand-logo').value.trim();
+    
+    if (!newName) {
+        alert("O nome da marca não pode ser vazio.");
+        return;
+    }
+    
+    if (newName !== oldName && brands.includes(newName)) {
+        alert("Já existe uma marca com este nome.");
+        return;
+    }
+    
+    // Disable inputs and buttons while saving
+    const inputs = li.querySelectorAll('input');
+    const buttons = li.querySelectorAll('button');
+    inputs.forEach(i => i.disabled = true);
+    buttons.forEach(b => b.disabled = true);
+    btn.innerHTML = 'Salvando...';
+
+    try {
+        // Update brands array
+        if (newName !== oldName) {
+            brands = brands.filter(b => b !== oldName);
+            brands.push(newName);
+        }
+        
+        // Update logos object
+        let updatedLogos = Object.assign({}, brandCustomLogos);
+        if (newName !== oldName) {
+            delete updatedLogos[oldName];
+        }
+        if (newLogo) {
+            updatedLogos[newName] = newLogo;
+        } else {
+            delete updatedLogos[newName];
+        }
+        
+        // Batch update tasks if name changed
+        if (newName !== oldName) {
+            const batch = window.db.batch();
+            let tasksToUpdate = window.allGlobalTasks.filter(t => t.brand === oldName);
+            tasksToUpdate.forEach(t => {
+                const ref = window.db.collection('tasks').doc(t.id);
+                batch.update(ref, { brand: newName });
+            });
+            await batch.commit();
+            
+            // Update currentViewBrand if active
+            if (currentViewBrand === oldName) {
+                currentViewBrand = newName;
+                document.getElementById('brand-view-title').innerText = currentViewBrand;
+            }
+        }
+        
+        // Save settings/brands
+        await window.db.collection('settings').doc('brands').set({ 
+            list: brands.sort(),
+            logos: updatedLogos
+        });
+        
+    } catch (e) {
+        console.error("Erro ao salvar marca: ", e);
+        alert("Erro ao salvar marca. Veja o console.");
+    }
 }
 
 async function addBrand() {
@@ -617,7 +773,12 @@ async function addBrand() {
     const val = input.value.trim().toUpperCase();
     if(val && !brands.includes(val)) {
         brands.push(val);
-        await window.db.collection('settings').doc('brands').set({ list: brands.sort() });
+        // Do not overwrite logos
+        let currentLogos = Object.assign({}, brandCustomLogos);
+        await window.db.collection('settings').doc('brands').set({ 
+            list: brands.sort(),
+            logos: currentLogos
+        });
         input.value = '';
     }
 }
@@ -706,7 +867,9 @@ function updateAssigneeFilters() {
 
 window.deleteBrand = async function(val) {
     brands = brands.filter(b => b !== val);
-    await window.db.collection('settings').doc('brands').set({ list: brands });
+    let updatedLogos = Object.assign({}, brandCustomLogos);
+    delete updatedLogos[val];
+    await window.db.collection('settings').doc('brands').set({ list: brands, logos: updatedLogos });
     if(currentViewBrand === val) {
         switchTab('day'); // reset se deletar a marca atual
     }
@@ -2882,3 +3045,5 @@ window.getCMSValueSingle = function(id) {
     const checked = container.querySelector('input[type="radio"]:checked');
     return checked ? checked.value : 'week';
 };
+
+window.toggleBrandSubGroup = function(id) { const body = document.getElementById(id); const icon = document.getElementById(id + '-icon'); if (body) body.classList.toggle('collapsed'); if (icon) { icon.className = body.classList.contains('collapsed') ? 'bx bx-chevron-down' : 'bx bx-chevron-up'; } };

@@ -57,8 +57,15 @@ body {
     box-shadow: 4px 0 24px rgba(0,0,0,0.2);
     z-index: 100;
     transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
+
+/* Custom Scrollbar for Sidebar */
+.calendar-panel::-webkit-scrollbar { width: 6px; }
+.calendar-panel::-webkit-scrollbar-track { background: transparent; }
+.calendar-panel::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+.calendar-panel::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 
 .calendar-panel.collapsed {
     width: 76px; /* Mini Sidebar */
@@ -2204,4 +2211,14 @@ body:not(.is-admin) .admin-only {
 }
 
 
+
+
+.subgroup-body { max-height: 1000px; overflow: hidden; transition: max-height 0.3s ease, opacity 0.3s ease; opacity: 1; }
+.subgroup-body.collapsed { max-height: 0; opacity: 0; pointer-events: none; }
+
+.calendar-panel { overflow-y: auto; overflow-x: hidden; }
+.calendar-panel::-webkit-scrollbar { width: 6px; }
+.calendar-panel::-webkit-scrollbar-track { background: transparent; }
+.calendar-panel::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+.calendar-panel::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 
