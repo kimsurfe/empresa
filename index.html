@@ -232,7 +232,7 @@
             <!-- VIEW: DIÁRIA -->
             <div id="view-day" class="view-container">
                 <div class="view-header" style="flex-wrap: wrap; gap: 1rem; flex-direction: column;">
-                    <div class="view-title-group" style="display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 100%;">
+                    <div class="view-title-group" style="display: flex; align-items: center; justify-content: center; gap: 2rem; width: 100%; max-width: 100%;">
                         <button class="nav-day-arrow" onclick="navigateDay(-1)" title="Dia Anterior"><i class='bx bx-chevron-left'></i></button>
                         <div style="display: flex; flex-direction: column; text-align: center;">
                             <h1 id="current-day-title" style="margin: 0; line-height: 1;">Selecione um dia</h1>
@@ -287,7 +287,7 @@
                 </div>
 
                 <div class="board-container">
-                    <div class="add-task-trigger-container">
+                    <div class="add-task-trigger-container" style="width: 100%; max-width: 600px; margin: 0 auto 1.5rem auto;">
                         <button id="open-task-modal-btn" class="add-task-trigger-btn" disabled>
                             <i class='bx bx-plus'></i> Adicionar nova tarefa para este dia...
                         </button>
@@ -727,13 +727,32 @@
             
             <div style="text-align: left; margin-bottom: 1rem;">
                 <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.3rem; display: block;">E-mail / Nome</label>
-                <input type="text" id="login-email-input" class="login-input-field" placeholder="seu@email.com ou login" value="kimsurfe@gmail.com" onkeypress="if(event.key === 'Enter') handleSimpleLogin()" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary);">
+                <input type="text" id="login-email-input" class="login-input-field" placeholder="seu@email.com ou login" onkeypress="if(event.key === 'Enter') handleSimpleLogin()" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary);">
             </div>
 
-            <div style="text-align: left; margin-bottom: 1.5rem;">
+            <div style="text-align: left; margin-bottom: 1.5rem; position: relative;">
                 <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.3rem; display: block;">Senha</label>
-                <input type="password" id="login-password-input" class="login-input-field" placeholder="Sua senha" value="010869" onkeypress="if(event.key === 'Enter') handleSimpleLogin()" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary);">
+                <div style="position: relative; display: flex; align-items: center;">
+                    <input type="password" id="login-password-input" class="login-input-field" placeholder="Sua senha" onkeypress="if(event.key === 'Enter') handleSimpleLogin()" style="width: 100%; padding: 0.75rem; padding-right: 2.5rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary);">
+                    <i class='bx bx-show' id="toggle-password-icon" onclick="togglePasswordVisibility()" style="position: absolute; right: 0.75rem; font-size: 1.2rem; color: var(--text-secondary); cursor: pointer;"></i>
+                </div>
             </div>
+            
+            <script>
+                function togglePasswordVisibility() {
+                    const pwdInput = document.getElementById('login-password-input');
+                    const icon = document.getElementById('toggle-password-icon');
+                    if (pwdInput.type === 'password') {
+                        pwdInput.type = 'text';
+                        icon.classList.remove('bx-show');
+                        icon.classList.add('bx-hide');
+                    } else {
+                        pwdInput.type = 'password';
+                        icon.classList.remove('bx-hide');
+                        icon.classList.add('bx-show');
+                    }
+                }
+            </script>
             
             <span id="login-error-msg" style="color: var(--danger-color); font-size: 0.85rem; display: block; margin-bottom: 1rem; min-height: 1rem;"></span>
 
