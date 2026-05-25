@@ -754,7 +754,7 @@ body {
 
 /* BOARD CONTAINER & TASKS */
 .board-container {
-    max-width: 800px;
+    max-width: 100%;
     width: 100%;
 }
 
@@ -2222,3 +2222,19 @@ body:not(.is-admin) .admin-only {
 .calendar-panel::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
 .calendar-panel::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 
+
+/* Pull to Refresh */
+.ptr-container { position: fixed; top: 0; left: 50%; transform: translateX(-50%) translateY(-100%); display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(10px); border: 1px solid var(--border-color); padding: 0.6rem 1.2rem; border-radius: 9999px; color: var(--text-primary); font-size: 0.85rem; font-weight: 500; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none; }
+.ptr-container.refreshing { transition: transform 0.3s ease; transform: translateX(-50%) translateY(20px); }
+.ptr-icon { font-size: 1.2rem; transition: transform 0.2s ease; }
+.ptr-icon.spinning { animation: ptr-spin 1s linear infinite; }
+@keyframes ptr-spin { 100% { transform: rotate(360deg); } }
+
+@media (max-width: 768px) {
+    .view-header h1 { font-size: 1.5rem; }
+    .view-title-group { flex-wrap: wrap; gap: 0.2rem; justify-content: center; text-align: center; }
+    .nav-day-arrow { padding: 0.2rem; font-size: 1.5rem; }
+    #current-day-title { font-size: 1.2rem !important; }
+    #db-current-day-title { font-size: 1.2rem !important; }
+    .brand-quick-filters, .dashboard-quick-filters { justify-content: center; }
+}

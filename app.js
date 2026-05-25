@@ -644,7 +644,7 @@ function renderSidebarBrands() {
 
     createGroup('KR', 'grp-kr', krBrands);
     createGroup('MKR', 'grp-mkr', mkrBrands);
-    createGroup('OUTRAS', 'grp-outras', otherBrands);
+    createGroup('OFFICE', 'grp-outras', otherBrands);
 }
 
 function renderSettingsBrands() {
@@ -1904,15 +1904,71 @@ async function handleDayDocumentLifecycle(dateStr, taskCount) {
 function renderTasks() {
     tasksListEl.innerHTML = '';
 
-    const currentDayTasks = [...localTasks];
-    
-    const deadlineTasks = [];
-    if(window.allGlobalTasks) {
-        window.allGlobalTasks.forEach(t => {
-            if(t.deadline === activeDateStr && t.dayId !== activeDateStr && t.status === 'pending') {
-                deadlineTasks.push(t);
+    const priorityFilter = window.getCMSValues ? window.getCMSValues('cms-dayview-priority') : [];
+    const assigneeFilter = window.getCMSValues ? window.getCMSValues('cms-dayview-assignee') : [];
+    const brandFilter = window.getCMSValues ? window.getCMSValues('cms-dayview-brand') : [];
+    const periodFilterRadio = document.querySelector('input[name="dayview-period-filter"]:checked');
+    const periodFilter = periodFilterRadio ? periodFilterRadio.value : 'today';
+
+    const filterFn = (t) => {
+        if(priorityFilter.length > 0 && !priorityFilter.includes(t.priority || 'medium')) return false;
+        if(brandFilter.length > 0 && !brandFilter.includes(t.brand || 'Sem Marca')) return false;
+        if(assigneeFilter.length > 0) {
+            let tAssignees = t.assignees || [];
+            if(typeof tAssignees === 'string') tAssignees = [tAssignees];
+            if(t.assignee && !tAssignees.includes(t.assignee)) tAssignees.push(t.assignee);
+            if(tAssignees.length === 0 && assigneeFilter.includes('Sem Responsável')) return true;
+            if(!tAssignees.some(a => assigneeFilter.includes(a))) return false;
+        }
+        return true;
+    };
+
+    let currentDayTasks = [];
+    let deadlineTasks = [];
+    let delayedTasks = [];
+    let monthTasks = [];
+
+    const todayStr = formatDate(new Date());
+
+    if (periodFilter === 'today') {
+        currentDayTasks = [...localTasks].filter(filterFn);
+        if(window.allGlobalTasks) {
+            window.allGlobalTasks.forEach(t => {
+                if(t.deadline === activeDateStr && t.dayId !== activeDateStr && t.status === 'pending') {
+                    if (filterFn(t)) deadlineTasks.push(t);
+                }
+            });
+        }
+        if(window.allGlobalTasks && activeDateStr) {
+            const [y, m] = activeDateStr.split('-');
+            const prefix = `${y}-${m}-`;
+            const uniqueMonthMap = new Map();
+            const uniqueDelayedMap = new Map();
+            window.allGlobalTasks.forEach(t => {
+                if(t.status !== 'completed' && filterFn(t)) {
+                    if (t.dayId < todayStr || (t.deadline && t.deadline < todayStr)) {
+                        if(!uniqueDelayedMap.has(t.id)) uniqueDelayedMap.set(t.id, t);
+                    }
+                    if(t.dayId.startsWith(prefix) || (t.deadline && t.deadline.startsWith(prefix))) {
+                        if (t.dayId !== activeDateStr && t.deadline !== activeDateStr) {
+                            if(!uniqueDelayedMap.has(t.id)) {
+                                if(!uniqueMonthMap.has(t.id)) uniqueMonthMap.set(t.id, t);
+                            }
+                        }
+                    }
+                }
+            });
+            delayedTasks = Array.from(uniqueDelayedMap.values());
+            monthTasks = Array.from(uniqueMonthMap.values());
+        }
+    } else {
+        if(window.allGlobalTasks) {
+            let baseTasks = window.allGlobalTasks.filter(filterFn);
+            if(window.filterTasksByPeriod) {
+                baseTasks = window.filterTasksByPeriod(baseTasks, periodFilter);
             }
-        });
+            currentDayTasks = baseTasks;
+        }
     }
 
     const priorityValue = { high: 3, medium: 2, low: 1 };
@@ -1930,37 +1986,6 @@ function renderTasks() {
 
     currentDayTasks.sort(sortFn);
     deadlineTasks.sort(sortFn);
-
-    const todayStr = formatDate(new Date());
-    let delayedTasks = [];
-    let monthTasks = [];
-    
-    if(window.allGlobalTasks && activeDateStr) {
-        const [y, m] = activeDateStr.split('-');
-        const prefix = `${y}-${m}-`;
-        
-        const uniqueMonthMap = new Map();
-        const uniqueDelayedMap = new Map();
-        
-        window.allGlobalTasks.forEach(t => {
-            if(t.status !== 'completed') {
-                if (t.dayId < todayStr || (t.deadline && t.deadline < todayStr)) {
-                    if(!uniqueDelayedMap.has(t.id)) uniqueDelayedMap.set(t.id, t);
-                }
-                if(t.dayId.startsWith(prefix) || (t.deadline && t.deadline.startsWith(prefix))) {
-                    if (t.dayId !== activeDateStr && t.deadline !== activeDateStr) {
-                        if(!uniqueDelayedMap.has(t.id)) {
-                            if(!uniqueMonthMap.has(t.id)) uniqueMonthMap.set(t.id, t);
-                        }
-                    }
-                }
-            }
-        });
-        
-        delayedTasks = Array.from(uniqueDelayedMap.values());
-        monthTasks = Array.from(uniqueMonthMap.values());
-    }
-    
     delayedTasks.sort(sortFn);
     monthTasks.sort(sortFn);
 
@@ -2226,9 +2251,11 @@ function createTaskDOM(task, dayIdContext, isKanban = false) {
                         ${task.subtitle ? `<span class="task-subtitle" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 2px;">${task.subtitle}</span>` : ''}
                     </div>
                 </div>
-                ${badgesHtml ? `<div class="task-badges">${badgesHtml}</div>` : ''}
-                ${assigneesHtml}
-                ${deadlineHtml}
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                    ${badgesHtml ? `<div class="task-badges" style="margin-top: 0;">${badgesHtml}</div>` : ''}
+                    ${assigneesHtml}
+                    ${deadlineHtml ? deadlineHtml.replace('margin-top: 4px;', 'margin-top: 0;') : ''}
+                </div>
                 ${feedbackHtml}
             </div>
             <div class="kanban-actions">
@@ -2250,9 +2277,11 @@ function createTaskDOM(task, dayIdContext, isKanban = false) {
                         <button class="task-action-btn delete-btn" onclick="deleteTaskGlobal('${refPath}')" title="Excluir"><i class='bx bx-trash'></i></button>
                     </div>
                 </div>
-                ${badgesHtml ? `<div class="task-badges">${badgesHtml}</div>` : ''}
-                ${assigneesHtml}
-                ${deadlineHtml}
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; margin-top: 0.5rem;">
+                    ${badgesHtml ? `<div class="task-badges" style="margin-top: 0;">${badgesHtml}</div>` : ''}
+                    ${assigneesHtml}
+                    ${deadlineHtml ? deadlineHtml.replace('margin-top: 4px;', 'margin-top: 0;') : ''}
+                </div>
                 ${commentsHtml}
                 ${feedbackHtml}
             </div>
@@ -2507,6 +2536,18 @@ window.updateDashboardFilterBrands = function() {
         });
         window.updateCMSLabel('cms-brandview-brand');
     }
+
+    // Day View Filter
+    const dayViewList = document.getElementById('cms-dayview-brand-list');
+    if(dayViewList) {
+        const checkedVals = window.getCMSValues('cms-dayview-brand');
+        dayViewList.innerHTML = '';
+        brands.forEach(b => {
+            const isChecked = checkedVals.includes(b) ? 'checked' : '';
+            dayViewList.innerHTML += `<label class="cms-option"><input type="checkbox" value="${b}" onchange="updateCMSLabel('cms-dayview-brand'); renderTasks();" ${isChecked}> ${b}</label>`;
+        });
+        window.updateCMSLabel('cms-dayview-brand');
+    }
 }
 
 window.filterByBrandViewBrand = function(val) {
@@ -2586,6 +2627,18 @@ window.updateDashboardFilterAssignees = function() {
             brandViewList.innerHTML += `<label class="cms-option"><input type="checkbox" value="${a}" onchange="updateCMSLabel('cms-brandview-assignee'); renderBrandTasks();" ${isChecked}> ${window.userEmailToName[a] || a}</label>`;
         });
         window.updateCMSLabel('cms-brandview-assignee');
+    }
+
+    // Day View Filter
+    const dayViewList = document.getElementById('cms-dayview-assignee-list');
+    if(dayViewList) {
+        const checkedVals = window.getCMSValues('cms-dayview-assignee');
+        dayViewList.innerHTML = '';
+        assignees.forEach(a => {
+            const isChecked = checkedVals.includes(a) ? 'checked' : '';
+            dayViewList.innerHTML += `<label class="cms-option"><input type="checkbox" value="${a}" onchange="updateCMSLabel('cms-dayview-assignee'); renderTasks();" ${isChecked}> ${window.userEmailToName[a] || a}</label>`;
+        });
+        window.updateCMSLabel('cms-dayview-assignee');
     }
 }
 
@@ -3047,3 +3100,83 @@ window.getCMSValueSingle = function(id) {
 };
 
 window.toggleBrandSubGroup = function(id) { const body = document.getElementById(id); const icon = document.getElementById(id + '-icon'); if (body) body.classList.toggle('collapsed'); if (icon) { icon.className = body.classList.contains('collapsed') ? 'bx bx-chevron-down' : 'bx bx-chevron-up'; } };
+
+// Pull to Refresh
+function setupPullToRefresh() {
+    const mainContent = document.querySelector('.main-content');
+    if (!mainContent) return;
+
+    const ptr = document.createElement('div');
+    ptr.className = 'ptr-container';
+    ptr.innerHTML = `
+        <i class='bx bx-down-arrow-alt ptr-icon'></i>
+        <span class="ptr-text">Puxe para atualizar</span>
+    `;
+    document.body.appendChild(ptr);
+
+    const ptrIcon = ptr.querySelector('.ptr-icon');
+    const ptrText = ptr.querySelector('.ptr-text');
+
+    let startY = 0;
+    let currentY = 0;
+    let isPulling = false;
+    let isRefreshing = false;
+    const threshold = 80;
+
+    mainContent.addEventListener('touchstart', (e) => {
+        if (mainContent.scrollTop === 0 && !isRefreshing) {
+            startY = e.touches[0].clientY;
+            isPulling = true;
+            ptr.style.transition = 'none';
+        }
+    }, { passive: true });
+
+    mainContent.addEventListener('touchmove', (e) => {
+        if (!isPulling || isRefreshing) return;
+
+        currentY = e.touches[0].clientY;
+        const pullDistance = currentY - startY;
+
+        if (pullDistance > 0 && mainContent.scrollTop === 0) {
+            const translateY = Math.min(pullDistance * 0.4, threshold * 1.5);
+            ptr.style.transform = `translateX(-50%) translateY(${translateY - 50}px)`;
+
+            if (translateY >= threshold) {
+                ptrIcon.className = 'bx bx-up-arrow-alt ptr-icon';
+                ptrText.innerText = 'Solte para atualizar';
+            } else {
+                ptrIcon.className = 'bx bx-down-arrow-alt ptr-icon';
+                ptrText.innerText = 'Puxe para atualizar';
+            }
+        } else {
+            isPulling = false;
+        }
+    }, { passive: true });
+
+    mainContent.addEventListener('touchend', () => {
+        if (!isPulling || isRefreshing) return;
+        isPulling = false;
+        ptr.style.transition = 'transform 0.3s ease';
+
+        const pullDistance = currentY - startY;
+        const translateY = Math.min(pullDistance * 0.4, threshold * 1.5);
+
+        if (translateY >= threshold) {
+            isRefreshing = true;
+            ptr.classList.add('refreshing');
+            ptr.style.transform = '';
+            ptrIcon.className = 'bx bx-loader-alt ptr-icon spinning';
+            ptrText.innerText = 'Atualizando...';
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        } else {
+            ptr.style.transform = `translateX(-50%) translateY(-100%)`;
+        }
+        
+        startY = 0;
+        currentY = 0;
+    });
+}
+document.addEventListener('DOMContentLoaded', setupPullToRefresh);

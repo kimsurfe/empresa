@@ -231,14 +231,58 @@
 
             <!-- VIEW: DIÁRIA -->
             <div id="view-day" class="view-container">
-                <div class="view-header">
-                    <div class="view-title-group" style="display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 800px;">
+                <div class="view-header" style="flex-wrap: wrap; gap: 1rem; flex-direction: column;">
+                    <div class="view-title-group" style="display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 100%;">
                         <button class="nav-day-arrow" onclick="navigateDay(-1)" title="Dia Anterior"><i class='bx bx-chevron-left'></i></button>
                         <div style="display: flex; flex-direction: column; text-align: center;">
                             <h1 id="current-day-title" style="margin: 0; line-height: 1;">Selecione um dia</h1>
                             <span id="current-day-subtitle" class="subtitle" style="margin-top: 0.25rem;"></span>
                         </div>
                         <button class="nav-day-arrow" onclick="navigateDay(1)" title="Próximo Dia"><i class='bx bx-chevron-right'></i></button>
+                    </div>
+                    <!-- Filtros da Visao Diaria -->
+                    <div class="day-quick-filters" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-top: 0.5rem;">
+                        <div class="custom-multi-select" id="cms-dayview-priority">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-dayview-priority', event)">
+                                <span class="cms-label">Todas Prioridades</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden">
+                                <label class="cms-option"><input type="checkbox" value="high" onchange="updateCMSLabel('cms-dayview-priority'); renderTasks();"> Alta Prioridade</label>
+                                <label class="cms-option"><input type="checkbox" value="medium" onchange="updateCMSLabel('cms-dayview-priority'); renderTasks();"> Média Prioridade</label>
+                                <label class="cms-option"><input type="checkbox" value="low" onchange="updateCMSLabel('cms-dayview-priority'); renderTasks();"> Baixa Prioridade</label>
+                            </div>
+                        </div>
+                        <div class="custom-multi-select" id="cms-dayview-assignee">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-dayview-assignee', event)">
+                                <span class="cms-label">Todos Responsáveis</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden" id="cms-dayview-assignee-list"></div>
+                        </div>
+                        <div class="custom-multi-select" id="cms-dayview-brand">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-dayview-brand', event)">
+                                <span class="cms-label">Todas Marcas</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden" id="cms-dayview-brand-list"></div>
+                        </div>
+                        <div class="custom-multi-select" id="cms-dayview-period">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-dayview-period', event)">
+                                <span class="cms-label">Dia Selecionado</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden">
+                                <label class="cms-option"><input type="radio" name="dayview-period-filter" value="today" onchange="updateCMSLabelSingle('cms-dayview-period'); renderTasks();" checked> Dia Selecionado</label>
+                                <label class="cms-option"><input type="radio" name="dayview-period-filter" value="week" onchange="updateCMSLabelSingle('cms-dayview-period'); renderTasks();"> Esta Semana</label>
+                                <label class="cms-option"><input type="radio" name="dayview-period-filter" value="month" onchange="updateCMSLabelSingle('cms-dayview-period'); renderTasks();"> Este Mês</label>
+                                <label class="cms-option"><input type="radio" name="dayview-period-filter" value="all" onchange="updateCMSLabelSingle('cms-dayview-period'); renderTasks();"> Todas as Datas</label>
+                            </div>
+                        </div>
+                        <button class="toggle-completed-btn" onclick="toggleCompletedVisibility()" title="Exibir/Ocultar tarefas concluídas" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 500; transition: all 0.2s;">
+                            <i class='bx bx-hide toggle-completed-icon-class'></i>
+                            <span class="toggle-completed-label-class">Ocultar concluídas</span>
+                        </button>
                     </div>
                 </div>
 
