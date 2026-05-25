@@ -128,27 +128,56 @@
                         <span class="subtitle" style="color: var(--text-secondary); font-size: 0.9rem;">Visão rápida e inteligente das tarefas e do dia</span>
                     </div>
                     <!-- Filtros Rápidos -->
-                    <div class="dashboard-quick-filters" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                        <select id="db-filter-priority" class="db-filter-select" onchange="renderDashboard()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <option value="Todos">Todas Prioridades</option>
-                            <option value="high">Alta Prioridade</option>
-                            <option value="medium">Média Prioridade</option>
-                            <option value="low">Baixa Prioridade</option>
-                        </select>
-                        <select id="db-filter-assignee" class="db-filter-select" onchange="renderDashboard()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <option value="Todos">Todos Responsáveis</option>
-                        </select>
-                        <select id="db-filter-brand" class="db-filter-select" onchange="renderDashboard()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <option value="Todos">Todas Marcas</option>
-                        </select>
-                        <select id="db-filter-period" class="db-filter-select" onchange="renderDashboard()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <option value="today">Hoje</option>
-                            <option value="tomorrow">Amanhã</option>
-                            <option value="week" selected>Esta Semana</option>
-                            <option value="month">Este Mês</option>
-                            <option value="overdue">Atrasadas</option>
-                            <option value="all">Todas as Datas</option>
-                        </select>
+                    <div class="dashboard-quick-filters" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;" id="dashboard-quick-filters-container">
+                        <!-- Custom Multi-Select: Priority -->
+                        <div class="custom-multi-select" id="cms-priority">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-priority', event)">
+                                <span class="cms-label">Todas Prioridades</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden">
+                                <label class="cms-option"><input type="checkbox" value="high" onchange="updateCMSLabel('cms-priority'); renderDashboard();"> Alta Prioridade</label>
+                                <label class="cms-option"><input type="checkbox" value="medium" onchange="updateCMSLabel('cms-priority'); renderDashboard();"> Média Prioridade</label>
+                                <label class="cms-option"><input type="checkbox" value="low" onchange="updateCMSLabel('cms-priority'); renderDashboard();"> Baixa Prioridade</label>
+                            </div>
+                        </div>
+
+                        <!-- Custom Multi-Select: Assignee -->
+                        <div class="custom-multi-select" id="cms-assignee">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-assignee', event)">
+                                <span class="cms-label">Todos Responsáveis</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden" id="cms-assignee-list">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Custom Multi-Select: Brand -->
+                        <div class="custom-multi-select" id="cms-brand">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-brand', event)">
+                                <span class="cms-label">Todas Marcas</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden" id="cms-brand-list">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Custom Multi-Select: Period (Single Selection) -->
+                        <div class="custom-multi-select" id="cms-period">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-period', event)">
+                                <span class="cms-label">Esta Semana</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden">
+                                <label class="cms-option"><input type="radio" name="period-filter" value="today" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();"> Hoje</label>
+                                <label class="cms-option"><input type="radio" name="period-filter" value="tomorrow" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();"> Amanhã</label>
+                                <label class="cms-option"><input type="radio" name="period-filter" value="week" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();" checked> Esta Semana</label>
+                                <label class="cms-option"><input type="radio" name="period-filter" value="month" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();"> Este Mês</label>
+                                <label class="cms-option"><input type="radio" name="period-filter" value="all" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();"> Todas as Datas</label>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -242,26 +271,55 @@
                     </div>
                     <!-- Filtros da Visão Geral de Marcas (Mesmos do Dashboard) -->
                     <div class="kanban-quick-filters" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                        <select id="kanban-filter-priority" class="kanban-filter-select" onchange="renderKanban()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <option value="Todos">Todas Prioridades</option>
-                            <option value="high">Alta Prioridade</option>
-                            <option value="medium">Média Prioridade</option>
-                            <option value="low">Baixa Prioridade</option>
-                        </select>
-                        <select id="kanban-filter-assignee" class="assignee-filter-select" onchange="filterByAssignee(this.value)" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <option value="Todos">Todos Responsáveis</option>
-                        </select>
-                        <select id="kanban-filter-brand" class="kanban-brand-filter-select" onchange="filterByKanbanBrand(this.value)" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <!-- Injetado via JS -->
-                        </select>
-                        <select id="kanban-filter-period" class="kanban-filter-select" onchange="renderKanban()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <option value="all" selected>Todas as Datas</option>
-                            <option value="today">Hoje</option>
-                            <option value="tomorrow">Amanhã</option>
-                            <option value="week">Esta Semana</option>
-                            <option value="month">Este Mês</option>
-                            <option value="overdue">Atrasadas</option>
-                        </select>
+                        <!-- Custom Multi-Select: Priority -->
+                        <div class="custom-multi-select" id="cms-kanban-priority">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-kanban-priority', event)">
+                                <span class="cms-label">Todas Prioridades</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden">
+                                <label class="cms-option"><input type="checkbox" value="high" onchange="updateCMSLabel('cms-kanban-priority'); renderKanban();"> Alta Prioridade</label>
+                                <label class="cms-option"><input type="checkbox" value="medium" onchange="updateCMSLabel('cms-kanban-priority'); renderKanban();"> Média Prioridade</label>
+                                <label class="cms-option"><input type="checkbox" value="low" onchange="updateCMSLabel('cms-kanban-priority'); renderKanban();"> Baixa Prioridade</label>
+                            </div>
+                        </div>
+
+                        <!-- Custom Multi-Select: Assignee -->
+                        <div class="custom-multi-select" id="cms-kanban-assignee">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-kanban-assignee', event)">
+                                <span class="cms-label">Todos Responsáveis</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden" id="cms-kanban-assignee-list">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Custom Multi-Select: Brand -->
+                        <div class="custom-multi-select" id="cms-kanban-brand">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-kanban-brand', event)">
+                                <span class="cms-label">Todas Marcas</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden" id="cms-kanban-brand-list">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Custom Multi-Select: Period (Single Selection) -->
+                        <div class="custom-multi-select" id="cms-kanban-period">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-kanban-period', event)">
+                                <span class="cms-label">Todas as Datas</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden">
+                                <label class="cms-option"><input type="radio" name="kanban-period-filter" value="all" onchange="updateCMSLabelSingle('cms-kanban-period'); renderKanban();" checked> Todas as Datas</label>
+                                <label class="cms-option"><input type="radio" name="kanban-period-filter" value="today" onchange="updateCMSLabelSingle('cms-kanban-period'); renderKanban();"> Hoje</label>
+                                <label class="cms-option"><input type="radio" name="kanban-period-filter" value="tomorrow" onchange="updateCMSLabelSingle('cms-kanban-period'); renderKanban();"> Amanhã</label>
+                                <label class="cms-option"><input type="radio" name="kanban-period-filter" value="week" onchange="updateCMSLabelSingle('cms-kanban-period'); renderKanban();"> Esta Semana</label>
+                                <label class="cms-option"><input type="radio" name="kanban-period-filter" value="month" onchange="updateCMSLabelSingle('cms-kanban-period'); renderKanban();"> Este Mês</label>
+                            </div>
+                        </div>
                         <button class="toggle-completed-btn" onclick="toggleCompletedVisibility()" title="Exibir/Ocultar tarefas concluídas" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 500; transition: all 0.2s;">
                             <i class='bx bx-hide toggle-completed-icon-class'></i>
                             <span class="toggle-completed-label-class">Ocultar concluídas</span>
@@ -288,25 +346,54 @@
                     </div>
                     <!-- Filtros da Visão de Marcas (Mesmos do Dashboard) -->
                     <div class="brand-quick-filters" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                        <select id="brand-filter-priority" class="brand-filter-select" onchange="renderBrandTasks()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <option value="Todos">Todas Prioridades</option>
-                            <option value="high">Alta Prioridade</option>
-                            <option value="medium">Média Prioridade</option>
-                            <option value="low">Baixa Prioridade</option>
-                        </select>
-                        <select id="brand-filter-assignee" class="assignee-filter-select" onchange="filterByAssignee(this.value)" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <option value="Todos">Todos Responsáveis</option>
-                        </select>
-                        <select id="brand-filter-brand" class="brand-filter-select" onchange="filterByBrandViewBrand(this.value)" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <!-- Injetado via JS -->
-                        </select>
-                        <select id="brand-filter-period" class="brand-filter-select" onchange="renderBrandTasks()" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-family: var(--font-family); cursor: pointer; outline: none;">
-                            <option value="today" selected>Dia Selecionado</option>
-                            <option value="week">Esta Semana</option>
-                            <option value="month">Este Mês</option>
-                            <option value="overdue">Atrasadas</option>
-                            <option value="all">Todas as Datas</option>
-                        </select>
+                        <!-- Custom Multi-Select: Priority -->
+                        <div class="custom-multi-select" id="cms-brandview-priority">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-brandview-priority', event)">
+                                <span class="cms-label">Todas Prioridades</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden">
+                                <label class="cms-option"><input type="checkbox" value="high" onchange="updateCMSLabel('cms-brandview-priority'); renderBrandTasks();"> Alta Prioridade</label>
+                                <label class="cms-option"><input type="checkbox" value="medium" onchange="updateCMSLabel('cms-brandview-priority'); renderBrandTasks();"> Média Prioridade</label>
+                                <label class="cms-option"><input type="checkbox" value="low" onchange="updateCMSLabel('cms-brandview-priority'); renderBrandTasks();"> Baixa Prioridade</label>
+                            </div>
+                        </div>
+
+                        <!-- Custom Multi-Select: Assignee -->
+                        <div class="custom-multi-select" id="cms-brandview-assignee">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-brandview-assignee', event)">
+                                <span class="cms-label">Todos Responsáveis</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden" id="cms-brandview-assignee-list">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Custom Multi-Select: Brand -->
+                        <div class="custom-multi-select" id="cms-brandview-brand">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-brandview-brand', event)">
+                                <span class="cms-label">Todas Marcas</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden" id="cms-brandview-brand-list">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Custom Multi-Select: Period (Single Selection) -->
+                        <div class="custom-multi-select" id="cms-brandview-period">
+                            <button class="cms-btn" onclick="toggleCustomSelect('cms-brandview-period', event)">
+                                <span class="cms-label">Dia Selecionado</span>
+                                <i class='bx bx-chevron-down'></i>
+                            </button>
+                            <div class="cms-dropdown hidden">
+                                <label class="cms-option"><input type="radio" name="brandview-period-filter" value="today" onchange="updateCMSLabelSingle('cms-brandview-period'); renderBrandTasks();" checked> Dia Selecionado</label>
+                                <label class="cms-option"><input type="radio" name="brandview-period-filter" value="week" onchange="updateCMSLabelSingle('cms-brandview-period'); renderBrandTasks();"> Esta Semana</label>
+                                <label class="cms-option"><input type="radio" name="brandview-period-filter" value="month" onchange="updateCMSLabelSingle('cms-brandview-period'); renderBrandTasks();"> Este Mês</label>
+                                <label class="cms-option"><input type="radio" name="brandview-period-filter" value="all" onchange="updateCMSLabelSingle('cms-brandview-period'); renderBrandTasks();"> Todas as Datas</label>
+                            </div>
+                        </div>
                         <button class="toggle-completed-btn" onclick="toggleCompletedVisibility()" title="Exibir/Ocultar tarefas concluídas" style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 500; transition: all 0.2s;">
                             <i class='bx bx-hide toggle-completed-icon-class'></i>
                             <span class="toggle-completed-label-class">Ocultar concluídas</span>

@@ -158,15 +158,14 @@ window.handleSimpleLogin = async function() {
 }
 
 function finalizeLogin(email, role, username) {
-    localStorage.setItem('empresa_auth_user', email);
+    localStorage.setItem('empresa_auth_user', email.toLowerCase().trim());
     localStorage.setItem('empresa_auth_role', role);
     if(username) {
         localStorage.setItem('empresa_auth_username', username);
     } else {
         localStorage.setItem('empresa_auth_username', email.split('@')[0]);
     }
-    document.getElementById('simple-login-modal').classList.add('hidden');
-    checkUserRole();
+    location.reload();
 }
 
 window.addSystemUser = async function() {
@@ -512,11 +511,36 @@ function setupGlobalListeners() {
         }
     });
     window.db.collectionGroup('tasks').onSnapshot((snapshot) => {
+        const rawEmail = localStorage.getItem('empresa_auth_user') || '';
+        const loggedInEmail = rawEmail.toLowerCase().trim();
+        const isAdmin = loggedInEmail === 'kimsurfe@gmail.com';
+
         const allTasks = [];
         snapshot.forEach(doc => {
-            const pathSegments = doc.ref.path.split('/');
-            const dayId = pathSegments[1];
-            allTasks.push({ id: doc.id, dayId: dayId, refPath: doc.ref.path, ...doc.data() });
+            const taskData = doc.data();
+            
+            // Tratamento retroativo para tarefas que não tinham assignees
+            let taskAssignees = taskData.assignees || [];
+            if (!Array.isArray(taskAssignees) && typeof taskAssignees === 'string') {
+                taskAssignees = [taskAssignees];
+            }
+            if (taskData.assignee && !taskAssignees.includes(taskData.assignee)) {
+                taskAssignees.push(taskData.assignee);
+            }
+            
+            // Regra de visualização: admin vê tudo, usuário comum vê apenas tarefas atribuídas a si
+            let canView = false;
+            if (isAdmin) {
+                canView = true;
+            } else if (taskAssignees.some(a => a.toLowerCase().trim() === loggedInEmail)) {
+                canView = true;
+            }
+
+            if (canView) {
+                const pathSegments = doc.ref.path.split('/');
+                const dayId = pathSegments[1];
+                allTasks.push({ id: doc.id, dayId: dayId, refPath: doc.ref.path, ...taskData });
+            }
         });
         window.allGlobalTasks = allTasks;
         renderKanban();
@@ -617,6 +641,21 @@ function updateAssigneeFilters() {
     const loggedInEmail = localStorage.getItem('empresa_auth_user');
     
     // 1. Filtro do Dashboard: Padrão é o usuário logado
+    const cmsAssigneeList = document.getElementById('cms-assignee-list');
+    if (cmsAssigneeList) {
+        const checkedVals = window.getCMSValues('cms-assignee');
+        cmsAssigneeList.innerHTML = '';
+        assignees.forEach(a => {
+            let isChecked = checkedVals.includes(a) ? 'checked' : '';
+            if (checkedVals.length === 0 && !window.hasInitializedAssigneeFilterDB) {
+                if (a === loggedInEmail) isChecked = 'checked';
+            }
+            cmsAssigneeList.innerHTML += `<label class="cms-option"><input type="checkbox" value="${a}" onchange="updateCMSLabel('cms-assignee'); renderDashboard();" ${isChecked}> ${window.userEmailToName[a] || a}</label>`;
+        });
+        window.hasInitializedAssigneeFilterDB = true;
+        window.updateCMSLabel('cms-assignee');
+    }
+
     const dbSelect = document.getElementById('db-filter-assignee');
     if (dbSelect) {
         const currentVal = dbSelect.value;
@@ -1187,14 +1226,16 @@ async function generateRecurringTasks(baseDateStr, recurrence, selectedDays, ser
             const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
             occurrenceDeadline = formatDate(occurrenceEnd);
         }
-
         const newTask = {
             text, subtitle, status: currentStatus, priority, brand, assignees, comments, 
             startDate: dateStr,
             deadline: occurrenceDeadline, 
             createdAt: new Date().getTime(),
-            recurrenceRule: recurrence, recurrenceDays: selectedDays, seriesId
+            recurrenceRule: recurrence, recurrenceDays: selectedDays
         };
+        if (recurrence !== 'none') {
+            newTask.seriesId = seriesId;
+        }
         
         if (currentStatus === 'completed') {
             newTask.completedAt = Date.now();
@@ -1518,8 +1559,10 @@ function renderBrandTasks() {
     if(!window.allGlobalTasks) return;
     
     // Obter filtros ativos da Brand View
-    const priorityFilter = document.getElementById('brand-filter-priority') ? document.getElementById('brand-filter-priority').value : 'Todos';
-    const periodFilter = document.getElementById('brand-filter-period') ? document.getElementById('brand-filter-period').value : 'today';
+    const priorityFilters = window.getCMSValues('cms-brandview-priority');
+    const assigneeFilters = window.getCMSValues('cms-brandview-assignee');
+    const brandFilters = window.getCMSValues('cms-brandview-brand');
+    const periodFilter = window.getCMSValueSingle('cms-brandview-period');
     const todayStr = formatDate(new Date());
     
     const tomorrowObj = new Date(); tomorrowObj.setDate(tomorrowObj.getDate() + 1);
@@ -1527,16 +1570,19 @@ function renderBrandTasks() {
     
     const brandTasks = window.allGlobalTasks.filter(t => {
         // Marca
-        if(t.brand !== currentViewBrand) return false;
+        if(brandFilters.length > 0 && !brandFilters.includes(t.brand)) return false;
+        if(brandFilters.length === 0 && t.brand !== currentViewBrand) return false;
         
         // Exibir/Ocultar concluídas
         if(!showCompleted && t.status === 'completed') return false;
         
-        // Responsável (Usa currentAssigneeFilter que já está sincronizado)
-        if(currentAssigneeFilter !== "Todos" && (!t.assignees || !t.assignees.includes(currentAssigneeFilter))) return false;
+        // Responsável
+        if(assigneeFilters.length > 0) {
+            if(!t.assignees || !t.assignees.some(a => assigneeFilters.includes(a))) return false;
+        }
         
         // Prioridade
-        if(priorityFilter !== 'Todos' && t.priority !== priorityFilter) return false;
+        if(priorityFilters.length > 0 && !priorityFilters.includes(t.priority)) return false;
         
         // Período
         if (periodFilter === 'today') {
@@ -1647,15 +1693,38 @@ function listenToActiveDateTasks(dateStr) {
     unsubscribeDayTasks = window.db.collection(`days/${dateStr}/tasks`)
         .orderBy("createdAt")
         .onSnapshot((snapshot) => {
+            const rawEmail = localStorage.getItem('empresa_auth_user') || '';
+            const loggedInEmail = rawEmail.toLowerCase().trim();
+            const isAdmin = loggedInEmail === 'kimsurfe@gmail.com';
+
             localTasks = [];
             snapshot.forEach((doc) => {
-                localTasks.push({ 
-                    id: doc.id, 
-                    refPath: `days/${dateStr}/tasks/${doc.id}`,
-                    ...doc.data() 
-                });
+                const taskData = doc.data();
+                
+                // Tratamento retroativo para tarefas que não tinham assignees
+                let taskAssignees = taskData.assignees || [];
+                if (!Array.isArray(taskAssignees) && typeof taskAssignees === 'string') {
+                    taskAssignees = [taskAssignees];
+                }
+                if (taskData.assignee && !taskAssignees.includes(taskData.assignee)) {
+                    taskAssignees.push(taskData.assignee);
+                }
+                
+                let canView = false;
+                if (isAdmin) {
+                    canView = true;
+                } else if (taskAssignees.some(a => a.toLowerCase().trim() === loggedInEmail)) {
+                    canView = true;
+                }
+
+                if (canView) {
+                    localTasks.push({ 
+                        id: doc.id, 
+                        refPath: `days/${dateStr}/tasks/${doc.id}`,
+                        ...taskData 
+                    });
+                }
             });
-            
             handleDayDocumentLifecycle(dateStr, localTasks.length);
             renderTasks();
         });
@@ -1787,9 +1856,10 @@ function renderKanban() {
     kanbanBoard.innerHTML = '';
     
     // Obter filtros ativos da Kanban View
-    const priorityFilter = document.getElementById('kanban-filter-priority') ? document.getElementById('kanban-filter-priority').value : 'Todos';
-    const periodFilter = document.getElementById('kanban-filter-period') ? document.getElementById('kanban-filter-period').value : 'all';
-    const brandFilter = document.getElementById('kanban-filter-brand') ? document.getElementById('kanban-filter-brand').value : 'Todos';
+    const priorityFilters = window.getCMSValues('cms-kanban-priority');
+    const periodFilter = window.getCMSValueSingle('cms-kanban-period');
+    const brandFilters = window.getCMSValues('cms-kanban-brand');
+    const assigneeFilters = window.getCMSValues('cms-kanban-assignee');
     const todayStr = formatDate(new Date());
     
     const tomorrowObj = new Date(); tomorrowObj.setDate(tomorrowObj.getDate() + 1);
@@ -1812,7 +1882,15 @@ function renderKanban() {
         }
         
         // Prioridade
-        if(priorityFilter !== 'Todos' && t.priority !== priorityFilter) return false;
+        if(priorityFilters.length > 0 && !priorityFilters.includes(t.priority)) return false;
+        
+        // Brand Filter (Adicionado no Kanban geral)
+        if(brandFilters.length > 0 && !brandFilters.includes(t.brand)) return false;
+
+        // Assignee Filter
+        if(assigneeFilters.length > 0) {
+            if(!t.assignees || !t.assignees.some(a => assigneeFilters.includes(a))) return false;
+        }
         
         // Período
         if (periodFilter === 'today') {
@@ -1851,8 +1929,8 @@ function renderKanban() {
     });
 
     let orderedKeys = [...brands, "Sem Marca"];
-    if (brandFilter !== 'Todos') {
-        orderedKeys = orderedKeys.filter(b => b === brandFilter);
+    if (brandFilters.length > 0) {
+        orderedKeys = orderedKeys.filter(b => brandFilters.includes(b));
     }
     
     orderedKeys.forEach(brand => {
@@ -1861,14 +1939,14 @@ function renderKanban() {
 
         // Contagem APENAS das tarefas pendentes, independentemente de estarem sendo exibidas ou não
         let countTasks = columnTasks.filter(t => t.status !== 'completed');
-        if (currentAssigneeFilter !== "Todos") {
-            countTasks = countTasks.filter(t => t.assignees && t.assignees.includes(currentAssigneeFilter));
+        if (assigneeFilters.length > 0) {
+            countTasks = countTasks.filter(t => t.assignees && t.assignees.some(a => assigneeFilters.includes(a)));
         }
         const pendingCount = countTasks.length;
 
         let displayTasks = columnTasks;
-        if (currentAssigneeFilter !== "Todos") {
-            displayTasks = displayTasks.filter(t => t.assignees && t.assignees.includes(currentAssigneeFilter));
+        if (assigneeFilters.length > 0) {
+            displayTasks = displayTasks.filter(t => t.assignees && t.assignees.some(a => assigneeFilters.includes(a)));
         }
         if (!showCompleted) {
             displayTasks = displayTasks.filter(t => t.status !== 'completed');
@@ -2212,21 +2290,15 @@ window.saveProfileChanges = async function() {
 // ----------------------------------------------------
 window.updateDashboardFilterBrands = function() {
     // Dashboard Filter
-    const select = document.getElementById('db-filter-brand');
-    if(select) {
-        const currentVal = select.value;
-        select.innerHTML = '<option value="Todos">Todas Marcas</option>';
+    const list = document.getElementById('cms-brand-list');
+    if(list) {
+        const checkedVals = window.getCMSValues('cms-brand');
+        list.innerHTML = '';
         brands.forEach(b => {
-            const opt = document.createElement('option');
-            opt.value = b;
-            opt.textContent = b;
-            select.appendChild(opt);
+            const isChecked = checkedVals.includes(b) ? 'checked' : '';
+            list.innerHTML += `<label class="cms-option"><input type="checkbox" value="${b}" onchange="updateCMSLabel('cms-brand'); renderDashboard();" ${isChecked}> ${b}</label>`;
         });
-        if(brands.includes(currentVal) || currentVal === 'Todos') {
-            select.value = currentVal;
-        } else {
-            select.value = 'Todos';
-        }
+        window.updateCMSLabel('cms-brand');
     }
 
     // Brand View Filter
@@ -2250,21 +2322,27 @@ window.updateDashboardFilterBrands = function() {
     }
 
     // Kanban View Filter
-    const kanbanBrandSelect = document.getElementById('kanban-filter-brand');
-    if(kanbanBrandSelect) {
-        const currentKanbanBrandVal = kanbanBrandSelect.value || 'Todos';
-        kanbanBrandSelect.innerHTML = '<option value="Todos">Todas Marcas</option>';
+    const kanbanList = document.getElementById('cms-kanban-brand-list');
+    if(kanbanList) {
+        const checkedVals = window.getCMSValues('cms-kanban-brand');
+        kanbanList.innerHTML = '';
         brands.forEach(b => {
-            const opt = document.createElement('option');
-            opt.value = b;
-            opt.textContent = b;
-            kanbanBrandSelect.appendChild(opt);
+            const isChecked = checkedVals.includes(b) ? 'checked' : '';
+            kanbanList.innerHTML += `<label class="cms-option"><input type="checkbox" value="${b}" onchange="updateCMSLabel('cms-kanban-brand'); renderKanban();" ${isChecked}> ${b}</label>`;
         });
-        if(brands.includes(currentKanbanBrandVal) || currentKanbanBrandVal === 'Todos') {
-            kanbanBrandSelect.value = currentKanbanBrandVal;
-        } else {
-            kanbanBrandSelect.value = 'Todos';
-        }
+        window.updateCMSLabel('cms-kanban-brand');
+    }
+
+    // Brand View Filter
+    const brandViewList = document.getElementById('cms-brandview-brand-list');
+    if(brandViewList) {
+        const checkedVals = window.getCMSValues('cms-brandview-brand');
+        brandViewList.innerHTML = '';
+        brands.forEach(b => {
+            const isChecked = checkedVals.includes(b) || (checkedVals.length === 0 && b === currentViewBrand) ? 'checked' : '';
+            brandViewList.innerHTML += `<label class="cms-option"><input type="checkbox" value="${b}" onchange="updateCMSLabel('cms-brandview-brand'); renderBrandTasks();" ${isChecked}> ${b}</label>`;
+        });
+        window.updateCMSLabel('cms-brandview-brand');
     }
 }
 
@@ -2314,25 +2392,37 @@ function isCurrentMonthGlobal(dateStr) {
 }
 
 window.updateDashboardFilterAssignees = function() {
-    const select = document.getElementById('db-filter-assignee');
-    if(!select) return;
-    const currentVal = select.value;
-    select.innerHTML = '<option value="Todos">Todos Responsáveis</option>';
-    assignees.forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a;
-        opt.textContent = window.userEmailToName[a] || a;
-        select.appendChild(opt);
-    });
-    
-    const loggedInEmail = localStorage.getItem('empresa_auth_user');
-    if (!window.hasInitializedAssigneeFilter && loggedInEmail && assignees.includes(loggedInEmail)) {
-        select.value = loggedInEmail;
-        window.hasInitializedAssigneeFilter = true;
-    } else if(currentVal && (assignees.includes(currentVal) || currentVal === 'Todos')) {
-        select.value = currentVal;
-    } else {
-        select.value = 'Todos';
+    const list = document.getElementById('cms-assignee-list');
+    if(list) {
+        const checkedVals = window.getCMSValues('cms-assignee');
+        list.innerHTML = '';
+        assignees.forEach(a => {
+            const isChecked = checkedVals.includes(a) ? 'checked' : '';
+            list.innerHTML += `<label class="cms-option"><input type="checkbox" value="${a}" onchange="updateCMSLabel('cms-assignee'); renderDashboard();" ${isChecked}> ${window.userEmailToName[a] || a}</label>`;
+        });
+        window.updateCMSLabel('cms-assignee');
+    }
+
+    const kanbanList = document.getElementById('cms-kanban-assignee-list');
+    if(kanbanList) {
+        const checkedVals = window.getCMSValues('cms-kanban-assignee');
+        kanbanList.innerHTML = '';
+        assignees.forEach(a => {
+            const isChecked = checkedVals.includes(a) ? 'checked' : '';
+            kanbanList.innerHTML += `<label class="cms-option"><input type="checkbox" value="${a}" onchange="updateCMSLabel('cms-kanban-assignee'); renderKanban();" ${isChecked}> ${window.userEmailToName[a] || a}</label>`;
+        });
+        window.updateCMSLabel('cms-kanban-assignee');
+    }
+
+    const brandViewList = document.getElementById('cms-brandview-assignee-list');
+    if(brandViewList) {
+        const checkedVals = window.getCMSValues('cms-brandview-assignee');
+        brandViewList.innerHTML = '';
+        assignees.forEach(a => {
+            const isChecked = checkedVals.includes(a) ? 'checked' : '';
+            brandViewList.innerHTML += `<label class="cms-option"><input type="checkbox" value="${a}" onchange="updateCMSLabel('cms-brandview-assignee'); renderBrandTasks();" ${isChecked}> ${window.userEmailToName[a] || a}</label>`;
+        });
+        window.updateCMSLabel('cms-brandview-assignee');
     }
 }
 
@@ -2378,12 +2468,11 @@ window.renderDashboard = function() {
     if(!window.allGlobalTasks || !viewDashboard.classList.contains('active')) return;
 
     const todayStr = formatDate(new Date());
-    
     // 1. Obter filtros ativos do Dashboard
-    const priorityFilter = document.getElementById('db-filter-priority') ? document.getElementById('db-filter-priority').value : 'Todos';
-    const assigneeFilter = document.getElementById('db-filter-assignee') ? document.getElementById('db-filter-assignee').value : 'Todos';
-    const brandFilter = document.getElementById('db-filter-brand') ? document.getElementById('db-filter-brand').value : 'Todos';
-    const periodFilter = document.getElementById('db-filter-period') ? document.getElementById('db-filter-period').value : 'week';
+    const priorityFilters = window.getCMSValues('cms-priority');
+    const assigneeFilters = window.getCMSValues('cms-assignee');
+    const brandFilters = window.getCMSValues('cms-brand');
+    const periodFilter = window.getCMSValueSingle('cms-period');
 
     // Utilitários de data
     const isOverdue = (t) => {
@@ -2400,9 +2489,11 @@ window.renderDashboard = function() {
 
     // 2. Filtrar base de tarefas pelas marcas, responsáveis e prioridade (para estatísticas e grids)
     const baseFilteredTasks = window.allGlobalTasks.filter(t => {
-        if(priorityFilter !== 'Todos' && t.priority !== priorityFilter) return false;
-        if(assigneeFilter !== 'Todos' && (!t.assignees || !t.assignees.includes(assigneeFilter))) return false;
-        if(brandFilter !== 'Todos' && t.brand !== brandFilter) return false;
+        if (priorityFilters.length > 0 && !priorityFilters.includes(t.priority)) return false;
+        if (brandFilters.length > 0 && !brandFilters.includes(t.brand)) return false;
+        if (assigneeFilters.length > 0) {
+            if (!t.assignees || !t.assignees.some(a => assigneeFilters.includes(a))) return false;
+        }
         return true;
     });
 
@@ -2733,3 +2824,61 @@ window.renderDashboard = function() {
 
 // Start
 init();
+
+// Custom Multi-Select Helper Functions
+window.toggleCustomSelect = function(id, event) {
+    if(event) event.stopPropagation();
+    const dropdown = document.querySelector(`#${id} .cms-dropdown`);
+    document.querySelectorAll('.cms-dropdown').forEach(d => {
+        if (d !== dropdown) d.classList.add('hidden');
+    });
+    if (dropdown) dropdown.classList.toggle('hidden');
+};
+
+window.addEventListener('click', function(e) {
+    if(!e.target.closest('.custom-multi-select')) {
+        document.querySelectorAll('.cms-dropdown').forEach(d => {
+            d.classList.add('hidden');
+        });
+    }
+});
+
+window.updateCMSLabel = function(id) {
+    const container = document.getElementById(id);
+    if(!container) return;
+    const checked = container.querySelectorAll('input[type="checkbox"]:checked');
+    const label = container.querySelector('.cms-label');
+    if (checked.length === 0) {
+        if(id === 'cms-priority') label.textContent = 'Todas Prioridades';
+        if(id === 'cms-assignee') label.textContent = 'Todos Responsáveis';
+        if(id === 'cms-brand') label.textContent = 'Todas Marcas';
+    } else if (checked.length === 1) {
+        label.textContent = checked[0].parentElement.textContent.trim();
+    } else {
+        label.textContent = `${checked.length} Selecionados`;
+    }
+};
+
+window.updateCMSLabelSingle = function(id) {
+    const container = document.getElementById(id);
+    if(!container) return;
+    const checked = container.querySelector('input[type="radio"]:checked');
+    const label = container.querySelector('.cms-label');
+    if (checked) {
+        label.textContent = checked.parentElement.textContent.trim();
+    }
+};
+
+window.getCMSValues = function(id) {
+    const container = document.getElementById(id);
+    if(!container) return [];
+    const checked = Array.from(container.querySelectorAll('input[type="checkbox"]:checked'));
+    return checked.map(c => c.value);
+};
+
+window.getCMSValueSingle = function(id) {
+    const container = document.getElementById(id);
+    if(!container) return 'week';
+    const checked = container.querySelector('input[type="radio"]:checked');
+    return checked ? checked.value : 'week';
+};
