@@ -1016,7 +1016,6 @@ document.getElementById('delete-task-modal-btn').addEventListener('click', async
         if(confirm('Tem certeza que deseja excluir esta tarefa?')) {
             await window.db.doc(editingTaskRefPath).delete();
             closeTaskModal();
-            window.location.reload();
         }
     }
 });
@@ -1030,7 +1029,6 @@ document.getElementById('confirm-delete-only-this').addEventListener('click', as
     await window.db.doc(editingTaskRefPath).delete();
     document.getElementById('delete-series-modal').classList.add('hidden');
     closeTaskModal();
-    window.location.reload();
 });
 
 document.getElementById('confirm-delete-all-series').addEventListener('click', async () => {
@@ -1053,7 +1051,6 @@ document.getElementById('confirm-delete-all-series').addEventListener('click', a
     
     document.getElementById('delete-series-modal').classList.add('hidden');
     closeTaskModal();
-    window.location.reload();
 });
 
 // Toggle status dentro do modal
@@ -1204,7 +1201,6 @@ async function saveTask() {
     }
 
     closeTaskModal();
-    window.location.reload();
 }
 
 // Confirmadores de Salvamento de Série Recorrente
@@ -1225,7 +1221,6 @@ document.getElementById('confirm-save-only-this').addEventListener('click', asyn
     
     document.getElementById('save-series-modal').classList.add('hidden');
     closeTaskModal();
-    window.location.reload();
 });
 
 document.getElementById('confirm-save-future-series').addEventListener('click', async () => {
@@ -1273,7 +1268,6 @@ document.getElementById('confirm-save-future-series').addEventListener('click', 
     
     document.getElementById('save-series-modal').classList.add('hidden');
     closeTaskModal();
-    window.location.reload();
 });
 
 document.getElementById('confirm-save-all-series').addEventListener('click', async () => {
@@ -1326,7 +1320,6 @@ document.getElementById('confirm-save-all-series').addEventListener('click', asy
     
     document.getElementById('save-series-modal').classList.add('hidden');
     closeTaskModal();
-    window.location.reload();
 });
 
 async function generateRecurringTasks(baseDateStr, recurrence, selectedDays, seriesId, text, subtitle, priority, brand, assignees, comments, deadline, skipFirst = false, statusVal = 'pending') {
@@ -2185,7 +2178,7 @@ function createTaskDOM(task, dayIdContext, isKanban = false) {
     div.className = `task-item ${task.status === 'completed' ? 'completed' : ''} ${isKanban ? 'kanban-card' : ''}`;
     
     const isCompleted = task.status === 'completed';
-    const icon = isCompleted ? '✅' : '⚠️';
+    const icon = isCompleted ? "<i class='bx bx-check-circle'></i>" : "<i class='bx bx-circle'></i>";
     
     const refPath = task.refPath || `days/${dayIdContext}/tasks/${task.id}`;
 
@@ -2265,16 +2258,11 @@ function createTaskDOM(task, dayIdContext, isKanban = false) {
         `;
     } else {
         div.innerHTML = `
-            <button class="task-status-btn" onclick="promptCompleteTask('${refPath}', '${task.status}')">${icon}</button>
-            <div class="task-content-wrapper">
+            <div class="task-content-wrapper" style="width: 100%;">
                 <div class="task-title-row">
                     <div style="display: flex; flex-direction: column;">
                         <span class="task-title">${task.text}</span>
                         ${task.subtitle ? `<span class="task-subtitle" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 2px;">${task.subtitle}</span>` : ''}
-                    </div>
-                    <div class="task-actions-row">
-                        <button class="task-action-btn" onclick="editTask('${refPath}')" title="Editar"><i class='bx bx-edit-alt'></i></button>
-                        <button class="task-action-btn delete-btn" onclick="deleteTaskGlobal('${refPath}')" title="Excluir"><i class='bx bx-trash'></i></button>
                     </div>
                 </div>
                 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; margin-top: 0.5rem;">
@@ -2284,6 +2272,11 @@ function createTaskDOM(task, dayIdContext, isKanban = false) {
                 </div>
                 ${commentsHtml}
                 ${feedbackHtml}
+                <div class="kanban-actions" style="margin-top: 1rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05);">
+                    <button class="kanban-action-btn edit-btn" onclick="editTask('${refPath}')" title="Editar"><i class='bx bx-edit-alt'></i></button>
+                    <button class="kanban-action-btn delete-btn" onclick="deleteTaskGlobal('${refPath}')" title="Excluir"><i class='bx bx-trash'></i></button>
+                    <button class="kanban-action-btn finish-btn" onclick="promptCompleteTask('${refPath}', '${task.status}')">${isCompleted ? 'Desfazer ↩️' : 'Concluir ✅'}</button>
+                </div>
             </div>
         `;
     }
@@ -2920,10 +2913,15 @@ window.renderDashboard = function() {
                 tasksList += `
                     <div class="timeline-task-item" style="font-size:0.78rem; display:${isExtra ? 'none' : 'flex'}; flex-direction:column; gap:2px; background:rgba(255,255,255,0.02); padding:0.4rem; border-radius:6px; border:1px solid rgba(255,255,255,0.03); cursor:pointer; margin-bottom: 0.4rem;" onclick="editTask('${t.refPath}')">
                         <div style="display:flex; align-items:center; justify-content:space-between;">
-                            <span style="font-weight:600; color:var(--text-primary);">${t.text}</span>
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <button onclick="event.stopPropagation(); promptCompleteTask('${t.refPath}', '${t.status}')" style="background:transparent; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem; padding:0; display:flex; align-items:center; transition: color 0.2s;" onmouseover="this.style.color='var(--accent-color)'" onmouseout="this.style.color='var(--text-secondary)'" title="Concluir Tarefa">
+                                    <i class='bx bx-circle'></i>
+                                </button>
+                                <span style="font-weight:600; color:var(--text-primary);">${t.text}</span>
+                            </div>
                             <span style="font-size:0.65rem; color:${badgeColor}; font-weight:700; text-transform:uppercase;">${priorityLabel}</span>
                         </div>
-                        ${t.subtitle ? `<span style="font-size:0.72rem; color:var(--text-secondary);">${t.subtitle}</span>` : ''}
+                        ${t.subtitle ? `<span style="font-size:0.72rem; color:var(--text-secondary); margin-left:1.6rem;">${t.subtitle}</span>` : ''}
                     </div>
                 `;
             });
