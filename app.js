@@ -2200,6 +2200,21 @@ function createTaskDOM(task, dayIdContext, isKanban = false) {
         badgesHtml += `<span class="badge brand"><i class='bx bx-tag'></i> ${task.brand}</span>`;
     }
 
+    if(task.status !== 'completed') {
+        const refDateStr = task.deadline || task.dayId || dayIdContext;
+        if(refDateStr) {
+            const todayStr = window.formatDate ? window.formatDate(new Date()) : new Date().toISOString().split('T')[0];
+            if(refDateStr < todayStr) {
+                const [y, m, d] = refDateStr.split('-').map(Number);
+                const refDateObj = new Date(y, m - 1, d);
+                const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
+                const diffTime = todayMidnight - refDateObj;
+                const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+                badgesHtml += `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--danger-color); font-weight: 600;"><i class='bx bx-alarm'></i> Vencida há ${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}</span>`;
+            }
+        }
+    }
+
     let assigneesHtml = '';
     if(task.assignees && task.assignees.length > 0) {
         const assigneeNames = task.assignees.map(email => window.userEmailToName[email] || email);
@@ -2805,7 +2820,7 @@ window.renderDashboard = function() {
     }
 
     // 6. Atualizar Quadro: Tarefas Atrasadas
-    const overdueTasks = periodTasks.filter(isOverdue).sort((a,b) => {
+    const overdueTasks = baseFilteredTasks.filter(isOverdue).sort((a,b) => {
         const pA = priorityValue[a.priority || 'medium'] || 2;
         const pB = priorityValue[b.priority || 'medium'] || 2;
         if (pA !== pB) return pB - pA;
@@ -2828,22 +2843,6 @@ window.renderDashboard = function() {
                 cardEl.addEventListener('click', (e) => {
                     if(!e.target.closest('button')) editTask(task.refPath);
                 });
-
-                // Calcular dias de atraso e injetar badge de alerta
-                const refDateStr = task.deadline || task.dayId;
-                const [y, m, d] = refDateStr.split('-').map(Number);
-                const refDate = new Date(y, m - 1, d);
-                const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
-                const diffTime = todayMidnight - refDate;
-                const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-
-                const overdueBadge = document.createElement('span');
-                overdueBadge.className = 'badge';
-                overdueBadge.style.cssText = 'background: rgba(239, 68, 68, 0.15); color: var(--danger-color); font-weight: 600; margin-left: 0.5rem;';
-                overdueBadge.innerHTML = `<i class='bx bx-alarm'></i> Vencida há ${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}`;
-                
-                const badgesDiv = cardEl.querySelector('.task-badges');
-                if(badgesDiv) badgesDiv.appendChild(overdueBadge);
 
                 overdueListEl.appendChild(cardEl);
             });
