@@ -298,6 +298,7 @@ function checkUserRole() {
             adminLogsMenu.style.display = 'block';
         } else {
             adminLogsMenu.style.display = 'none';
+            adminLogsMenu.remove(); // Remove completamente do HTML por segurança
         }
     }
     
