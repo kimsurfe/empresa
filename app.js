@@ -266,6 +266,22 @@ function renderSettingsUsers(usersList) {
     });
 }
 
+window.logUserAccess = async function(areaName) {
+    const rawEmail = localStorage.getItem('empresa_auth_user') || '';
+    const loggedInEmail = rawEmail.toLowerCase().trim();
+    if (!loggedInEmail || loggedInEmail === 'kimsurfe@gmail.com') return;
+
+    try {
+        await window.db.collection('access_logs').add({
+            userEmail: loggedInEmail,
+            area: areaName,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch(err) {
+        console.error("Erro ao registrar log de acesso:", err);
+    }
+};
+
 function checkUserRole() {
     const role = localStorage.getItem('empresa_auth_role');
     if (role === 'admin') {
@@ -273,6 +289,18 @@ function checkUserRole() {
     } else {
         document.body.classList.remove('is-admin');
     }
+    
+    const rawEmail = localStorage.getItem('empresa_auth_user') || '';
+    const loggedInEmail = rawEmail.toLowerCase().trim();
+    const adminLogsMenu = document.getElementById('admin-logs-menu');
+    if(adminLogsMenu) {
+        if(loggedInEmail === 'kimsurfe@gmail.com') {
+            adminLogsMenu.style.display = 'block';
+        } else {
+            adminLogsMenu.style.display = 'none';
+        }
+    }
+    
     updateUserHeader();
 }
 
@@ -447,21 +475,29 @@ function switchTab(tab) {
     viewKanban.classList.remove('active');
     viewBrand.classList.remove('active');
     
+    const viewLogs = document.getElementById('view-logs');
+    if (viewLogs) viewLogs.classList.remove('active');
+    const navLogsBtn = document.getElementById('nav-logs-btn');
+    if (navLogsBtn) navLogsBtn.classList.remove('active');
+    
     // Remover a classe active de todas as marcas do sidebar
     document.querySelectorAll('.sidebar-brand-item').forEach(el => el.classList.remove('active'));
 
     if (tab === 'dashboard') {
+        if (window.logUserAccess) window.logUserAccess('Dashboard (Painel de Operações)');
         if (tabDashboard) tabDashboard.classList.add('active');
         if (navDashboardBtn) navDashboardBtn.classList.add('active');
         if (viewDashboard) viewDashboard.classList.add('active');
         currentViewBrand = null;
         renderDashboard();
     } else if(tab === 'day') {
+        if (window.logUserAccess) window.logUserAccess('Calendário Diário');
         tabDay.classList.add('active');
         if(navDayBtn) navDayBtn.classList.add('active');
         viewDay.classList.add('active');
         currentViewBrand = null;
     } else if (tab === 'kanban') {
+        if (window.logUserAccess) window.logUserAccess('Visão Geral de Marcas (Kanban)');
         tabKanban.classList.add('active');
         if(navBrandsBtn) navBrandsBtn.classList.add('active');
         viewKanban.classList.add('active');
@@ -476,7 +512,13 @@ function switchTab(tab) {
         if (kanbanPeriodSelect) kanbanPeriodSelect.value = 'all';
         
         renderKanban();
+    } else if (tab === 'logs') {
+        if(viewLogs) viewLogs.classList.add('active');
+        if(navLogsBtn) navLogsBtn.classList.add('active');
+        currentViewBrand = null;
+        if (window.renderAccessLogs) window.renderAccessLogs();
     } else if (tab === 'brand') {
+        if (window.logUserAccess && currentViewBrand) window.logUserAccess(`Marca: ${currentViewBrand}`);
         viewBrand.classList.add('active');
         if(navBrandsBtn) navBrandsBtn.classList.add('active');
     }
@@ -3177,3 +3219,75 @@ function setupPullToRefresh() {
     });
 }
 document.addEventListener('DOMContentLoaded', setupPullToRefresh);
+
+// ----------------------------------------------------
+// LOGS DE ACESSO (BACKLOG) - SOMENTE ADMIN
+// ----------------------------------------------------
+window.renderAccessLogs = async function() {
+    const container = document.getElementById('access-logs-container');
+    if (!container) return;
+
+    container.innerHTML = `<div class="empty-state" style="padding: 3rem;"><i class='bx bx-loader-alt bx-spin'></i><p>Carregando logs...</p></div>`;
+
+    try {
+        const snapshot = await window.db.collection('access_logs')
+            .orderBy('timestamp', 'desc')
+            .limit(100)
+            .get();
+
+        if (snapshot.empty) {
+            container.innerHTML = `<div class="empty-state" style="padding: 3rem;"><i class='bx bx-history'></i><p>Nenhum log de acesso registrado ainda.</p></div>`;
+            return;
+        }
+
+        let html = `<table style="width: 100%; border-collapse: collapse; text-align: left;">
+            <thead>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Data e Hora</th>
+                    <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Usuário</th>
+                    <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Área / Ação</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const dateObj = data.timestamp ? data.timestamp.toDate() : new Date();
+            const dateStr = dateObj.toLocaleDateString('pt-BR');
+            const timeStr = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const email = data.userEmail || 'Desconhecido';
+            const area = data.area || '-';
+            
+            // Format username
+            let displayUser = email;
+            if (window.userEmailToName && window.userEmailToName[email]) {
+                displayUser = `${window.userEmailToName[email]} <span style="font-size:0.8rem; color:var(--text-secondary);">(${email})</span>`;
+            }
+
+            html += `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;">
+                    <td style="padding: 1rem; white-space: nowrap;">
+                        <div style="font-weight: 500;">${dateStr}</div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);"><i class='bx bx-time-five'></i> ${timeStr}</div>
+                    </td>
+                    <td style="padding: 1rem;">
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <i class='bx bxs-user-circle' style="color:var(--primary-color); font-size:1.2rem;"></i>
+                            <span>${displayUser}</span>
+                        </div>
+                    </td>
+                    <td style="padding: 1rem;">
+                        <span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.1);"><i class='bx bx-link-external'></i> ${area}</span>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+
+    } catch (err) {
+        console.error("Erro ao carregar logs:", err);
+        container.innerHTML = `<div class="empty-state" style="padding: 3rem; color: var(--danger-color);"><i class='bx bx-error-circle'></i><p>Erro ao carregar os logs. Verifique o console.</p></div>`;
+    }
+};

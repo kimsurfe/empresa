@@ -84,6 +84,18 @@
                     </div>
                 </div>
 
+                <!-- MENU ADMIN (LOGS) -->
+                <div id="admin-logs-menu" style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem; display: none;">
+                    <button id="nav-logs-btn" class="sidebar-nav-btn" onclick="document.getElementById('tab-logs').click();">
+                        <div style="display:flex; align-items:center; gap:0.75rem;">
+                            <i class='bx bx-history'></i>
+                            <span class="nav-text">Backlog de Acessos</span>
+                        </div>
+                    </button>
+                    <!-- Fake button to simulate a tab click -->
+                    <button id="tab-logs" class="tab-btn hidden" style="display:none;"></button>
+                </div>
+
             </nav>
 
             <div class="sidebar-footer" style="display: none;">
@@ -469,6 +481,20 @@
                         <div class="calendar-grid brand-calendar-grid-large" id="brand-calendar-grid">
                             <!-- Os dias serão inseridos dinamicamente aqui -->
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View: Logs -->
+            <div id="view-logs" class="app-view hidden" style="padding: 1.5rem; max-width: 1000px; margin: 0 auto; width: 100%;">
+                <div style="margin-bottom: 2rem;">
+                    <h1 style="font-size: 1.75rem; color: var(--text-primary); margin-bottom: 0.5rem; display:flex; align-items:center; gap:0.5rem;"><i class='bx bx-history'></i> Backlog de Acessos</h1>
+                    <p style="color: var(--text-secondary);">Registro de atividades e navegação dos usuários na plataforma.</p>
+                </div>
+                
+                <div class="card" style="padding: 0;">
+                    <div id="access-logs-container" style="max-height: 70vh; overflow-y: auto;">
+                        <div class="empty-state" style="padding: 3rem;"><i class='bx bx-loader-alt bx-spin'></i><p>Carregando logs...</p></div>
                     </div>
                 </div>
             </div>
