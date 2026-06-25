@@ -292,13 +292,13 @@ function checkUserRole() {
     
     const rawEmail = localStorage.getItem('empresa_auth_user') || '';
     const loggedInEmail = rawEmail.toLowerCase().trim();
-    const adminLogsMenu = document.getElementById('admin-logs-menu');
-    if(adminLogsMenu) {
+    const settingsLogsSection = document.getElementById('settings-logs-section');
+    if(settingsLogsSection) {
         if(loggedInEmail === 'kimsurfe@gmail.com') {
-            adminLogsMenu.style.display = 'block';
+            settingsLogsSection.style.display = 'block';
         } else {
-            adminLogsMenu.style.display = 'none';
-            adminLogsMenu.remove(); // Remove completamente do HTML por segurança
+            settingsLogsSection.style.display = 'none';
+            settingsLogsSection.remove(); // Remove completamente do HTML por segurança
         }
     }
     
