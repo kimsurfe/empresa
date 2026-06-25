@@ -84,17 +84,7 @@
                     </div>
                 </div>
 
-                <!-- MENU ADMIN (LOGS) -->
-                <div id="admin-logs-menu" style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem; display: none;">
-                    <button id="nav-logs-btn" class="sidebar-nav-btn" onclick="document.getElementById('tab-logs').click();">
-                        <div style="display:flex; align-items:center; gap:0.75rem;">
-                            <i class='bx bx-history'></i>
-                            <span class="nav-text">Backlog de Acessos</span>
-                        </div>
-                    </button>
-                    <!-- Fake button to simulate a tab click -->
-                    <button id="tab-logs" class="tab-btn hidden" style="display:none;"></button>
-                </div>
+
 
             </nav>
 
@@ -485,19 +475,7 @@
                 </div>
             </div>
 
-            <!-- View: Logs -->
-            <div id="view-logs" class="view-container" style="padding: 1.5rem; max-width: 1000px; margin: 0 auto; width: 100%;">
-                <div style="margin-bottom: 2rem;">
-                    <h1 style="font-size: 1.75rem; color: var(--text-primary); margin-bottom: 0.5rem; display:flex; align-items:center; gap:0.5rem;"><i class='bx bx-history'></i> Backlog de Acessos</h1>
-                    <p style="color: var(--text-secondary);">Registro de atividades e navegação dos usuários na plataforma.</p>
-                </div>
-                
-                <div class="card" style="padding: 0;">
-                    <div id="access-logs-container" style="max-height: 70vh; overflow-y: auto;">
-                        <div class="empty-state" style="padding: 3rem;"><i class='bx bx-loader-alt bx-spin'></i><p>Carregando logs...</p></div>
-                    </div>
-                </div>
-            </div>
+
 
         </main>
     </div>
@@ -691,6 +669,16 @@
                     <ul class="settings-list" id="settings-brands-list">
                     </ul>
                 </div>
+                
+                <div class="settings-section admin-only" id="settings-logs-section" style="display: none;">
+                    <h3>Backlog de Acessos</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Registro de atividades e navegação dos usuários na plataforma.</p>
+                    <div style="background: var(--bg-page); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem;">
+                        <div id="access-logs-container" style="max-height: 300px; overflow-y: auto;">
+                            <div class="empty-state" style="padding: 2rem;"><i class='bx bx-loader-alt bx-spin'></i><p>Carregando logs...</p></div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" id="close-settings-footer-btn">Concluído</button>
@@ -794,6 +782,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     
     <script src="firebase-config.js"></script>
-    <script src="app.js?v=4"></script>
+    <script src="app.js?v=5"></script>
 </body>
 </html>

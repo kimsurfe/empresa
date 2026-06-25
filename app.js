@@ -476,11 +476,6 @@ function switchTab(tab) {
     viewKanban.classList.remove('active');
     viewBrand.classList.remove('active');
     
-    const viewLogs = document.getElementById('view-logs');
-    if (viewLogs) viewLogs.classList.remove('active');
-    const navLogsBtn = document.getElementById('nav-logs-btn');
-    if (navLogsBtn) navLogsBtn.classList.remove('active');
-    
     // Remover a classe active de todas as marcas do sidebar
     document.querySelectorAll('.sidebar-brand-item').forEach(el => el.classList.remove('active'));
 
@@ -513,11 +508,6 @@ function switchTab(tab) {
         if (kanbanPeriodSelect) kanbanPeriodSelect.value = 'all';
         
         renderKanban();
-    } else if (tab === 'logs') {
-        if(viewLogs) viewLogs.classList.add('active');
-        if(navLogsBtn) navLogsBtn.classList.add('active');
-        currentViewBrand = null;
-        if (window.renderAccessLogs) window.renderAccessLogs();
     } else if (tab === 'brand') {
         if (window.logUserAccess && currentViewBrand) window.logUserAccess(`Marca: ${currentViewBrand}`);
         viewBrand.classList.add('active');
@@ -918,7 +908,10 @@ window.deleteBrand = async function(val) {
     }
 }
 
-function openSettingsModal() { settingsModal.classList.remove('hidden'); }
+function openSettingsModal() { 
+    settingsModal.classList.remove('hidden'); 
+    if (window.renderAccessLogs) window.renderAccessLogs();
+}
 function closeSettingsModal() { settingsModal.classList.add('hidden'); }
 
 // ----------------------------------------------------
