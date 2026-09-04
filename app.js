@@ -918,7 +918,7 @@ function closeSettingsModal() { settingsModal.classList.add('hidden'); }
 // TASK MODAL LOGIC (Criar e Editar)
 // ----------------------------------------------------
 function populateTaskFormOptions() {
-    taskBrandSelect.innerHTML = '<option value="">Sem Marca</option>';
+    taskBrandSelect.innerHTML = '<option value="">Selecione uma marca...</option>';
     brands.forEach(b => {
         const opt = document.createElement('option');
         opt.value = b;
@@ -1147,6 +1147,12 @@ async function saveTask() {
         return;
     }
 
+    const brandValue = taskBrandSelect.value;
+    if(!brandValue || brandValue === "Sem Marca") {
+        alert("A marca da tarefa é obrigatória!");
+        return;
+    }
+
     const startDate = taskStartDateInput.value;
     const deadline = taskDateInput.value;
     if(!startDate) {
@@ -1182,7 +1188,7 @@ async function saveTask() {
         subtitle: document.getElementById('task-subtitle').value.trim(),
         priority: taskPriorityInput.value,
         status: statusVal,
-        brand: taskBrandSelect.value || "Sem Marca",
+        brand: taskBrandSelect.value,
         assignees: selectedAssignees,
         comments: taskCommentsInput.value.trim(),
         startDate: startDate,
@@ -1227,7 +1233,7 @@ async function saveTask() {
             title, 
             document.getElementById('task-subtitle').value.trim(),
             taskPriorityInput.value,
-            taskBrandSelect.value || "Sem Marca",
+            taskBrandSelect.value,
             selectedAssignees,
             taskCommentsInput.value.trim(),
             deadline || startDate,
