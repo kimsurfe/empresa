@@ -103,6 +103,13 @@
                         <button id="tab-kanban" class="tab-btn"><i class='bx bx-purchase-tag'></i> Marca</button>
                     </div>
                 </div>
+
+                <!-- Global Search -->
+                <div style="flex: 1; max-width: 400px; margin: 0 1rem; position: relative;">
+                    <i class='bx bx-search' style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 1.1rem;"></i>
+                    <input type="text" id="global-search-input" placeholder="Localizar tarefa..." style="width: 100%; padding: 0.6rem 1rem 0.6rem 2.2rem; border-radius: 20px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.9rem;" oninput="window.handleGlobalSearch()">
+                </div>
+
                 <div class="header-actions">
                     <div class="user-dropdown">
                         <button class="user-dropdown-btn" id="user-dropdown-btn">
@@ -782,6 +789,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     
     <script src="firebase-config.js"></script>
-    <script src="app.js?v=7"></script>
+    <script src="app.js?v=8"></script>
 </body>
 </html>

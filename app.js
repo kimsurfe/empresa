@@ -1169,6 +1169,11 @@ async function saveTask() {
         selectedAssignees.push(cb.value);
     });
 
+    if (selectedAssignees.length === 0) {
+        alert("A atribuição da tarefa é obrigatória (selecione pelo menos um responsável)!");
+        return;
+    }
+
     const recurrence = document.getElementById('task-recurrence').value;
     const selectedDays = [];
     if (recurrence === 'custom_days') {
@@ -1779,6 +1784,8 @@ function renderBrandTasks() {
             if(!t.assignees || !t.assignees.some(a => assigneeFilters.includes(a))) return false;
         }
         
+        if(!window.applyGlobalSearchFilter(t)) return false;
+        
         // Prioridade
         if(priorityFilters.length > 0 && !priorityFilters.includes(t.priority)) return false;
         
@@ -1955,6 +1962,7 @@ function renderTasks() {
             if(tAssignees.length === 0 && assigneeFilter.includes('Sem Responsável')) return true;
             if(!tAssignees.some(a => assigneeFilter.includes(a))) return false;
         }
+        if(window.applyGlobalSearchFilter && !window.applyGlobalSearchFilter(t)) return false;
         return true;
     };
 
@@ -2114,6 +2122,8 @@ function renderKanban() {
         if(assigneeFilters.length > 0) {
             if(!t.assignees || !t.assignees.some(a => assigneeFilters.includes(a))) return false;
         }
+        
+        if(!window.applyGlobalSearchFilter(t)) return false;
         
         // Período
         if (periodFilter === 'today') {
@@ -2760,6 +2770,7 @@ window.renderDashboard = function() {
         if (assigneeFilters.length > 0) {
             if (!t.assignees || !t.assignees.some(a => assigneeFilters.includes(a))) return false;
         }
+        if(!window.applyGlobalSearchFilter(t)) return false;
         return true;
     });
 
@@ -3097,6 +3108,38 @@ window.addEventListener('click', function(e) {
         });
     }
 });
+
+window.handleGlobalSearch = function() {
+    const viewDashboard = document.getElementById('view-dashboard');
+    const viewKanban = document.getElementById('view-kanban');
+    const viewBrand = document.getElementById('view-brand');
+    
+    if (viewDashboard && viewDashboard.classList.contains('active')) {
+        if (window.renderDashboard) window.renderDashboard();
+    }
+    if (viewKanban && viewKanban.classList.contains('active')) {
+        if (window.renderKanban) window.renderKanban();
+    }
+    if (viewBrand && viewBrand.classList.contains('active')) {
+        if (window.renderBrandTasks && window.currentViewBrand) window.renderBrandTasks();
+    }
+    const viewDay = document.getElementById('view-day');
+    if (viewDay && viewDay.classList.contains('active')) {
+        if (window.renderTasks) window.renderTasks();
+    }
+}
+
+window.applyGlobalSearchFilter = function(t) {
+    const searchInput = document.getElementById('global-search-input');
+    if (!searchInput) return true;
+    const searchQ = searchInput.value.toLowerCase().trim();
+    if (!searchQ) return true;
+    
+    const titleMatch = t.text && t.text.toLowerCase().includes(searchQ);
+    const subMatch = t.subtitle && t.subtitle.toLowerCase().includes(searchQ);
+    const brandMatch = t.brand && t.brand.toLowerCase().includes(searchQ);
+    return titleMatch || subMatch || brandMatch;
+}
 
 window.updateCMSLabel = function(id) {
     const container = document.getElementById(id);
