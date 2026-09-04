@@ -269,16 +269,34 @@ function renderSettingsUsers(usersList) {
 window.logUserAccess = async function(areaName) {
     const rawEmail = localStorage.getItem('empresa_auth_user') || '';
     const loggedInEmail = rawEmail.toLowerCase().trim();
-    if (!loggedInEmail || loggedInEmail === 'kimsurfe@gmail.com') return;
+    if (!loggedInEmail) return;
 
     try {
         await window.db.collection('access_logs').add({
             userEmail: loggedInEmail,
-            area: areaName,
+            area: `Acessou: ${areaName}`,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
-    } catch(err) {
-        console.error("Erro ao registrar log de acesso:", err);
+    } catch (e) {
+        console.warn("Failed to log access", e);
+    }
+}
+
+window.logUserAction = async function(actionDesc) {
+    const rawEmail = localStorage.getItem('empresa_auth_user') || '';
+    const loggedInEmail = rawEmail.toLowerCase().trim();
+    if (!loggedInEmail) return;
+
+    const userName = window.userEmailToName && window.userEmailToName[loggedInEmail] ? window.userEmailToName[loggedInEmail] : loggedInEmail.split('@')[0];
+    
+    try {
+        await window.db.collection('access_logs').add({
+            userEmail: loggedInEmail,
+            area: `${userName} ${actionDesc}`,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (e) {
+        console.warn("Failed to log action", e);
     }
 };
 
@@ -524,6 +542,30 @@ async function initializeDefaultSettings() {
         const defaultBrands = ["EVOKE", "MCD", "MORMAII", "NEW ERA", "STANCE", "STEP DEFEND", "VANS"].sort();
         await window.db.collection('settings').doc('brands').set({ list: defaultBrands });
     }
+
+    // Carregar favicon customizado, se houver
+    const generalSnap = await window.db.collection('settings').doc('general').get();
+    if (generalSnap.exists && generalSnap.data().faviconBase64) {
+        applyFavicon(generalSnap.data().faviconBase64);
+    }
+}
+
+window.applyFavicon = function(base64Str) {
+    let linkIcon = document.querySelector("link[rel~='icon']");
+    if (!linkIcon) {
+        linkIcon = document.createElement('link');
+        linkIcon.rel = 'icon';
+        document.head.appendChild(linkIcon);
+    }
+    linkIcon.href = base64Str;
+
+    let linkApple = document.querySelector("link[rel='apple-touch-icon']");
+    if (!linkApple) {
+        linkApple = document.createElement('link');
+        linkApple.rel = 'apple-touch-icon';
+        document.head.appendChild(linkApple);
+    }
+    linkApple.href = base64Str;
 }
 
 function setupGlobalListeners() {
@@ -1111,9 +1153,22 @@ document.getElementById('save-feedback-btn').addEventListener('click', async () 
 });
 
 window.editTask = async function(refPath) {
-    const doc = await window.db.doc(refPath).get();
-    if(doc.exists) {
-        openTaskModal(doc.data(), refPath);
+    try {
+        const cachedTask = window.allGlobalTasks ? window.allGlobalTasks.find(t => (t.refPath || `days/${t.dayId}/tasks/${t.id}`) === refPath) : null;
+        if (cachedTask) {
+            openTaskModal(cachedTask, refPath);
+            return;
+        }
+        
+        const doc = await window.db.doc(refPath).get();
+        if(doc.exists) {
+            openTaskModal(doc.data(), refPath);
+        } else {
+            alert("Erro: Tarefa nÃ£o encontrada no banco de dados.");
+        }
+    } catch (e) {
+        console.error("Erro ao abrir tarefa para ediÃ§Ã£o: ", e);
+        alert("Erro ao abrir a tarefa. Verifique sua conexÃ£o.");
     }
 }
 
@@ -1245,6 +1300,12 @@ async function saveTask() {
             false,
             statusVal
         );
+    }
+
+    if (isEditingTask) {
+        if(window.logUserAction) window.logUserAction(`editou a tarefa "${title}" da marca ${taskBrandSelect.value}`);
+    } else {
+        if(window.logUserAction) window.logUserAction(`criou a tarefa "${title}" da marca ${taskBrandSelect.value}`);
     }
 
     closeTaskModal();
@@ -2380,10 +2441,13 @@ window.promptCompleteTask = function(refPath, currentStatus) {
 }
 
 window.toggleTaskStatusGlobal = async function(refPath, currentStatus) {
+    const task = window.allGlobalTasks ? window.allGlobalTasks.find(t => (t.refPath || `days/${t.dayId}/tasks/${t.id}`) === refPath) : null;
     if(currentStatus === 'completed') {
         await window.db.doc(refPath).update({ status: 'pending', completedAt: firebase.firestore.FieldValue.delete() });
+        if(task && window.logUserAction) window.logUserAction(`reabriu a tarefa "${task.text}" da marca ${task.brand || 'Sem Marca'}`);
     } else {
         await window.db.doc(refPath).update({ status: 'completed', completedAt: Date.now() });
+        if(task && window.logUserAction) window.logUserAction(`concluiu a tarefa "${task.text}" da marca ${task.brand || 'Sem Marca'}`);
     }
 }
 
@@ -2437,7 +2501,9 @@ window.deleteTask = async function(taskId) {
 
 window.deleteTaskGlobal = async function(refPath) {
     if(confirm("Tem certeza que deseja excluir esta tarefa?")) {
+        const task = window.allGlobalTasks ? window.allGlobalTasks.find(t => (t.refPath || `days/${t.dayId}/tasks/${t.id}`) === refPath) : null;
         await window.db.doc(refPath).delete();
+        if(task && window.logUserAction) window.logUserAction(`deletou a tarefa "${task.text}" da marca ${task.brand || 'Sem Marca'}`);
     }
 }
 
@@ -3205,21 +3271,39 @@ function setupPullToRefresh() {
     let isRefreshing = false;
     const threshold = 80;
 
-    mainContent.addEventListener('touchstart', (e) => {
-        if (mainContent.scrollTop === 0 && !isRefreshing) {
+    const getScrollContainer = (target) => {
+        let el = target;
+        while (el && el !== document.body) {
+            const style = window.getComputedStyle(el);
+            if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+                return el;
+            }
+            el = el.parentElement;
+        }
+        return mainContent;
+    };
+
+    let activeScrollContainer = mainContent;
+
+    document.addEventListener('touchstart', (e) => {
+        activeScrollContainer = getScrollContainer(e.target);
+        if (activeScrollContainer.scrollTop <= 0 && !isRefreshing) {
             startY = e.touches[0].clientY;
             isPulling = true;
             ptr.style.transition = 'none';
         }
     }, { passive: true });
 
-    mainContent.addEventListener('touchmove', (e) => {
+    document.addEventListener('touchmove', (e) => {
         if (!isPulling || isRefreshing) return;
 
         currentY = e.touches[0].clientY;
         const pullDistance = currentY - startY;
 
-        if (pullDistance > 0 && mainContent.scrollTop === 0) {
+        if (pullDistance > 0 && activeScrollContainer.scrollTop <= 0) {
+            // Prevent default scroll behavior to avoid rubber-banding
+            if(e.cancelable) e.preventDefault();
+
             const translateY = Math.min(pullDistance * 0.4, threshold * 1.5);
             ptr.style.transform = `translateX(-50%) translateY(${translateY - 50}px)`;
 
@@ -3230,12 +3314,12 @@ function setupPullToRefresh() {
                 ptrIcon.className = 'bx bx-down-arrow-alt ptr-icon';
                 ptrText.innerText = 'Puxe para atualizar';
             }
-        } else {
+        } else if (pullDistance < 0) {
             isPulling = false;
         }
-    }, { passive: true });
+    }, { passive: false });
 
-    mainContent.addEventListener('touchend', () => {
+    document.addEventListener('touchend', () => {
         if (!isPulling || isRefreshing) return;
         isPulling = false;
         ptr.style.transition = 'transform 0.3s ease';
@@ -3259,9 +3343,8 @@ function setupPullToRefresh() {
         
         startY = 0;
         currentY = 0;
-    });
-}
-document.addEventListener('DOMContentLoaded', setupPullToRefresh);
+// Initialization
+setupPullToRefresh();
 
 // ----------------------------------------------------
 // LOGS DE ACESSO (BACKLOG) - SOMENTE ADMIN
@@ -3334,3 +3417,33 @@ window.renderAccessLogs = async function() {
         container.innerHTML = `<div class="empty-state" style="padding: 3rem; color: var(--danger-color);"><i class='bx bx-error-circle'></i><p>Erro ao carregar os logs. Verifique o console.</p></div>`;
     }
 };
+
+window.saveSystemFavicon = async function() {
+    const fileInput = document.getElementById('system-favicon-upload');
+    const statusEl = document.getElementById('favicon-upload-status');
+    if (!fileInput.files || fileInput.files.length === 0) {
+        statusEl.textContent = 'Por favor, selecione uma imagem.';
+        statusEl.style.color = 'var(--warning-color)';
+        return;
+    }
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const base64Str = e.target.result;
+        try {
+            statusEl.textContent = 'Salvando...';
+            statusEl.style.color = 'var(--text-secondary)';
+            await window.db.collection('settings').doc('general').set({ faviconBase64: base64Str }, { merge: true });
+            applyFavicon(base64Str);
+            statusEl.textContent = 'Ícone salvo com sucesso!';
+            statusEl.style.color = 'var(--accent-color)';
+            if(window.logUserAction) window.logUserAction('alterou o ícone do sistema (favicon)');
+        } catch(err) {
+            console.error('Erro ao salvar favicon', err);
+            statusEl.textContent = 'Erro ao salvar ícone.';
+            statusEl.style.color = 'var(--danger-color)';
+        }
+    };
+    reader.readAsDataURL(file);
+};
+

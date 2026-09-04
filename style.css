@@ -2232,9 +2232,10 @@ body:not(.is-admin) .admin-only {
 
 @media (max-width: 768px) {
     .view-header h1 { font-size: 1.5rem; }
-    .view-title-group { flex-wrap: wrap; gap: 0.2rem; justify-content: center; text-align: center; }
+    .view-title-group { flex-wrap: nowrap; gap: 0.2rem; justify-content: center; text-align: center; }
     .nav-day-arrow { padding: 0.2rem; font-size: 1.5rem; }
     #current-day-title { font-size: 1.2rem !important; }
     #db-current-day-title { font-size: 1.2rem !important; }
     .brand-quick-filters, .dashboard-quick-filters { justify-content: center; }
 }
+@media (max-width: 768px) { .modal-footer { flex-direction: column-reverse; gap: 0.75rem; } .modal-footer > div { width: 100%; display: flex; justify-content: space-between; gap: 1rem; } .modal-footer button { flex: 1; justify-content: center; } #modal-delete-container button { width: 100%; } }

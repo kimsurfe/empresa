@@ -17,7 +17,7 @@
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     
     <!-- CSS Customizado -->
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
     <div class="app-container">
@@ -649,7 +649,10 @@
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; align-items: center;">
                             <input type="email" id="new-user-email" placeholder="E-mail (Identificador)" autocomplete="off" class="settings-input" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
                             <input type="text" id="new-user-username" placeholder="Nome/Login" autocomplete="off" class="settings-input" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
-                            <input type="password" id="new-user-password" placeholder="Senha" class="settings-input" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
+                            <div style="position: relative; display: flex; align-items: center; width: 100%;">
+                                <input type="password" id="new-user-password" placeholder="Senha" class="settings-input" style="width: 100%; padding: 0.6rem; padding-right: 2.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
+                                <i class='bx bx-show' id="new-user-password-toggle" onclick="togglePasswordVisibility('new-user-password', 'new-user-password-toggle')" style="position: absolute; right: 0.5rem; font-size: 1.1rem; color: var(--text-secondary); cursor: pointer;"></i>
+                            </div>
                             <select id="new-user-role" class="settings-input" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
                                 <option value="user">Usuário Comum</option>
                                 <option value="admin">Admin</option>
@@ -677,6 +680,16 @@
                     </ul>
                 </div>
                 
+                <div class="settings-section admin-only">
+                    <h3>Personalização do Sistema</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Alterar ícone do sistema (Favicon / Atalho no Celular).</p>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <input type="file" id="system-favicon-upload" accept="image/*" class="settings-input" style="flex: 1; padding: 0.5rem; font-size: 0.85rem; border-radius: 6px;">
+                        <button class="btn-primary" onclick="saveSystemFavicon()">Salvar Ícone</button>
+                    </div>
+                    <span id="favicon-upload-status" style="font-size: 0.8rem; display: block; margin-top: 0.5rem;"></span>
+                </div>
+
                 <div class="settings-section admin-only" id="settings-logs-section" style="display: none;">
                     <h3>Backlog de Acessos</h3>
                     <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Registro de atividades e navegação dos usuários na plataforma.</p>
@@ -712,7 +725,10 @@
                     </div>
                     <div>
                         <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">Nova Senha</label>
-                        <input type="password" id="profile-password" class="settings-input" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
+                        <div style="position: relative; display: flex; align-items: center;">
+                            <input type="password" id="profile-password" class="settings-input" style="width: 100%; padding: 0.6rem; padding-right: 2.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-page); color: var(--text-primary); font-size: 0.85rem;">
+                            <i class='bx bx-show' id="profile-password-toggle" onclick="togglePasswordVisibility('profile-password', 'profile-password-toggle')" style="position: absolute; right: 0.75rem; font-size: 1.2rem; color: var(--text-secondary); cursor: pointer;"></i>
+                        </div>
                     </div>
                     <span id="profile-error" style="color: var(--danger-color); font-size: 0.8rem; min-height: 1rem; display: block;"></span>
                 </div>
@@ -763,9 +779,9 @@
             </div>
             
             <script>
-                function togglePasswordVisibility() {
-                    const pwdInput = document.getElementById('login-password-input');
-                    const icon = document.getElementById('toggle-password-icon');
+                function togglePasswordVisibility(inputId = 'login-password-input', iconId = 'toggle-password-icon') {
+                    const pwdInput = document.getElementById(inputId);
+                    const icon = document.getElementById(iconId);
                     if (pwdInput.type === 'password') {
                         pwdInput.type = 'text';
                         icon.classList.remove('bx-show');
@@ -789,6 +805,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     
     <script src="firebase-config.js"></script>
-    <script src="app.js?v=8"></script>
+    <script src="app.js?v=9"></script>
 </body>
 </html>
