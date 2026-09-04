@@ -3343,6 +3343,9 @@ function setupPullToRefresh() {
         
         startY = 0;
         currentY = 0;
+    });
+}
+
 // Initialization
 setupPullToRefresh();
 
@@ -3435,12 +3438,12 @@ window.saveSystemFavicon = async function() {
             statusEl.style.color = 'var(--text-secondary)';
             await window.db.collection('settings').doc('general').set({ faviconBase64: base64Str }, { merge: true });
             applyFavicon(base64Str);
-            statusEl.textContent = 'Ícone salvo com sucesso!';
+            statusEl.textContent = 'ï¿½cone salvo com sucesso!';
             statusEl.style.color = 'var(--accent-color)';
-            if(window.logUserAction) window.logUserAction('alterou o ícone do sistema (favicon)');
+            if(window.logUserAction) window.logUserAction('alterou o ï¿½cone do sistema (favicon)');
         } catch(err) {
             console.error('Erro ao salvar favicon', err);
-            statusEl.textContent = 'Erro ao salvar ícone.';
+            statusEl.textContent = 'Erro ao salvar ï¿½cone.';
             statusEl.style.color = 'var(--danger-color)';
         }
     };
