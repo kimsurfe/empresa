@@ -415,9 +415,20 @@ async function init() {
         await initializeDefaultSettings();
         setupGlobalListeners();
     }
-    
-    selectDate(formatDate(new Date()));
-    switchTab('dashboard');
+    const lastDate = sessionStorage.getItem('last_active_date') || formatDate(new Date());
+    selectDate(lastDate);
+
+    const lastTab = sessionStorage.getItem('last_active_tab') || 'dashboard';
+    if (lastTab === 'brand') {
+        const lastBrand = sessionStorage.getItem('last_active_brand');
+        if (lastBrand) {
+            selectBrandView(lastBrand);
+        } else {
+            switchTab('dashboard');
+        }
+    } else {
+        switchTab(lastTab);
+    }
 }
 
 // Toggle do calendário no sidebar
@@ -478,6 +489,7 @@ function updateConnectionStatus() {
 }
 
 function switchTab(tab) {
+    sessionStorage.setItem('last_active_tab', tab);
     if (tabDashboard) tabDashboard.classList.remove('active');
     tabDay.classList.remove('active');
     tabKanban.classList.remove('active');
@@ -1791,6 +1803,7 @@ function createBrandCalendarDay(dateObj, isOtherMonth, brandDays, brandDeadlines
 }
 
 window.selectBrandView = function(brand) {
+    sessionStorage.setItem('last_active_brand', brand);
     currentViewBrand = brand;
     currentBrandDate = new Date();
     brandActiveDateStr = formatDate(new Date());
@@ -1924,6 +1937,7 @@ window.openTaskModalForBrand = function(brand) {
 let unsubscribeDayTasks = null;
 
 function selectDate(dateStr) {
+    sessionStorage.setItem('last_active_date', dateStr);
     activeDateStr = dateStr;
     
     const [y, m, d] = dateStr.split('-');
