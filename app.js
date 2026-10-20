@@ -1,4 +1,4 @@
-// app.js
+﻿// app.js
 
 // Estado da Aplicação
 let currentDate = new Date();
@@ -1105,6 +1105,8 @@ document.getElementById('delete-task-modal-btn').addEventListener('click', async
         // Tarefa normal. Pergunta simples do navegador.
         if(confirm('Tem certeza que deseja excluir esta tarefa?')) {
             await window.db.doc(editingTaskRefPath).delete();
+            if(window.logUserAction && taskData) window.logUserAction(`deletou a tarefa "${taskData.text}" da marca ${taskData.brand || 'Sem Marca'}`);
+            window.showNotification('Tarefa excluída com sucesso!');
             closeTaskModal();
         }
     }
@@ -1116,7 +1118,11 @@ document.getElementById('cancel-delete-series').addEventListener('click', () => 
 
 document.getElementById('confirm-delete-only-this').addEventListener('click', async () => {
     if(!editingTaskRefPath) return;
+    const doc = await window.db.doc(editingTaskRefPath).get();
+    const taskData = doc.data();
     await window.db.doc(editingTaskRefPath).delete();
+    if(window.logUserAction && taskData) window.logUserAction(`deletou a ocorrência da tarefa "${taskData.text}" da marca ${taskData.brand || 'Sem Marca'}`);
+    window.showNotification('Tarefa excluída com sucesso!');
     document.getElementById('delete-series-modal').classList.add('hidden');
     closeTaskModal();
 });
@@ -1139,6 +1145,8 @@ document.getElementById('confirm-delete-all-series').addEventListener('click', a
         await window.db.doc(editingTaskRefPath).delete();
     }
     
+    if(window.logUserAction && taskData) window.logUserAction(`deletou a série da tarefa "${taskData.text}" da marca ${taskData.brand || 'Sem Marca'}`);
+    window.showNotification('Série de tarefas excluída com sucesso!');
     document.getElementById('delete-series-modal').classList.add('hidden');
     closeTaskModal();
 });
@@ -1253,74 +1261,93 @@ async function saveTask() {
         }
     }
 
-    const statusVal = document.getElementById('task-status') ? document.getElementById('task-status').value : 'pending';
+    const isEditing = Boolean(editingTaskRefPath);
+    const saveBtn = document.getElementById('save-task-btn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Salvando...';
+    }
 
-    const updateData = {
-        text: title,
-        subtitle: document.getElementById('task-subtitle').value.trim(),
-        priority: taskPriorityInput.value,
-        status: statusVal,
-        brand: taskBrandSelect.value,
-        assignees: selectedAssignees,
-        comments: taskCommentsInput.value.trim(),
-        startDate: startDate,
-        deadline: deadline || startDate,
-        recurrenceRule: recurrence,
-        recurrenceDays: selectedDays
-    };
+    try {
+        const statusVal = document.getElementById('task-status') ? document.getElementById('task-status').value : 'pending';
 
-    if (editingTaskRefPath) {
-        const doc = await window.db.doc(editingTaskRefPath).get();
-        const oldData = doc.data();
-        
-        if (statusVal === 'completed') {
-            if (!oldData.completedAt) {
-                updateData.completedAt = Date.now();
+        const updateData = {
+            text: title,
+            subtitle: document.getElementById('task-subtitle').value.trim(),
+            priority: taskPriorityInput.value,
+            status: statusVal,
+            brand: taskBrandSelect.value,
+            assignees: selectedAssignees,
+            comments: taskCommentsInput.value.trim(),
+            startDate: startDate,
+            deadline: deadline || startDate,
+            recurrenceRule: recurrence,
+            recurrenceDays: selectedDays
+        };
+
+        if (editingTaskRefPath) {
+            const doc = await window.db.doc(editingTaskRefPath).get();
+            const oldData = doc.data();
+            
+            if (statusVal === 'completed') {
+                if (!oldData.completedAt) {
+                    updateData.completedAt = Date.now();
+                } else {
+                    updateData.completedAt = oldData.completedAt;
+                }
             } else {
-                updateData.completedAt = oldData.completedAt;
+                updateData.completedAt = firebase.firestore.FieldValue.delete();
             }
+
+            // Se a tarefa pertencer a uma recorrência (seriesId ativo)
+            if (oldData.seriesId) {
+                pendingTaskUpdateData = updateData;
+                pendingOldTaskData = { ...oldData, refPath: editingTaskRefPath };
+                document.getElementById('save-series-modal').classList.remove('hidden');
+                return;
+            }
+
+            // Caso contrário, é uma tarefa comum de data única
+            await updateSingleTaskPath(editingTaskRefPath, oldData.dayId || oldData.startDate, startDate, updateData);
+
         } else {
-            updateData.completedAt = firebase.firestore.FieldValue.delete();
+            // Criando nova tarefa
+            const seriesId = 'series_' + Date.now();
+            await generateRecurringTasks(
+                startDate, 
+                recurrence, 
+                selectedDays, 
+                seriesId, 
+                title, 
+                document.getElementById('task-subtitle').value.trim(),
+                taskPriorityInput.value,
+                taskBrandSelect.value,
+                selectedAssignees,
+                taskCommentsInput.value.trim(),
+                deadline || startDate,
+                false,
+                statusVal
+            );
         }
 
-        // Se a tarefa pertencer a uma recorrência (seriesId ativo)
-        if (oldData.seriesId) {
-            pendingTaskUpdateData = updateData;
-            pendingOldTaskData = { ...oldData, refPath: editingTaskRefPath };
-            document.getElementById('save-series-modal').classList.remove('hidden');
-            return;
+        if (isEditing) {
+            if(window.logUserAction) window.logUserAction(`editou a tarefa "${title}" da marca ${taskBrandSelect.value}`);
+            window.showNotification('Tarefa atualizada com sucesso!');
+        } else {
+            if(window.logUserAction) window.logUserAction(`criou a tarefa "${title}" da marca ${taskBrandSelect.value}`);
+            window.showNotification('Tarefa criada com sucesso!');
         }
 
-        // Caso contrário, é uma tarefa comum de data única
-        await updateSingleTaskPath(editingTaskRefPath, oldData.dayId || oldData.startDate, startDate, updateData);
-
-    } else {
-        // Criando nova tarefa
-        const seriesId = 'series_' + Date.now();
-        await generateRecurringTasks(
-            startDate, 
-            recurrence, 
-            selectedDays, 
-            seriesId, 
-            title, 
-            document.getElementById('task-subtitle').value.trim(),
-            taskPriorityInput.value,
-            taskBrandSelect.value,
-            selectedAssignees,
-            taskCommentsInput.value.trim(),
-            deadline || startDate,
-            false,
-            statusVal
-        );
+        closeTaskModal();
+    } catch(err) {
+        console.error("Erro ao salvar tarefa:", err);
+        window.showNotification('Erro ao salvar tarefa. Verifique sua conexão.', 'error');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Salvar Tarefa';
+        }
     }
-
-    if (isEditingTask) {
-        if(window.logUserAction) window.logUserAction(`editou a tarefa "${title}" da marca ${taskBrandSelect.value}`);
-    } else {
-        if(window.logUserAction) window.logUserAction(`criou a tarefa "${title}" da marca ${taskBrandSelect.value}`);
-    }
-
-    closeTaskModal();
 }
 
 // Confirmadores de Salvamento de Série Recorrente
@@ -1338,6 +1365,8 @@ document.getElementById('confirm-save-only-this').addEventListener('click', asyn
     const updateData = { ...pendingTaskUpdateData, seriesId: pendingOldTaskData.seriesId };
     
     await updateSingleTaskPath(pendingOldTaskData.refPath, oldStartDate, newStartDate, updateData);
+    if(window.logUserAction) window.logUserAction(`editou a tarefa "${updateData.text}" da marca ${updateData.brand}`);
+    window.showNotification('Tarefa atualizada com sucesso!');
     
     document.getElementById('save-series-modal').classList.add('hidden');
     closeTaskModal();
@@ -1386,6 +1415,8 @@ document.getElementById('confirm-save-future-series').addEventListener('click', 
         pendingTaskUpdateData.status
     );
     
+    if(window.logUserAction) window.logUserAction(`editou a série da tarefa "${pendingTaskUpdateData.text}" da marca ${pendingTaskUpdateData.brand}`);
+    window.showNotification('Tarefas futuras atualizadas com sucesso!');
     document.getElementById('save-series-modal').classList.add('hidden');
     closeTaskModal();
 });
@@ -1438,6 +1469,8 @@ document.getElementById('confirm-save-all-series').addEventListener('click', asy
         pendingTaskUpdateData.status
     );
     
+    if(window.logUserAction) window.logUserAction(`editou toda a série da tarefa "${pendingTaskUpdateData.text}" da marca ${pendingTaskUpdateData.brand}`);
+    window.showNotification('Toda a série foi atualizada com sucesso!');
     document.getElementById('save-series-modal').classList.add('hidden');
     closeTaskModal();
 });
@@ -2429,7 +2462,7 @@ function createTaskDOM(task, dayIdContext, isKanban = false) {
 // ----------------------------------------------------
 // ACTIONS GLOBAIS DE DELEÇÃO/STATUS E FEEDBACK DE CONCLUSÃO
 // ----------------------------------------------------
-let completingTaskRefPath = null;
+var completingTaskRefPath = null;
 
 window.toggleTaskStatus = async function(taskId, currentStatus) {
     if (currentStatus === 'completed') {
@@ -2505,11 +2538,13 @@ window.confirmTaskCompletion = async function() {
     
     await window.db.doc(completingTaskRefPath).update(updateData);
     closeCompletionModal();
+    window.showNotification(isAlreadyCompleted ? 'Anotação atualizada com sucesso!' : 'Tarefa concluída com sucesso!');
 }
 
 window.deleteTask = async function(taskId) {
     if(confirm("Tem certeza que deseja excluir esta tarefa?")) {
         await window.db.doc(`days/${activeDateStr}/tasks/${taskId}`).delete();
+        window.showNotification('Tarefa excluída com sucesso!');
     }
 }
 
@@ -2518,6 +2553,7 @@ window.deleteTaskGlobal = async function(refPath) {
         const task = window.allGlobalTasks ? window.allGlobalTasks.find(t => (t.refPath || `days/${t.dayId}/tasks/${t.id}`) === refPath) : null;
         await window.db.doc(refPath).delete();
         if(task && window.logUserAction) window.logUserAction(`deletou a tarefa "${task.text}" da marca ${task.brand || 'Sem Marca'}`);
+        window.showNotification('Tarefa excluída com sucesso!');
     }
 }
 
@@ -3462,5 +3498,22 @@ window.saveSystemFavicon = async function() {
         }
     };
     reader.readAsDataURL(file);
+};
+
+window.showNotification = function(message, type = 'success') {
+    let toast = document.getElementById('app-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'app-toast';
+        document.body.appendChild(toast);
+    }
+    const iconClass = type === 'success' ? 'bx bx-check-circle' : 'bx bx-error-circle';
+    toast.className = `app-toast ${type} show`;
+    toast.innerHTML = `<i class='${iconClass} toast-icon'></i><span>${message}</span>`;
+    
+    if (window._toastTimeout) clearTimeout(window._toastTimeout);
+    window._toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+    }, 3200);
 };
 
