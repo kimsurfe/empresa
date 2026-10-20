@@ -1196,21 +1196,45 @@ let pendingTaskUpdateData = null;
 let pendingOldTaskData = null;
 
 async function updateSingleTaskPath(refPath, oldDate, newDate, updateData) {
-    if (oldDate === newDate) {
-        await window.db.doc(refPath).update(updateData);
+    const pathSegments = refPath ? refPath.split('/') : [];
+    const actualOldDate = oldDate || (pathSegments.length >= 2 ? pathSegments[1] : null);
+    const taskId = pathSegments.length >= 4 ? pathSegments[3] : ('task_' + Date.now());
+
+    // Limpar FieldValue.delete() de payloads destinados a .set()
+    const cleanDataForSet = { ...updateData };
+    if (cleanDataForSet.completedAt === firebase.firestore.FieldValue.delete() || typeof cleanDataForSet.completedAt === 'undefined') {
+        delete cleanDataForSet.completedAt;
+    }
+    if (cleanDataForSet.seriesId === firebase.firestore.FieldValue.delete()) {
+        delete cleanDataForSet.seriesId;
+    }
+
+    if (actualOldDate && actualOldDate === newDate && refPath) {
+        // Mesma data: atualizar in-place
+        try {
+            await window.db.doc(refPath).update(updateData);
+        } catch(updErr) {
+            console.warn("Update in-place falhou, usando set com merge:", updErr);
+            await window.db.doc(refPath).set(cleanDataForSet, { merge: true });
+        }
     } else {
-        // Deleta o antigo
-        await window.db.doc(refPath).delete();
+        // Data diferente (mudança de data no formulário) ou documento novo/movido:
+        // 1. Gravar com segurança na nova data PRIMEIRO
+        await window.db.collection(`days/${newDate}/tasks`).doc(taskId).set(cleanDataForSet);
         
-        // Adiciona o novo com o mesmo ID para integridade de links/referências
-        const pathSegments = refPath.split('/');
-        const taskId = pathSegments[3];
-        await window.db.collection(`days/${newDate}/tasks`).doc(taskId).set(updateData);
-        
-        // Registrar atividade do dia
+        // 2. Registrar atividade no novo dia
         if (!daysWithTasks.has(newDate)) {
             await window.db.collection("days").doc(newDate).set({ active: true }, { merge: true });
             daysWithTasks.add(newDate);
+        }
+
+        // 3. Somente após gravar com sucesso, remover do dia anterior se o caminho existir e for diferente
+        if (refPath && actualOldDate && actualOldDate !== newDate) {
+            try {
+                await window.db.doc(refPath).delete();
+            } catch(delErr) {
+                console.warn("Aviso ao remover da data anterior:", delErr);
+            }
         }
     }
 }
@@ -1286,8 +1310,16 @@ async function saveTask() {
         };
 
         if (editingTaskRefPath) {
-            const doc = await window.db.doc(editingTaskRefPath).get();
-            const oldData = doc.data();
+            let doc = null;
+            let oldData = {};
+            try {
+                doc = await window.db.doc(editingTaskRefPath).get();
+                if (doc && doc.exists) {
+                    oldData = doc.data() || {};
+                }
+            } catch(fetchErr) {
+                console.warn("Aviso ao buscar documento para edição:", fetchErr);
+            }
             
             if (statusVal === 'completed') {
                 if (!oldData.completedAt) {
@@ -1296,19 +1328,28 @@ async function saveTask() {
                     updateData.completedAt = oldData.completedAt;
                 }
             } else {
-                updateData.completedAt = firebase.firestore.FieldValue.delete();
+                if (oldData.completedAt) {
+                    updateData.completedAt = firebase.firestore.FieldValue.delete();
+                }
             }
 
-            // Se a tarefa pertencer a uma recorrência (seriesId ativo)
-            if (oldData.seriesId) {
+            // Se a tarefa pertencer a uma recorrência (seriesId ativo) E a recorrência continua ativa
+            if (oldData.seriesId && recurrence !== 'none') {
                 pendingTaskUpdateData = updateData;
                 pendingOldTaskData = { ...oldData, refPath: editingTaskRefPath };
                 document.getElementById('save-series-modal').classList.remove('hidden');
                 return;
             }
 
+            // Se o usuário mudou a recorrência para "none", desvincula da série
+            if (recurrence === 'none' && oldData.seriesId) {
+                updateData.seriesId = firebase.firestore.FieldValue.delete();
+            }
+
             // Caso contrário, é uma tarefa comum de data única
-            await updateSingleTaskPath(editingTaskRefPath, oldData.dayId || oldData.startDate, startDate, updateData);
+            const pathSegments = editingTaskRefPath.split('/');
+            const oldDate = (pathSegments.length >= 2 ? pathSegments[1] : null) || oldData.startDate;
+            await updateSingleTaskPath(editingTaskRefPath, oldDate, startDate, updateData);
 
         } else {
             // Criando nova tarefa
@@ -1341,7 +1382,7 @@ async function saveTask() {
         closeTaskModal();
     } catch(err) {
         console.error("Erro ao salvar tarefa:", err);
-        window.showNotification('Erro ao salvar tarefa. Verifique sua conexão.', 'error');
+        window.showNotification('Erro ao salvar tarefa: ' + (err.message || 'Verifique sua conexão.'), 'error');
     } finally {
         if (saveBtn) {
             saveBtn.disabled = false;
@@ -1360,119 +1401,136 @@ document.getElementById('cancel-save-series').addEventListener('click', () => {
 document.getElementById('confirm-save-only-this').addEventListener('click', async () => {
     if (!pendingTaskUpdateData || !pendingOldTaskData) return;
     
-    const oldStartDate = pendingOldTaskData.startDate || pendingOldTaskData.dayId;
-    const newStartDate = pendingTaskUpdateData.startDate;
-    const updateData = { ...pendingTaskUpdateData, seriesId: pendingOldTaskData.seriesId };
-    
-    await updateSingleTaskPath(pendingOldTaskData.refPath, oldStartDate, newStartDate, updateData);
-    if(window.logUserAction) window.logUserAction(`editou a tarefa "${updateData.text}" da marca ${updateData.brand}`);
-    window.showNotification('Tarefa atualizada com sucesso!');
-    
-    document.getElementById('save-series-modal').classList.add('hidden');
-    closeTaskModal();
+    try {
+        const pathSegments = pendingOldTaskData.refPath ? pendingOldTaskData.refPath.split('/') : [];
+        const oldStartDate = (pathSegments.length >= 2 ? pathSegments[1] : null) || pendingOldTaskData.startDate || pendingOldTaskData.dayId;
+        const newStartDate = pendingTaskUpdateData.startDate;
+        const updateData = { ...pendingTaskUpdateData, seriesId: pendingOldTaskData.seriesId };
+        
+        await updateSingleTaskPath(pendingOldTaskData.refPath, oldStartDate, newStartDate, updateData);
+        if(window.logUserAction) window.logUserAction(`editou a tarefa "${updateData.text}" da marca ${updateData.brand}`);
+        window.showNotification('Tarefa atualizada com sucesso!');
+        
+        document.getElementById('save-series-modal').classList.add('hidden');
+        closeTaskModal();
+    } catch(err) {
+        console.error("Erro ao salvar ocorrência:", err);
+        window.showNotification('Erro ao salvar tarefa: ' + (err.message || 'Verifique sua conexão.'), 'error');
+    }
 });
 
 document.getElementById('confirm-save-future-series').addEventListener('click', async () => {
     if (!pendingTaskUpdateData || !pendingOldTaskData) return;
     
-    const oldStartDate = pendingOldTaskData.startDate || pendingOldTaskData.dayId;
-    const newStartDate = pendingTaskUpdateData.startDate;
-    const seriesId = pendingOldTaskData.seriesId;
-    
-    // 1. Deletar tarefas pendentes futuras (incluindo a atual, para recriar se o dia mudou)
-    const futureTasks = window.allGlobalTasks.filter(t => 
-        t.seriesId === seriesId && 
-        t.status === 'pending' && 
-        t.dayId >= oldStartDate
-    );
-    for (const ft of futureTasks) {
-        await window.db.doc(ft.refPath).delete();
+    try {
+        const pathSegments = pendingOldTaskData.refPath ? pendingOldTaskData.refPath.split('/') : [];
+        const oldStartDate = (pathSegments.length >= 2 ? pathSegments[1] : null) || pendingOldTaskData.startDate || pendingOldTaskData.dayId;
+        const newStartDate = pendingTaskUpdateData.startDate;
+        const seriesId = pendingOldTaskData.seriesId;
+        
+        // 1. Deletar tarefas pendentes futuras (incluindo a atual, para recriar se o dia mudou)
+        const futureTasks = window.allGlobalTasks.filter(t => 
+            t.seriesId === seriesId && 
+            t.status === 'pending' && 
+            t.dayId >= oldStartDate
+        );
+        for (const ft of futureTasks) {
+            await window.db.doc(ft.refPath).delete();
+        }
+        
+        // Se a atual já estava concluída, a gente não deleta ela no loop acima
+        // Mas a gente precisa atualizá-la
+        if (pendingOldTaskData.status === 'completed') {
+            const updateData = { ...pendingTaskUpdateData, seriesId };
+            await updateSingleTaskPath(pendingOldTaskData.refPath, oldStartDate, newStartDate, updateData);
+        }
+        
+        // 2. Gerar as novas futuras a partir da nova data de início
+        const skipFirst = (pendingOldTaskData.status === 'completed');
+        
+        await generateRecurringTasks(
+            newStartDate,
+            pendingTaskUpdateData.recurrenceRule,
+            pendingTaskUpdateData.recurrenceDays,
+            seriesId,
+            pendingTaskUpdateData.text,
+            pendingTaskUpdateData.subtitle,
+            pendingTaskUpdateData.priority,
+            pendingTaskUpdateData.brand,
+            pendingTaskUpdateData.assignees,
+            pendingTaskUpdateData.comments,
+            pendingTaskUpdateData.deadline,
+            skipFirst,
+            pendingTaskUpdateData.status
+        );
+        
+        if(window.logUserAction) window.logUserAction(`editou a série da tarefa "${pendingTaskUpdateData.text}" da marca ${pendingTaskUpdateData.brand}`);
+        window.showNotification('Tarefas futuras atualizadas com sucesso!');
+        document.getElementById('save-series-modal').classList.add('hidden');
+        closeTaskModal();
+    } catch(err) {
+        console.error("Erro ao salvar série futura:", err);
+        window.showNotification('Erro ao salvar tarefas: ' + (err.message || 'Verifique sua conexão.'), 'error');
     }
-    
-    // Se a atual já estava concluída, a gente não deleta ela no loop acima
-    // Mas a gente precisa atualizá-la
-    if (pendingOldTaskData.status === 'completed') {
-        const updateData = { ...pendingTaskUpdateData, seriesId };
-        await updateSingleTaskPath(pendingOldTaskData.refPath, oldStartDate, newStartDate, updateData);
-    }
-    
-    // 2. Gerar as novas futuras a partir da nova data de início
-    const skipFirst = (pendingOldTaskData.status === 'completed');
-    
-    await generateRecurringTasks(
-        newStartDate,
-        pendingTaskUpdateData.recurrenceRule,
-        pendingTaskUpdateData.recurrenceDays,
-        seriesId,
-        pendingTaskUpdateData.text,
-        pendingTaskUpdateData.subtitle,
-        pendingTaskUpdateData.priority,
-        pendingTaskUpdateData.brand,
-        pendingTaskUpdateData.assignees,
-        pendingTaskUpdateData.comments,
-        pendingTaskUpdateData.deadline,
-        skipFirst,
-        pendingTaskUpdateData.status
-    );
-    
-    if(window.logUserAction) window.logUserAction(`editou a série da tarefa "${pendingTaskUpdateData.text}" da marca ${pendingTaskUpdateData.brand}`);
-    window.showNotification('Tarefas futuras atualizadas com sucesso!');
-    document.getElementById('save-series-modal').classList.add('hidden');
-    closeTaskModal();
 });
 
 document.getElementById('confirm-save-all-series').addEventListener('click', async () => {
     if (!pendingTaskUpdateData || !pendingOldTaskData) return;
     
-    const seriesId = pendingOldTaskData.seriesId;
-    const newStartDate = pendingTaskUpdateData.startDate;
-    
-    // 1. Deletar todas as tarefas pendentes da série
-    const pendingTasks = window.allGlobalTasks.filter(t => 
-        t.seriesId === seriesId && 
-        t.status === 'pending'
-    );
-    for (const pt of pendingTasks) {
-        await window.db.doc(pt.refPath).delete();
+    try {
+        const seriesId = pendingOldTaskData.seriesId;
+        const newStartDate = pendingTaskUpdateData.startDate;
+        
+        // 1. Deletar todas as tarefas pendentes da série
+        const pendingTasks = window.allGlobalTasks.filter(t => 
+            t.seriesId === seriesId && 
+            t.status === 'pending'
+        );
+        for (const pt of pendingTasks) {
+            await window.db.doc(pt.refPath).delete();
+        }
+        
+        // 2. Atualizar metadados das tarefas concluídas da série
+        const completedTasks = window.allGlobalTasks.filter(t => 
+            t.seriesId === seriesId && 
+            t.status === 'completed'
+        );
+        for (const ct of completedTasks) {
+            await window.db.doc(ct.refPath).update({
+                text: pendingTaskUpdateData.text,
+                subtitle: pendingTaskUpdateData.subtitle,
+                priority: pendingTaskUpdateData.priority,
+                brand: pendingTaskUpdateData.brand,
+                assignees: pendingTaskUpdateData.assignees,
+                comments: pendingTaskUpdateData.comments
+            });
+        }
+        
+        // 3. Regenerar as tarefas pendentes a partir da nova data
+        await generateRecurringTasks(
+            newStartDate,
+            pendingTaskUpdateData.recurrenceRule,
+            pendingTaskUpdateData.recurrenceDays,
+            seriesId,
+            pendingTaskUpdateData.text,
+            pendingTaskUpdateData.subtitle,
+            pendingTaskUpdateData.priority,
+            pendingTaskUpdateData.brand,
+            pendingTaskUpdateData.assignees,
+            pendingTaskUpdateData.comments,
+            pendingTaskUpdateData.deadline,
+            false,
+            pendingTaskUpdateData.status
+        );
+        
+        if(window.logUserAction) window.logUserAction(`editou toda a série da tarefa "${pendingTaskUpdateData.text}" da marca ${pendingTaskUpdateData.brand}`);
+        window.showNotification('Toda a série foi atualizada com sucesso!');
+        document.getElementById('save-series-modal').classList.add('hidden');
+        closeTaskModal();
+    } catch(err) {
+        console.error("Erro ao salvar toda série:", err);
+        window.showNotification('Erro ao salvar tarefas: ' + (err.message || 'Verifique sua conexão.'), 'error');
     }
-    
-    // 2. Atualizar metadados das tarefas concluídas da série
-    const completedTasks = window.allGlobalTasks.filter(t => 
-        t.seriesId === seriesId && 
-        t.status === 'completed'
-    );
-    for (const ct of completedTasks) {
-        await window.db.doc(ct.refPath).update({
-            text: pendingTaskUpdateData.text,
-            subtitle: pendingTaskUpdateData.subtitle,
-            priority: pendingTaskUpdateData.priority,
-            brand: pendingTaskUpdateData.brand,
-            assignees: pendingTaskUpdateData.assignees,
-            comments: pendingTaskUpdateData.comments
-        });
-    }
-    
-    // 3. Regenerar as tarefas pendentes a partir da nova data
-    await generateRecurringTasks(
-        newStartDate,
-        pendingTaskUpdateData.recurrenceRule,
-        pendingTaskUpdateData.recurrenceDays,
-        seriesId,
-        pendingTaskUpdateData.text,
-        pendingTaskUpdateData.subtitle,
-        pendingTaskUpdateData.priority,
-        pendingTaskUpdateData.brand,
-        pendingTaskUpdateData.assignees,
-        pendingTaskUpdateData.comments,
-        pendingTaskUpdateData.deadline,
-        false,
-        pendingTaskUpdateData.status
-    );
-    
-    if(window.logUserAction) window.logUserAction(`editou toda a série da tarefa "${pendingTaskUpdateData.text}" da marca ${pendingTaskUpdateData.brand}`);
-    window.showNotification('Toda a série foi atualizada com sucesso!');
-    document.getElementById('save-series-modal').classList.add('hidden');
-    closeTaskModal();
 });
 
 async function generateRecurringTasks(baseDateStr, recurrence, selectedDays, seriesId, text, subtitle, priority, brand, assignees, comments, deadline, skipFirst = false, statusVal = 'pending') {
