@@ -618,19 +618,9 @@ function setupGlobalListeners() {
                 taskAssignees.push(taskData.assignee);
             }
             
-            // Regra de visualização: admin vê tudo, usuário comum vê apenas tarefas atribuídas a si
-            let canView = false;
-            if (isAdmin) {
-                canView = true;
-            } else if (taskAssignees.some(a => a.toLowerCase().trim() === loggedInEmail)) {
-                canView = true;
-            }
-
-            if (canView) {
-                const pathSegments = doc.ref.path.split('/');
-                const dayId = pathSegments[1];
-                allTasks.push({ id: doc.id, dayId: dayId, refPath: doc.ref.path, ...taskData });
-            }
+            const pathSegments = doc.ref.path.split('/');
+            const dayId = pathSegments[1];
+            allTasks.push({ id: doc.id, dayId: dayId, refPath: doc.ref.path, ...taskData });
         });
         window.allGlobalTasks = allTasks;
         renderKanban();
@@ -1593,11 +1583,13 @@ async function generateRecurringTasks(baseDateStr, recurrence, selectedDays, ser
             const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
             occurrenceDeadline = formatDate(occurrenceEnd);
         }
+        const loggedInUserEmail = (localStorage.getItem('empresa_auth_user') || '').toLowerCase().trim();
         const newTask = {
             text, subtitle, status: currentStatus, priority, brand, assignees, comments, 
             startDate: dateStr,
             deadline: occurrenceDeadline, 
             createdAt: new Date().getTime(),
+            createdBy: loggedInUserEmail,
             recurrenceRule: recurrence, recurrenceDays: selectedDays
         };
         if (recurrence !== 'none') {
@@ -2081,20 +2073,11 @@ function listenToActiveDateTasks(dateStr) {
                     taskAssignees.push(taskData.assignee);
                 }
                 
-                let canView = false;
-                if (isAdmin) {
-                    canView = true;
-                } else if (taskAssignees.some(a => a.toLowerCase().trim() === loggedInEmail)) {
-                    canView = true;
-                }
-
-                if (canView) {
-                    localTasks.push({ 
-                        id: doc.id, 
-                        refPath: `days/${dateStr}/tasks/${doc.id}`,
-                        ...taskData 
-                    });
-                }
+                localTasks.push({ 
+                    id: doc.id, 
+                    refPath: `days/${dateStr}/tasks/${doc.id}`,
+                    ...taskData 
+                });
             });
             handleDayDocumentLifecycle(dateStr, localTasks.length);
             renderTasks();
