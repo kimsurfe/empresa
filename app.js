@@ -429,6 +429,19 @@ async function init() {
     } else {
         switchTab(lastTab);
     }
+
+    // Limpar campo de busca global contra autofill de credenciais do navegador
+    const searchInput = document.getElementById('global-search-input');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    setTimeout(() => {
+        const si = document.getElementById('global-search-input');
+        if (si && (si.value.includes('@') || si.value === localStorage.getItem('empresa_auth_user'))) {
+            si.value = '';
+            if (window.handleGlobalSearch) window.handleGlobalSearch();
+        }
+    }, 350);
 }
 
 // Toggle do calendário no sidebar
