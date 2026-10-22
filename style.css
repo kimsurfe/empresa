@@ -1,4 +1,4 @@
-﻿/* style.css - Design Premium Calendário, Tabs, Kanban e Sidebar */
+/* style.css - Design Premium Calendário, Tabs, Kanban e Sidebar */
 
 :root {
     /* Color Palette */
@@ -1116,7 +1116,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 10000;
     opacity: 1;
     visibility: visible;
     transition: all 0.3s;

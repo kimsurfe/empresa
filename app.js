@@ -1,4 +1,4 @@
-﻿// app.js
+// app.js
 
 // Estado da Aplicação
 let currentDate = new Date();
@@ -988,6 +988,9 @@ function populateTaskFormOptions() {
 
 function openTaskModal(taskData = null, refPath = null) {
     if(!activeDateStr && !taskData) return;
+    if(taskData) {
+        activeDateStr = taskData.startDate || taskData.dayId || activeDateStr;
+    }
     populateTaskFormOptions();
     
     const completionSection = document.getElementById('task-completion-section');
@@ -1951,7 +1954,9 @@ function renderBrandTasks() {
         
         // Responsável
         if(assigneeFilters.length > 0) {
-            if(!t.assignees || !t.assignees.some(a => assigneeFilters.includes(a))) return false;
+            const hasAssignee = t.assignees && t.assignees.some(a => assigneeFilters.includes(a));
+            const isCreator = t.createdBy && assigneeFilters.includes(t.createdBy);
+            if(!hasAssignee && !isCreator) return false;
         }
         
         if(!window.applyGlobalSearchFilter(t)) return false;
@@ -2121,8 +2126,10 @@ function renderTasks() {
             let tAssignees = t.assignees || [];
             if(typeof tAssignees === 'string') tAssignees = [tAssignees];
             if(t.assignee && !tAssignees.includes(t.assignee)) tAssignees.push(t.assignee);
+            const hasAssignee = tAssignees.some(a => assigneeFilter.includes(a));
+            const isCreator = t.createdBy && assigneeFilter.includes(t.createdBy);
             if(tAssignees.length === 0 && assigneeFilter.includes('Sem Responsável')) return true;
-            if(!tAssignees.some(a => assigneeFilter.includes(a))) return false;
+            if(!hasAssignee && !isCreator) return false;
         }
         if(window.applyGlobalSearchFilter && !window.applyGlobalSearchFilter(t)) return false;
         return true;
@@ -2282,7 +2289,9 @@ function renderKanban() {
 
         // Assignee Filter
         if(assigneeFilters.length > 0) {
-            if(!t.assignees || !t.assignees.some(a => assigneeFilters.includes(a))) return false;
+            const hasAssignee = t.assignees && t.assignees.some(a => assigneeFilters.includes(a));
+            const isCreator = t.createdBy && assigneeFilters.includes(t.createdBy);
+            if(!hasAssignee && !isCreator) return false;
         }
         
         if(!window.applyGlobalSearchFilter(t)) return false;
@@ -2938,7 +2947,9 @@ window.renderDashboard = function() {
         if (priorityFilters.length > 0 && !priorityFilters.includes(t.priority)) return false;
         if (brandFilters.length > 0 && !brandFilters.includes(t.brand)) return false;
         if (assigneeFilters.length > 0) {
-            if (!t.assignees || !t.assignees.some(a => assigneeFilters.includes(a))) return false;
+            const hasAssignee = t.assignees && t.assignees.some(a => assigneeFilters.includes(a));
+            const isCreator = t.createdBy && assigneeFilters.includes(t.createdBy);
+            if (!hasAssignee && !isCreator) return false;
         }
         if(!window.applyGlobalSearchFilter(t)) return false;
         return true;
@@ -3132,18 +3143,24 @@ window.renderDashboard = function() {
                 let badgeColor = t.priority === 'high' ? 'red' : t.priority === 'medium' ? 'orange' : 'green';
                 let priorityLabel = t.priority === 'high' ? 'Alta' : t.priority === 'medium' ? 'Média' : 'Baixa';
                 const isExtra = index >= 4;
+                const safeRefPath = (t.refPath || `days/${t.dayId}/tasks/${t.id}`).replace(/'/g, "\\'");
                 tasksList += `
-                    <div class="timeline-task-item" style="font-size:0.78rem; display:${isExtra ? 'none' : 'flex'}; flex-direction:column; gap:2px; background:rgba(255,255,255,0.02); padding:0.4rem; border-radius:6px; border:1px solid rgba(255,255,255,0.03); cursor:pointer; margin-bottom: 0.4rem;" onclick="editTask('${t.refPath}')">
-                        <div style="display:flex; align-items:center; justify-content:space-between;">
-                            <div style="display:flex; align-items:center; gap:0.5rem;">
-                                <button onclick="event.stopPropagation(); promptCompleteTask('${t.refPath}', '${t.status}')" style="background:transparent; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem; padding:0; display:flex; align-items:center; transition: color 0.2s;" onmouseover="this.style.color='var(--accent-color)'" onmouseout="this.style.color='var(--text-secondary)'" title="Concluir Tarefa">
+                    <div class="timeline-task-item" style="font-size:0.78rem; display:${isExtra ? 'none' : 'flex'}; flex-direction:column; gap:4px; background:rgba(255,255,255,0.02); padding:0.45rem 0.6rem; border-radius:8px; border:1px solid rgba(255,255,255,0.04); cursor:pointer; margin-bottom: 0.4rem; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'" onclick="editTask('${safeRefPath}')">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+                            <div style="display:flex; align-items:center; gap:0.5rem; flex:1; min-width:0;">
+                                <button onclick="event.stopPropagation(); promptCompleteTask('${safeRefPath}', '${t.status}')" style="background:transparent; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.15rem; padding:0; display:flex; align-items:center; transition: color 0.2s;" onmouseover="this.style.color='var(--accent-color)'" onmouseout="this.style.color='var(--text-secondary)'" title="Concluir Tarefa">
                                     <i class='bx bx-circle'></i>
                                 </button>
-                                <span style="font-weight:600; color:var(--text-primary);">${t.text}</span>
+                                <span style="font-weight:600; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${t.text}</span>
                             </div>
-                            <span style="font-size:0.65rem; color:${badgeColor}; font-weight:700; text-transform:uppercase;">${priorityLabel}</span>
+                            <div style="display:flex; align-items:center; gap:0.4rem; flex-shrink:0;">
+                                <span style="font-size:0.65rem; color:${badgeColor}; font-weight:700; text-transform:uppercase;">${priorityLabel}</span>
+                                <button onclick="event.stopPropagation(); editTask('${safeRefPath}')" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); color:var(--text-secondary); cursor:pointer; font-size:0.95rem; padding:2px 6px; border-radius:4px; display:flex; align-items:center; transition: all 0.2s;" onmouseover="this.style.color='var(--accent-color)'; this.style.borderColor='var(--accent-color)'" onmouseout="this.style.color='var(--text-secondary)'; this.style.borderColor='rgba(255,255,255,0.08)'" title="Editar Tarefa">
+                                    <i class='bx bx-edit-alt'></i>
+                                </button>
+                            </div>
                         </div>
-                        ${t.subtitle ? `<span style="font-size:0.72rem; color:var(--text-secondary); margin-left:1.6rem;">${t.subtitle}</span>` : ''}
+                        ${t.subtitle ? `<span style="font-size:0.72rem; color:var(--text-secondary); margin-left:1.65rem;">${t.subtitle}</span>` : ''}
                     </div>
                 `;
             });
