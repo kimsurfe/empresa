@@ -66,10 +66,12 @@ const sidebarBrandsList = document.getElementById('sidebar-brands-list');
 const tabDashboard = document.getElementById('tab-dashboard');
 const tabDay = document.getElementById('tab-day');
 const tabKanban = document.getElementById('tab-kanban');
+const tabClients = document.getElementById('tab-clients');
 const viewDashboard = document.getElementById('view-dashboard');
 const viewDay = document.getElementById('view-day');
 const viewKanban = document.getElementById('view-kanban');
 const viewBrand = document.getElementById('view-brand');
+const viewClients = document.getElementById('view-clients');
 
 // Elementos da DOM - Tarefas e Header
 const currentDayTitleEl = document.getElementById('current-day-title');
@@ -379,6 +381,7 @@ async function init() {
     if (tabDashboard) tabDashboard.addEventListener('click', () => switchTab('dashboard'));
     tabDay.addEventListener('click', () => switchTab('day'));
     tabKanban.addEventListener('click', () => switchTab('kanban'));
+    if (tabClients) tabClients.addEventListener('click', () => switchTab('clients'));
 
     // Calendário Navegação (Global)
     prevMonthBtn.addEventListener('click', () => changeMonth(-1));
@@ -417,6 +420,8 @@ async function init() {
     }
     const lastDate = sessionStorage.getItem('last_active_date') || formatDate(new Date());
     selectDate(lastDate);
+
+    if (window.initClientsModule) window.initClientsModule();
 
     const lastTab = sessionStorage.getItem('last_active_tab') || 'dashboard';
     if (lastTab === 'brand') {
@@ -506,18 +511,22 @@ function switchTab(tab) {
     if (tabDashboard) tabDashboard.classList.remove('active');
     tabDay.classList.remove('active');
     tabKanban.classList.remove('active');
+    if (tabClients) tabClients.classList.remove('active');
     
     const navDashboardBtn = document.getElementById('nav-dashboard-btn');
     const navDayBtn = document.getElementById('nav-day-btn');
     const navBrandsBtn = document.getElementById('nav-brands-btn');
+    const navClientsBtn = document.getElementById('nav-clients-btn');
     if(navDashboardBtn) navDashboardBtn.classList.remove('active');
     if(navDayBtn) navDayBtn.classList.remove('active');
     if(navBrandsBtn) navBrandsBtn.classList.remove('active');
+    if(navClientsBtn) navClientsBtn.classList.remove('active');
     
     if (viewDashboard) viewDashboard.classList.remove('active');
     viewDay.classList.remove('active');
     viewKanban.classList.remove('active');
     viewBrand.classList.remove('active');
+    if (viewClients) viewClients.classList.remove('active');
     
     // Remover a classe active de todas as marcas do sidebar
     document.querySelectorAll('.sidebar-brand-item').forEach(el => el.classList.remove('active'));
@@ -555,6 +564,13 @@ function switchTab(tab) {
         if (window.logUserAccess && currentViewBrand) window.logUserAccess(`Marca: ${currentViewBrand}`);
         viewBrand.classList.add('active');
         if(navBrandsBtn) navBrandsBtn.classList.add('active');
+    } else if (tab === 'clients') {
+        if (window.logUserAccess) window.logUserAccess('Base de Clientes');
+        if (tabClients) tabClients.classList.add('active');
+        if (navClientsBtn) navClientsBtn.classList.add('active');
+        if (viewClients) viewClients.classList.add('active');
+        currentViewBrand = null;
+        if (window.renderClientsView) window.renderClientsView();
     }
 }
 
@@ -572,6 +588,23 @@ async function initializeDefaultSettings() {
     const generalSnap = await window.db.collection('settings').doc('general').get();
     if (generalSnap.exists && generalSnap.data().faviconBase64) {
         applyFavicon(generalSnap.data().faviconBase64);
+    }
+
+    // Inicializar clientes no Firestore se ainda não existir
+    try {
+        const clientsSnap = await window.db.collection('settings').doc('clients').get();
+        if (!clientsSnap.exists) {
+            const initialList = (window.INITIAL_CLIENTS_DATA && window.INITIAL_CLIENTS_DATA.length > 0)
+                ? window.INITIAL_CLIENTS_DATA
+                : [];
+            await window.db.collection('settings').doc('clients').set({
+                list: initialList,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedBy: 'Sistema'
+            });
+        }
+    } catch (e) {
+        console.warn('Erro ao inicializar settings/clients no Firestore:', e);
     }
 }
 
@@ -611,6 +644,22 @@ function setupGlobalListeners() {
             updateDashboardFilterBrands();
             if(currentViewBrand) renderBrandTasks();
             renderDashboard();
+        }
+    });
+
+    window.db.collection('settings').doc('clients').onSnapshot((doc) => {
+        if (doc.exists && doc.data().list && Array.isArray(doc.data().list)) {
+            const remoteList = doc.data().list;
+            if (remoteList.length > 0) {
+                clientsMasterData = remoteList;
+                localStorage.setItem('empresa_clients_custom_data', JSON.stringify(clientsMasterData));
+                const sidebarBadge = document.getElementById('sidebar-clients-count');
+                if (sidebarBadge) sidebarBadge.textContent = clientsMasterData.length;
+                populateClientsDatalists();
+                if (sessionStorage.getItem('last_active_tab') === 'clients') {
+                    applyClientsFilter();
+                }
+            }
         }
     });
     window.db.collectionGroup('tasks').onSnapshot((snapshot) => {
@@ -3587,4 +3636,1160 @@ window.showNotification = function(message, type = 'success') {
         toast.classList.remove('show');
     }, 3200);
 };
+
+// ==========================================================================
+// MÓDULO DE CLIENTES (Consulta, Filtros, Ficha, Importação e Exportação)
+// ==========================================================================
+
+function escapeHTML(str) {
+    if (str === null || str === undefined) return '';
+    return str.toString()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+const CLIENT_BRAND_COLS = ['BAW', 'EVOKE', 'NEW ERA', 'LOST', 'MCD', 'MORMAII', 'STANCE', 'STEP DEFEND', 'VANS'];
+
+let clientsMasterData = [];
+let clientsFilteredData = [];
+let clientsCurrentPage = 1;
+let clientsPageSize = 25;
+let clientsActiveStatus = 'all';
+let clientsActiveBrand = 'all';
+let currentModalClient = null;
+
+window.initClientsModule = function() {
+    try {
+        const savedCustom = localStorage.getItem('empresa_clients_custom_data');
+        if (savedCustom) {
+            clientsMasterData = JSON.parse(savedCustom);
+        } else if (window.INITIAL_CLIENTS_DATA && Array.isArray(window.INITIAL_CLIENTS_DATA)) {
+            clientsMasterData = [...window.INITIAL_CLIENTS_DATA];
+        } else {
+            clientsMasterData = [];
+        }
+    } catch (e) {
+        console.error('Erro ao carregar dados de clientes:', e);
+        clientsMasterData = window.INITIAL_CLIENTS_DATA || [];
+    }
+
+    const sidebarBadge = document.getElementById('sidebar-clients-count');
+    if (sidebarBadge) {
+        sidebarBadge.textContent = clientsMasterData.length;
+    }
+
+    populateClientsDatalists();
+    renderClientsBrandPills();
+};
+
+function populateClientsDatalists() {
+    const grupoDatalist = document.getElementById('clients-grupo-datalist');
+    const grupoRealDatalist = document.getElementById('clients-grupo-real-datalist');
+    if (!grupoDatalist || !grupoRealDatalist) return;
+
+    const grupos = new Set();
+    const gruposReais = new Set();
+
+    clientsMasterData.forEach(c => {
+        if (c['GRUPO'] && typeof c['GRUPO'] === 'string' && c['GRUPO'].trim()) {
+            grupos.add(c['GRUPO'].trim());
+        }
+        if (c['GRUPO REAL'] && typeof c['GRUPO REAL'] === 'string' && c['GRUPO REAL'].trim()) {
+            gruposReais.add(c['GRUPO REAL'].trim());
+        }
+    });
+
+    grupoDatalist.innerHTML = Array.from(grupos).sort().map(g => `<option value="${escapeHTML(g)}">`).join('');
+    grupoRealDatalist.innerHTML = Array.from(gruposReais).sort().map(g => `<option value="${escapeHTML(g)}">`).join('');
+}
+
+function renderClientsBrandPills() {
+    const container = document.getElementById('clients-brand-pills-list');
+    if (!container) return;
+
+    let html = `<button type="button" class="client-brand-pill ${clientsActiveBrand === 'all' ? 'active' : ''}" data-brand-val="all" onclick="setClientBrandFilter('all')">Todas</button>`;
+    
+    CLIENT_BRAND_COLS.forEach(brand => {
+        const isActive = clientsActiveBrand === brand ? 'active' : '';
+        html += `<button type="button" class="client-brand-pill ${isActive}" data-brand-val="${escapeHTML(brand)}" onclick="setClientBrandFilter('${escapeHTML(brand)}')">${escapeHTML(brand)}</button>`;
+    });
+
+    container.innerHTML = html;
+}
+
+window.renderClientsView = function() {
+    if (!clientsMasterData || clientsMasterData.length === 0) {
+        window.initClientsModule();
+    }
+    applyClientsFilter();
+};
+
+window.setClientStatusFilter = function(statusVal) {
+    clientsActiveStatus = statusVal;
+    document.querySelectorAll('.client-pill-btn').forEach(btn => {
+        if (btn.getAttribute('data-status-val') === statusVal) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    applyClientsFilter();
+};
+
+window.setClientBrandFilter = function(brandVal) {
+    clientsActiveBrand = brandVal;
+    document.querySelectorAll('.client-brand-pill').forEach(btn => {
+        if (btn.getAttribute('data-brand-val') === brandVal) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    applyClientsFilter();
+};
+
+function normalizeString(str) {
+    if (!str) return '';
+    return str.toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+
+function cleanDigits(str) {
+    if (!str) return '';
+    return str.toString().replace(/\D/g, '');
+}
+
+window.applyClientsFilter = function() {
+    const cnpjVal = cleanDigits(document.getElementById('filter-client-cnpj')?.value || '');
+    const razaoVal = normalizeString(document.getElementById('filter-client-razao')?.value || '');
+    const fantasiaVal = normalizeString(document.getElementById('filter-client-fantasia')?.value || '');
+    const grupoVal = normalizeString(document.getElementById('filter-client-grupo')?.value || '');
+    const grupoRealVal = normalizeString(document.getElementById('filter-client-grupo-real')?.value || '');
+
+    clientsFilteredData = clientsMasterData.filter(client => {
+        // Filtro CNPJ (busca por dígitos limpos)
+        if (cnpjVal) {
+            const clientCnpjDigits = cleanDigits(client['CNPJ']);
+            if (!clientCnpjDigits.includes(cnpjVal)) {
+                return false;
+            }
+        }
+
+        // Filtro Razão Social
+        if (razaoVal) {
+            const clientRazao = normalizeString(client['RAZAO SOCIAL']);
+            if (!clientRazao.includes(razaoVal)) {
+                return false;
+            }
+        }
+
+        // Filtro Nome Fantasia
+        if (fantasiaVal) {
+            const clientFantasia = normalizeString(client['FANTASIA']);
+            if (!clientFantasia.includes(fantasiaVal)) {
+                return false;
+            }
+        }
+
+        // Filtro Grupo
+        if (grupoVal) {
+            const clientGrupo = normalizeString(client['GRUPO']);
+            if (!clientGrupo.includes(grupoVal)) {
+                return false;
+            }
+        }
+
+        // Filtro Grupo Real
+        if (grupoRealVal) {
+            const clientGrupoReal = normalizeString(client['GRUPO REAL']);
+            if (!clientGrupoReal.includes(grupoRealVal)) {
+                return false;
+            }
+        }
+
+        // Filtro de Status Ativo/Inativo
+        if (clientsActiveStatus !== 'all') {
+            const isActive = (client['CLIENTE ATIVO?'] || '').toString().trim().toUpperCase() === 'SIM';
+            if (clientsActiveStatus === 'SIM' && !isActive) return false;
+            if (clientsActiveStatus === 'NAO' && isActive) return false;
+        }
+
+        // Filtro de Marca
+        if (clientsActiveBrand !== 'all') {
+            const brandFlag = client[clientsActiveBrand];
+            if (!brandFlag || brandFlag === '0' || brandFlag === false) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    clientsCurrentPage = 1;
+    renderClientsTable();
+};
+
+window.clearClientsFilter = function() {
+    const fields = [
+        'filter-client-cnpj',
+        'filter-client-razao',
+        'filter-client-fantasia',
+        'filter-client-grupo',
+        'filter-client-grupo-real'
+    ];
+    fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+
+    clientsActiveStatus = 'all';
+    document.querySelectorAll('.client-pill-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-status-val') === 'all');
+    });
+
+    clientsActiveBrand = 'all';
+    document.querySelectorAll('.client-brand-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-brand-val') === 'all');
+    });
+
+    applyClientsFilter();
+};
+
+window.changeClientsPageSize = function(val) {
+    if (val === 'all') {
+        clientsPageSize = 999999;
+    } else {
+        clientsPageSize = parseInt(val, 10) || 25;
+    }
+    clientsCurrentPage = 1;
+    renderClientsTable();
+};
+
+window.goToClientsPage = function(page) {
+    clientsCurrentPage = page;
+    renderClientsTable();
+};
+
+function renderClientsTable() {
+    const tableContainer = document.getElementById('clients-table-container');
+    const countBadge = document.getElementById('clients-count-badge');
+    const filterIndicator = document.getElementById('clients-filter-indicator');
+    const paginationContainer = document.getElementById('clients-pagination-container');
+    if (!tableContainer) return;
+
+    const total = clientsFilteredData.length;
+    const masterTotal = clientsMasterData.length;
+
+    if (countBadge) {
+        countBadge.innerHTML = `<i class='bx bx-check-circle'></i> ${total} ${total === 1 ? 'cliente encontrado' : 'clientes encontrados'}`;
+    }
+
+    if (filterIndicator) {
+        if (total < masterTotal) {
+            filterIndicator.textContent = `(Filtrado de um total de ${masterTotal} cadastrados)`;
+        } else {
+            filterIndicator.textContent = `(Base completa)`;
+        }
+    }
+
+    if (total === 0) {
+        tableContainer.innerHTML = `
+            <div style="text-align: center; padding: 3rem 1.5rem; color: var(--text-secondary);">
+                <i class='bx bx-search-alt' style="font-size: 3rem; color: rgba(255,255,255,0.2); margin-bottom: 0.75rem;"></i>
+                <h3 style="font-size: 1.1rem; color: var(--text-primary); margin-bottom: 0.35rem;">Nenhum cliente encontrado</h3>
+                <p style="font-size: 0.85rem; max-width: 450px; margin: 0 auto 1.25rem auto;">Tente ajustar os filtros de CNPJ, Razão, Fantasia, Grupo ou Marca acima para localizar os registros desejados.</p>
+                <button type="button" class="btn-client-clear" onclick="clearClientsFilter()" style="display: inline-flex;">
+                    <i class='bx bx-reset'></i> Limpar Filtros
+                </button>
+            </div>
+        `;
+        if (paginationContainer) paginationContainer.innerHTML = '';
+        return;
+    }
+
+    // Calcular paginação
+    const totalPages = Math.ceil(total / clientsPageSize);
+    if (clientsCurrentPage > totalPages) clientsCurrentPage = totalPages;
+    if (clientsCurrentPage < 1) clientsCurrentPage = 1;
+
+    const startIndex = (clientsCurrentPage - 1) * clientsPageSize;
+    const endIndex = Math.min(startIndex + clientsPageSize, total);
+    const pageItems = clientsFilteredData.slice(startIndex, endIndex);
+
+    // Tabela HTML
+    let tableHtml = `
+        <table class="clients-table">
+            <thead>
+                <tr>
+                    <th style="width: 150px;">CNPJ</th>
+                    <th>Razão Social / Nome Fantasia</th>
+                    <th>Grupo</th>
+                    <th>Grupo Real</th>
+                    <th>Cidade / UF</th>
+                    <th style="text-align: center; width: 90px;">Status</th>
+                    <th>Marcas</th>
+                    <th style="text-align: right; width: 150px;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    pageItems.forEach((client, idx) => {
+        const globalIdx = startIndex + idx;
+        const isActive = (client['CLIENTE ATIVO?'] || '').toString().trim().toUpperCase() === 'SIM';
+        const statusBadge = isActive
+            ? `<span class="client-status-badge active"><i class='bx bx-check'></i> Ativo</span>`
+            : `<span class="client-status-badge inactive"><i class='bx bx-x'></i> Inativo</span>`;
+
+        // Marcas que o cliente possui
+        const clientBrands = [];
+        CLIENT_BRAND_COLS.forEach(brand => {
+            if (client[brand] && client[brand] !== '0' && client[brand] !== 0) {
+                clientBrands.push(brand);
+            }
+        });
+
+        const brandsHtml = clientBrands.length > 0
+            ? clientBrands.map(b => `<span class="client-brand-mini-tag">${escapeHTML(b)}</span>`).join('')
+            : `<span style="color: rgba(255,255,255,0.3); font-size: 0.75rem;">Nenhuma</span>`;
+
+        const cidadeUf = [client['CIDADE'], client['ESTADO']].filter(Boolean).join(' / ') || '-';
+        const fantasia = client['FANTASIA'] || '-';
+        const razao = client['RAZAO SOCIAL'] || '-';
+        const cnpjFormatted = client['CNPJ'] || '-';
+        const grupo = client['GRUPO'] || '-';
+        const grupoReal = client['GRUPO REAL'] || '-';
+
+        tableHtml += `
+            <tr onclick="openClientDetailModal(${globalIdx})">
+                <td class="font-mono" style="font-weight: 500; color: var(--accent-color);">
+                    ${escapeHTML(cnpjFormatted)}
+                </td>
+                <td>
+                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">
+                        ${escapeHTML(fantasia)}
+                    </div>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary); max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(razao)}">
+                        ${escapeHTML(razao)}
+                    </div>
+                </td>
+                <td style="color: var(--text-secondary); font-size: 0.82rem;">${escapeHTML(grupo)}</td>
+                <td style="color: var(--text-secondary); font-size: 0.82rem;">${escapeHTML(grupoReal)}</td>
+                <td style="white-space: nowrap; font-size: 0.82rem;">${escapeHTML(cidadeUf)}</td>
+                <td style="text-align: center;">${statusBadge}</td>
+                <td><div style="display: flex; flex-wrap: wrap; max-width: 200px;">${brandsHtml}</div></td>
+                <td style="text-align: right;" onclick="event.stopPropagation()">
+                    <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                        <button type="button" class="btn-table-action" onclick="openClientDetailModal(${globalIdx})" title="Ver ficha completa">
+                            <i class='bx bx-show'></i>
+                        </button>
+                        <button type="button" class="btn-table-action" onclick="openEditClientByIndex(${globalIdx})" title="Editar dados da loja">
+                            <i class='bx bx-edit'></i>
+                        </button>
+                        <button type="button" class="btn-table-action btn-table-task" onclick="createTaskForClient(${globalIdx})" title="Criar tarefa para este cliente">
+                            <i class='bx bx-plus'></i> Tarefa
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    tableHtml += `</tbody></table>`;
+    tableContainer.innerHTML = tableHtml;
+
+    // Renderizar paginação se houver mais de uma página
+    if (paginationContainer) {
+        if (totalPages <= 1) {
+            paginationContainer.innerHTML = '';
+        } else {
+            let pagHtml = `
+                <button type="button" class="btn-page" ${clientsCurrentPage === 1 ? 'disabled' : ''} onclick="goToClientsPage(1)" title="Primeira Página">
+                    <i class='bx bx-chevrons-left'></i>
+                </button>
+                <button type="button" class="btn-page" ${clientsCurrentPage === 1 ? 'disabled' : ''} onclick="goToClientsPage(${clientsCurrentPage - 1})" title="Página Anterior">
+                    <i class='bx bx-chevron-left'></i>
+                </button>
+            `;
+
+            // Páginas numéricas (janela de até 5 páginas)
+            const maxVisible = 5;
+            let startPage = Math.max(1, clientsCurrentPage - 2);
+            let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+            if (endPage - startPage < maxVisible - 1) {
+                startPage = Math.max(1, endPage - maxVisible + 1);
+            }
+
+            for (let p = startPage; p <= endPage; p++) {
+                pagHtml += `
+                    <button type="button" class="btn-page ${p === clientsCurrentPage ? 'active' : ''}" onclick="goToClientsPage(${p})">
+                        ${p}
+                    </button>
+                `;
+            }
+
+            pagHtml += `
+                <button type="button" class="btn-page" ${clientsCurrentPage === totalPages ? 'disabled' : ''} onclick="goToClientsPage(${clientsCurrentPage + 1})" title="Próxima Página">
+                    <i class='bx bx-chevron-right'></i>
+                </button>
+                <button type="button" class="btn-page" ${clientsCurrentPage === totalPages ? 'disabled' : ''} onclick="goToClientsPage(${totalPages})" title="Última Página">
+                    <i class='bx bx-chevrons-right'></i>
+                </button>
+                <span style="font-size: 0.8rem; color: var(--text-secondary); margin-left: 0.5rem;">
+                    Página ${clientsCurrentPage} de ${totalPages} (${total} itens)
+                </span>
+            `;
+
+            paginationContainer.innerHTML = pagHtml;
+        }
+    }
+}
+
+// --------------------------------------------------------------------------
+// MODAL DETALHE DO CLIENTE
+// --------------------------------------------------------------------------
+
+window.openClientDetailModal = function(clientIndex) {
+    const client = clientsFilteredData[clientIndex];
+    if (!client) return;
+
+    currentModalClient = client;
+
+    // Header
+    const fantasiaEl = document.getElementById('cdm-fantasia');
+    const razaoEl = document.getElementById('cdm-razao');
+    const statusBadgeEl = document.getElementById('cdm-status-badge');
+    
+    if (fantasiaEl) fantasiaEl.textContent = client['FANTASIA'] || client['RAZAO SOCIAL'] || 'Cliente';
+    if (razaoEl) razaoEl.textContent = client['RAZAO SOCIAL'] || '-';
+
+    const isActive = (client['CLIENTE ATIVO?'] || '').toString().trim().toUpperCase() === 'SIM';
+    if (statusBadgeEl) {
+        statusBadgeEl.className = `client-status-badge ${isActive ? 'active' : 'inactive'}`;
+        statusBadgeEl.innerHTML = isActive ? "<i class='bx bx-check'></i> Cliente Ativo" : "<i class='bx bx-x'></i> Cliente Inativo";
+    }
+
+    // Card 1: Identificação
+    document.getElementById('cdm-cnpj').textContent = client['CNPJ'] || '-';
+    document.getElementById('cdm-grupo').textContent = client['GRUPO'] || '-';
+    document.getElementById('cdm-grupo-real').textContent = client['GRUPO REAL'] || '-';
+    document.getElementById('cdm-cod-arezzo').textContent = client['CODIGO AREZZO'] || '-';
+    document.getElementById('cdm-cod-new-era').textContent = client['CODIGO NEW ERA'] || '-';
+
+    // Card 2: Endereço
+    const ruaStr = client['RUA'] || '';
+    const numStr = client['NUMERO'] ? `nº ${client['NUMERO']}` : '';
+    const compStr = client['COMPLEMENTO'] || '';
+    const bairroStr = client['BAIRRO'] || '';
+    const cidadeStr = client['CIDADE'] || '';
+    const estadoStr = client['ESTADO'] || '';
+    const cepStr = client['CEP'] ? `CEP: ${client['CEP']}` : '';
+
+    const logradouroFull = [ruaStr, numStr, compStr].filter(Boolean).join(', ');
+    const cidadeUf = [cidadeStr, estadoStr].filter(Boolean).join(' / ') || '-';
+    const structuredFull = [
+        logradouroFull,
+        bairroStr,
+        cidadeStr ? (estadoStr ? `${cidadeStr}/${estadoStr}` : cidadeStr) : estadoStr,
+        cepStr
+    ].filter(Boolean).join(' - ');
+
+    const rawCompleto = (client['ENDERECO COMPLETO'] || '').trim();
+
+    // Se o rawCompleto for vazio, ou for apenas cidade/UF (e temos dados com rua/bairro), usar o estruturado completo!
+    const isOnlyCity = !rawCompleto || 
+        (cidadeStr && rawCompleto.toUpperCase() === cidadeStr.toUpperCase()) || 
+        (cidadeStr && estadoStr && (rawCompleto.toUpperCase() === `${cidadeStr}/${estadoStr}`.toUpperCase() || rawCompleto.toUpperCase() === `${cidadeStr} / ${estadoStr}`.toUpperCase()));
+
+    let enderecoCompleto = rawCompleto;
+    if (isOnlyCity || (ruaStr && !rawCompleto.toUpperCase().includes(ruaStr.toUpperCase()))) {
+        enderecoCompleto = structuredFull || rawCompleto || 'Endereço não informado';
+    }
+
+    const enderecoBox = document.getElementById('cdm-endereco-box');
+    if (enderecoBox) enderecoBox.textContent = enderecoCompleto || 'Endereço não informado';
+
+    // Detalhes extras do endereço
+    const ruaEl = document.getElementById('cdm-rua');
+    const ruaRow = document.getElementById('cdm-rua-row');
+    if (ruaEl) ruaEl.textContent = logradouroFull || '-';
+    if (ruaRow) ruaRow.style.display = logradouroFull ? 'flex' : 'none';
+
+    const bairroEl = document.getElementById('cdm-bairro');
+    const bairroRow = document.getElementById('cdm-bairro-row');
+    if (bairroEl) bairroEl.textContent = bairroStr || '-';
+    if (bairroRow) bairroRow.style.display = bairroStr ? 'flex' : 'none';
+
+    const mapsLink = document.getElementById('cdm-maps-link');
+    if (mapsLink) {
+        if (enderecoCompleto) {
+            mapsLink.style.display = 'inline-flex';
+            mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enderecoCompleto)}`;
+        } else {
+            mapsLink.style.display = 'none';
+        }
+    }
+
+    document.getElementById('cdm-cidade-uf').textContent = cidadeUf;
+    document.getElementById('cdm-cep').textContent = client['CEP'] || '-';
+    document.getElementById('cdm-status-endereco').textContent = client['ENDERECO?'] || '-';
+
+    // Card 3: Contato & Proprietário
+    document.getElementById('cdm-proprietario').textContent = client['PROPRIETARIO'] || '-';
+    
+    const tel = client['TELEFONE'] ? client['TELEFONE'].toString() : '';
+    document.getElementById('cdm-telefone').textContent = tel || '-';
+
+    const waLink = document.getElementById('cdm-whatsapp-link');
+    if (waLink) {
+        const digits = cleanDigits(tel);
+        if (digits && digits.length >= 8) {
+            waLink.style.display = 'inline-flex';
+            waLink.href = `https://wa.me/55${digits}`;
+        } else {
+            waLink.style.display = 'none';
+        }
+    }
+
+    document.getElementById('cdm-aniversario').textContent = client['ANIVERSARIO'] || '-';
+
+    // Card 4: Marcas
+    const brandsListContainer = document.getElementById('cdm-brands-list');
+    if (brandsListContainer) {
+        const activeBrands = [];
+        CLIENT_BRAND_COLS.forEach(b => {
+            if (client[b] && client[b] !== '0' && client[b] !== 0) {
+                activeBrands.push(b);
+            }
+        });
+
+        if (activeBrands.length === 0) {
+            brandsListContainer.innerHTML = `<span style="color: var(--text-secondary); font-size: 0.85rem;">Nenhuma marca associada</span>`;
+        } else {
+            brandsListContainer.innerHTML = activeBrands.map(b => `
+                <div class="cdm-brand-badge">
+                    <i class='bx bx-check-circle' style="color: #10b981;"></i>
+                    <span>${escapeHTML(b)}</span>
+                </div>
+            `).join('');
+        }
+    }
+
+    // Botão Criar Tarefa
+    const createTaskBtn = document.getElementById('cdm-create-task-btn');
+    if (createTaskBtn) {
+        createTaskBtn.onclick = () => createTaskForClient(clientIndex);
+    }
+
+    const modal = document.getElementById('client-detail-modal');
+    if (modal) modal.classList.remove('hidden');
+};
+
+window.closeClientDetailModal = function() {
+    const modal = document.getElementById('client-detail-modal');
+    if (modal) modal.classList.add('hidden');
+    currentModalClient = null;
+};
+
+window.createTaskForClient = function(clientIndex) {
+    const client = clientsFilteredData[clientIndex] || currentModalClient;
+    if (!client) return;
+
+    closeClientDetailModal();
+
+    // Abrir o modal de tarefas
+    openTaskModal();
+
+    // Preencher automaticamente os campos da tarefa
+    const clientName = client['FANTASIA'] || client['RAZAO SOCIAL'] || 'Cliente';
+    const titleInput = document.getElementById('task-title');
+    if (titleInput) {
+        titleInput.value = clientName;
+    }
+
+    const cidadeUf = [client['CIDADE'], client['ESTADO']].filter(Boolean).join('/');
+    const prop = client['PROPRIETARIO'] ? `Proprietário: ${client['PROPRIETARIO']}` : '';
+    const tel = client['TELEFONE'] ? `Tel: ${client['TELEFONE']}` : '';
+    const details = [cidadeUf, prop, tel].filter(Boolean).join(' | ');
+
+    const subtitleInput = document.getElementById('task-subtitle');
+    if (subtitleInput) {
+        subtitleInput.value = details ? `Atendimento: ${details}` : `Atendimento ao cliente ${clientName}`;
+    }
+
+    // Identificar se o cliente trabalha com uma marca específica
+    const activeBrands = CLIENT_BRAND_COLS.filter(b => client[b] && client[b] !== '0' && client[b] !== 0);
+    if (activeBrands.length === 1) {
+        const brandSelect = document.getElementById('task-brand');
+        if (brandSelect) {
+            brandSelect.value = activeBrands[0];
+        }
+    }
+
+    window.showNotification(`Formulário de tarefa preenchido para "${clientName}"!`, 'success');
+};
+
+window.copyClientSummary = function() {
+    if (!currentModalClient) return;
+    const c = currentModalClient;
+    const activeBrands = CLIENT_BRAND_COLS.filter(b => c[b] && c[b] !== '0' && c[b] !== 0).join(', ') || 'Nenhuma';
+    const text = [
+        `*CLIENTE: ${c['FANTASIA'] || c['RAZAO SOCIAL'] || '-'}*`,
+        `Razão Social: ${c['RAZAO SOCIAL'] || '-'}`,
+        `CNPJ: ${c['CNPJ'] || '-'}`,
+        `Grupo: ${c['GRUPO'] || '-'} | Grupo Real: ${c['GRUPO REAL'] || '-'}`,
+        `Endereço: ${c['ENDERECO COMPLETO'] || '-'}`,
+        `Cidade: ${c['CIDADE'] || '-'}/${c['ESTADO'] || '-'} - CEP: ${c['CEP'] || '-'}`,
+        `Proprietário: ${c['PROPRIETARIO'] || '-'} | Tel: ${c['TELEFONE'] || '-'}`,
+        `Aniversário: ${c['ANIVERSARIO'] || '-'}`,
+        `Marcas: ${activeBrands}`,
+        `Cód Arezzo: ${c['CODIGO AREZZO'] || '-'} | Cód New Era: ${c['CODIGO NEW ERA'] || '-'}`
+    ].join('\n');
+
+    copyToClipboard(text, 'Ficha resumida copiada com sucesso!');
+};
+
+window.copyToClipboard = function(text, successMsg = 'Copiado!') {
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            window.showNotification(successMsg, 'success');
+        }).catch(() => {
+            fallbackCopy(text, successMsg);
+        });
+    } else {
+        fallbackCopy(text, successMsg);
+    }
+};
+
+function fallbackCopy(text, successMsg) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+        document.execCommand('copy');
+        window.showNotification(successMsg, 'success');
+    } catch (e) {
+        window.showNotification('Erro ao copiar para área de transferência', 'error');
+    }
+    document.body.removeChild(ta);
+}
+
+// --------------------------------------------------------------------------
+// EXPORTAÇÃO E IMPORTAÇÃO EXCEL (SheetJS)
+// --------------------------------------------------------------------------
+
+window.exportClientsToExcel = function() {
+    if (!window.XLSX) {
+        window.showNotification('Biblioteca Excel não carregada. Verifique sua conexão.', 'error');
+        return;
+    }
+
+    const dataToExport = clientsFilteredData.length > 0 ? clientsFilteredData : clientsMasterData;
+    if (dataToExport.length === 0) {
+        window.showNotification('Nenhum dado para exportar.', 'error');
+        return;
+    }
+
+    try {
+        // Mapear para colunas limpas e ordenadas
+        const exportRows = dataToExport.map(c => {
+            const row = {
+                'CNPJ': c['CNPJ'] || '',
+                'RAZAO SOCIAL': c['RAZAO SOCIAL'] || '',
+                'FANTASIA': c['FANTASIA'] || '',
+                'CLIENTE ATIVO?': c['CLIENTE ATIVO?'] || '',
+                'GRUPO': c['GRUPO'] || '',
+                'GRUPO REAL': c['GRUPO REAL'] || '',
+                'CIDADE': c['CIDADE'] || '',
+                'ESTADO': c['ESTADO'] || '',
+                'CEP': c['CEP'] || '',
+                'ENDERECO COMPLETO': c['ENDERECO COMPLETO'] || '',
+                'TELEFONE': c['TELEFONE'] || '',
+                'PROPRIETARIO': c['PROPRIETARIO'] || '',
+                'ANIVERSARIO': c['ANIVERSARIO'] || '',
+                'CODIGO AREZZO': c['CODIGO AREZZO'] || '',
+                'CODIGO NEW ERA': c['CODIGO NEW ERA'] || ''
+            };
+
+            CLIENT_BRAND_COLS.forEach(brand => {
+                row[brand] = (c[brand] && c[brand] !== '0' && c[brand] !== 0) ? 'SIM' : '';
+            });
+
+            return row;
+        });
+
+        const ws = XLSX.utils.json_to_sheet(exportRows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'CLIENTES');
+
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}`;
+        XLSX.writeFile(wb, `CLIENTES_EMPRESA_${dateStr}.xlsx`);
+
+        window.showNotification(`Exportação de ${exportRows.length} clientes concluída!`, 'success');
+        if (window.logUserAction) window.logUserAction(`exportou ${exportRows.length} clientes para planilha Excel`);
+    } catch (err) {
+        console.error('Erro na exportação Excel:', err);
+        window.showNotification('Erro ao gerar arquivo Excel.', 'error');
+    }
+};
+
+window.handleUploadClientsExcel = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!window.XLSX) {
+        window.showNotification('Biblioteca Excel não carregada.', 'error');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+
+            const sheetName = workbook.SheetNames.includes('LISTA') ? 'LISTA' : workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const rawJson = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+
+            if (!rawJson || rawJson.length === 0) {
+                window.showNotification('A planilha importada está vazia ou ilegível.', 'error');
+                return;
+            }
+
+            // Normalizar e validar linhas
+            const parsedClients = rawJson.filter(row => {
+                return (row['CNPJ'] || row['RAZAO SOCIAL'] || row['FANTASIA']);
+            }).map(row => {
+                const clientObj = {};
+                Object.keys(row).forEach(k => {
+                    const cleanKey = k.trim().toUpperCase();
+                    let val = row[k];
+                    // Formatar se for data Excel de aniversário
+                    if (cleanKey === 'ANIVERSARIO' && typeof val === 'number') {
+                        try {
+                            const dateObj = new Date(Math.round((val - 25569) * 86400 * 1000));
+                            if (!isNaN(dateObj.getTime())) {
+                                val = `${dateObj.getDate().toString().padStart(2,'0')}/${(dateObj.getMonth()+1).toString().padStart(2,'0')}/${dateObj.getFullYear()}`;
+                            }
+                        } catch (de) {}
+                    }
+                    clientObj[cleanKey] = val;
+                });
+                return clientObj;
+            });
+
+            if (parsedClients.length === 0) {
+                window.showNotification('Nenhum registro válido de cliente encontrado na planilha.', 'error');
+                return;
+            }
+
+            // Salvar no estado e localStorage
+            clientsMasterData = parsedClients;
+            await persistClientsData(`importou nova planilha com ${parsedClients.length} clientes`);
+
+            window.showNotification(`Sucesso! ${parsedClients.length} clientes carregados da nova planilha!`, 'success');
+
+            // Resetar input file
+            event.target.value = '';
+        } catch (err) {
+            console.error('Erro ao ler planilha Excel:', err);
+            window.showNotification('Erro ao processar o arquivo Excel: ' + err.message, 'error');
+            event.target.value = '';
+        }
+    };
+
+    reader.readAsArrayBuffer(file);
+};
+
+// --------------------------------------------------------------------------
+// PERSISTÊNCIA CENTRALIZADA (LocalStorage + Firestore em Tempo Real)
+// --------------------------------------------------------------------------
+
+async function persistClientsData(actionMessage = 'atualizou a base de clientes') {
+    // 1. Salvar no localStorage local imediatamente para resposta de 0 ms
+    localStorage.setItem('empresa_clients_custom_data', JSON.stringify(clientsMasterData));
+
+    // 2. Atualizar contadores e filtros na tela
+    const sidebarBadge = document.getElementById('sidebar-clients-count');
+    if (sidebarBadge) {
+        sidebarBadge.textContent = clientsMasterData.length;
+    }
+    populateClientsDatalists();
+    applyClientsFilter();
+
+    // 3. Salvar no Firestore para sincronização em tempo real entre todos os usuários
+    if (isFirebaseConnected && window.db) {
+        try {
+            await window.db.collection('settings').doc('clients').set({
+                list: clientsMasterData,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedBy: localStorage.getItem('empresa_auth_user') || 'Usuário'
+            }, { merge: true });
+        } catch (err) {
+            console.error('Erro ao sincronizar clientes no Firestore:', err);
+        }
+    }
+
+    if (window.logUserAction) {
+        window.logUserAction(actionMessage);
+    }
+}
+
+// --------------------------------------------------------------------------
+// ADIÇÃO E EDIÇÃO DE CLIENTES (Modal Form)
+// --------------------------------------------------------------------------
+
+window.openNewClientModal = function() {
+    document.getElementById('cfm-modal-title').textContent = 'Novo Cliente';
+    document.getElementById('cfm-modal-subtitle').textContent = 'Cadastrar nova loja na base de clientes';
+    document.getElementById('cfm-header-icon').innerHTML = "<i class='bx bx-user-plus'></i>";
+    document.getElementById('cfm-client-index').value = '';
+
+    document.getElementById('cfm-status').value = 'SIM';
+    document.getElementById('cfm-cnpj').value = '';
+    document.getElementById('cfm-fantasia').value = '';
+    document.getElementById('cfm-razao').value = '';
+    document.getElementById('cfm-grupo').value = '';
+    document.getElementById('cfm-grupo-real').value = '';
+    document.getElementById('cfm-cod-arezzo').value = '';
+    document.getElementById('cfm-cod-new-era').value = '';
+
+    document.getElementById('cfm-cep').value = '';
+    document.getElementById('cfm-rua').value = '';
+    document.getElementById('cfm-numero').value = '';
+    document.getElementById('cfm-complemento').value = '';
+    document.getElementById('cfm-bairro').value = '';
+    document.getElementById('cfm-cidade').value = '';
+    document.getElementById('cfm-estado').value = '';
+    document.getElementById('cfm-endereco-completo').value = '';
+    document.getElementById('cfm-endereco-status').value = 'REVISADO';
+
+    document.getElementById('cfm-proprietario').value = '';
+    document.getElementById('cfm-telefone').value = '';
+    document.getElementById('cfm-aniversario').value = '';
+
+    renderFormBrandToggles({});
+
+    const deleteBtn = document.getElementById('cfm-delete-btn');
+    if (deleteBtn) deleteBtn.style.display = 'none';
+
+    const modal = document.getElementById('client-form-modal');
+    if (modal) modal.classList.remove('hidden');
+};
+
+window.openEditCurrentClientModal = function() {
+    if (!currentModalClient) return;
+
+    let idx = clientsMasterData.findIndex(c => c === currentModalClient);
+    if (idx === -1 && currentModalClient['CNPJ']) {
+        idx = clientsMasterData.findIndex(c => cleanDigits(c['CNPJ']) === cleanDigits(currentModalClient['CNPJ']));
+    }
+    if (idx === -1 && currentModalClient['FANTASIA']) {
+        idx = clientsMasterData.findIndex(c => c['FANTASIA'] === currentModalClient['FANTASIA']);
+    }
+
+    closeClientDetailModal();
+    if (idx !== -1) {
+        openEditClientByIndex(idx);
+    }
+};
+
+window.openEditClientByIndex = function(index) {
+    let client = clientsFilteredData[index];
+    let masterIndex = -1;
+    if (client) {
+        masterIndex = clientsMasterData.indexOf(client);
+        if (masterIndex === -1 && client['CNPJ']) {
+            masterIndex = clientsMasterData.findIndex(c => cleanDigits(c['CNPJ']) === cleanDigits(client['CNPJ']));
+        }
+    } else {
+        client = clientsMasterData[index];
+        masterIndex = index;
+    }
+
+    if (!client) return;
+
+    document.getElementById('cfm-modal-title').textContent = 'Editar Cliente';
+    document.getElementById('cfm-modal-subtitle').textContent = client['FANTASIA'] || client['RAZAO SOCIAL'] || 'Atualizar dados da loja';
+    document.getElementById('cfm-header-icon').innerHTML = "<i class='bx bx-edit'></i>";
+    document.getElementById('cfm-client-index').value = masterIndex !== -1 ? masterIndex : index;
+
+    document.getElementById('cfm-status').value = (client['CLIENTE ATIVO?'] || '').toString().trim().toUpperCase() === 'NAO' ? 'NAO' : 'SIM';
+    document.getElementById('cfm-cnpj').value = client['CNPJ'] || '';
+    document.getElementById('cfm-fantasia').value = client['FANTASIA'] || '';
+    document.getElementById('cfm-razao').value = client['RAZAO SOCIAL'] || '';
+    document.getElementById('cfm-grupo').value = client['GRUPO'] || '';
+    document.getElementById('cfm-grupo-real').value = client['GRUPO REAL'] || '';
+    document.getElementById('cfm-cod-arezzo').value = client['CODIGO AREZZO'] || '';
+    document.getElementById('cfm-cod-new-era').value = client['CODIGO NEW ERA'] || '';
+
+    document.getElementById('cfm-cep').value = client['CEP'] || '';
+    document.getElementById('cfm-rua').value = client['RUA'] || '';
+    document.getElementById('cfm-numero').value = client['NUMERO'] || '';
+    document.getElementById('cfm-complemento').value = client['COMPLEMENTO'] || '';
+    document.getElementById('cfm-bairro').value = client['BAIRRO'] || '';
+    document.getElementById('cfm-cidade').value = client['CIDADE'] || '';
+    document.getElementById('cfm-estado').value = client['ESTADO'] || '';
+
+    // Se o ENDERECO COMPLETO salvo estiver vazio ou for apenas cidade/UF mas tivermos dados estruturados, compor o endereço completo!
+    let endSaved = (client['ENDERECO COMPLETO'] || '').trim();
+    const ruaS = client['RUA'] || '';
+    const numS = client['NUMERO'] ? `nº ${client['NUMERO']}` : '';
+    const compS = client['COMPLEMENTO'] || '';
+    const bS = client['BAIRRO'] || '';
+    const cS = client['CIDADE'] || '';
+    const uS = client['ESTADO'] || '';
+    const cepS = client['CEP'] ? `CEP: ${client['CEP']}` : '';
+
+    const logrS = [ruaS, numS, compS].filter(Boolean).join(', ');
+    const structS = [logrS, bS, cS ? (uS ? `${cS}/${uS}` : cS) : uS, cepS].filter(Boolean).join(' - ');
+
+    const isOnlyCityS = !endSaved || 
+        (cS && endSaved.toUpperCase() === cS.toUpperCase()) || 
+        (cS && uS && (endSaved.toUpperCase() === `${cS}/${uS}`.toUpperCase() || endSaved.toUpperCase() === `${cS} / ${uS}`.toUpperCase()));
+
+    if ((isOnlyCityS && structS) || (ruaS && !endSaved.toUpperCase().includes(ruaS.toUpperCase()) && structS)) {
+        endSaved = structS;
+    }
+    document.getElementById('cfm-endereco-completo').value = endSaved;
+    document.getElementById('cfm-endereco-status').value = client['ENDERECO?'] || 'REVISADO';
+
+    document.getElementById('cfm-proprietario').value = client['PROPRIETARIO'] || '';
+    document.getElementById('cfm-telefone').value = client['TELEFONE'] || '';
+    document.getElementById('cfm-aniversario').value = client['ANIVERSARIO'] || '';
+
+    renderFormBrandToggles(client);
+
+    const deleteBtn = document.getElementById('cfm-delete-btn');
+    if (deleteBtn) deleteBtn.style.display = 'inline-flex';
+
+    const modal = document.getElementById('client-form-modal');
+    if (modal) modal.classList.remove('hidden');
+};
+
+function renderFormBrandToggles(clientData = {}) {
+    const container = document.getElementById('cfm-brands-toggle-grid');
+    if (!container) return;
+
+    let html = '';
+    CLIENT_BRAND_COLS.forEach(brand => {
+        const val = clientData[brand];
+        const isActive = (val && val !== '0' && val !== 0);
+        html += `
+            <button type="button" class="cfm-brand-toggle-btn ${isActive ? 'active' : ''}" data-brand="${escapeHTML(brand)}" onclick="toggleFormBrandBtn(this)">
+                <i class='bx ${isActive ? 'bx-check-square' : 'bx-square'} toggle-icon'></i>
+                <span>${escapeHTML(brand)}</span>
+            </button>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+window.toggleFormBrandBtn = function(btn) {
+    btn.classList.toggle('active');
+    const icon = btn.querySelector('.toggle-icon');
+    if (icon) {
+        if (btn.classList.contains('active')) {
+            icon.className = 'bx bx-check-square toggle-icon';
+        } else {
+            icon.className = 'bx bx-square toggle-icon';
+        }
+    }
+};
+
+window.closeClientFormModal = function() {
+    const modal = document.getElementById('client-form-modal');
+    if (modal) modal.classList.add('hidden');
+};
+
+window.updateFormEnderecoCompleto = function() {
+    const rua = document.getElementById('cfm-rua')?.value?.trim() || '';
+    const num = document.getElementById('cfm-numero')?.value?.trim() || '';
+    const comp = document.getElementById('cfm-complemento')?.value?.trim() || '';
+    const bairro = document.getElementById('cfm-bairro')?.value?.trim() || '';
+    const cidade = document.getElementById('cfm-cidade')?.value?.trim() || '';
+    const estado = document.getElementById('cfm-estado')?.value?.trim()?.toUpperCase() || '';
+    const cep = document.getElementById('cfm-cep')?.value?.trim() || '';
+
+    let logradouro = rua;
+    if (num) logradouro += (logradouro ? `, ${num}` : `nº ${num}`);
+    if (comp) logradouro += (logradouro ? ` - ${comp}` : comp);
+
+    const parts = [
+        logradouro,
+        bairro,
+        cidade ? (estado ? `${cidade}/${estado}` : cidade) : estado,
+        cep ? `CEP: ${cep}` : ''
+    ].filter(Boolean);
+
+    const endField = document.getElementById('cfm-endereco-completo');
+    if (endField) {
+        endField.value = parts.join(' - ');
+    }
+};
+
+window.lookupCep = async function(cepVal) {
+    const cleanCep = cleanDigits(cepVal);
+    if (cleanCep.length !== 8) return;
+
+    const loadingEl = document.getElementById('cfm-cep-loading');
+    if (loadingEl) loadingEl.style.display = 'inline-flex';
+
+    try {
+        const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+            if (data.logradouro) document.getElementById('cfm-rua').value = data.logradouro;
+            if (data.bairro) document.getElementById('cfm-bairro').value = data.bairro;
+            if (data.localidade) document.getElementById('cfm-cidade').value = data.localidade;
+            if (data.uf) document.getElementById('cfm-estado').value = data.uf;
+
+            // Atualiza imediatamente o endereço completo
+            window.updateFormEnderecoCompleto();
+
+            window.showNotification('Endereço preenchido pelo CEP!', 'success');
+        } else {
+            window.showNotification('CEP não encontrado.', 'error');
+        }
+    } catch (e) {
+        console.warn('Erro ao consultar ViaCEP:', e);
+    } finally {
+        if (loadingEl) loadingEl.style.display = 'none';
+    }
+};
+
+window.saveClientFormData = async function() {
+    const statusVal = document.getElementById('cfm-status')?.value || 'SIM';
+    const fantasiaVal = document.getElementById('cfm-fantasia')?.value?.trim();
+    if (!fantasiaVal) {
+        window.showNotification('Informe o Nome Fantasia da loja.', 'error');
+        document.getElementById('cfm-fantasia')?.focus();
+        return;
+    }
+
+    const indexVal = document.getElementById('cfm-client-index')?.value;
+    const isNew = (indexVal === '' || indexVal === null || indexVal === undefined);
+
+    const cnpjVal = document.getElementById('cfm-cnpj')?.value?.trim() || null;
+    const razaoVal = document.getElementById('cfm-razao')?.value?.trim() || null;
+    const grupoVal = document.getElementById('cfm-grupo')?.value?.trim() || null;
+    const grupoRealVal = document.getElementById('cfm-grupo-real')?.value?.trim() || null;
+    const arezzoVal = document.getElementById('cfm-cod-arezzo')?.value?.trim() || null;
+    const newEraVal = document.getElementById('cfm-cod-new-era')?.value?.trim() || null;
+
+    const cepVal = document.getElementById('cfm-cep')?.value?.trim() || null;
+    const ruaVal = document.getElementById('cfm-rua')?.value?.trim() || null;
+    const numVal = document.getElementById('cfm-numero')?.value?.trim() || null;
+    const compVal = document.getElementById('cfm-complemento')?.value?.trim() || null;
+    const bairroVal = document.getElementById('cfm-bairro')?.value?.trim() || null;
+    const cidadeVal = document.getElementById('cfm-cidade')?.value?.trim() || null;
+    const estadoVal = document.getElementById('cfm-estado')?.value?.trim()?.toUpperCase() || null;
+    let endCompletoVal = document.getElementById('cfm-endereco-completo')?.value?.trim() || null;
+
+    // Compor endereço estruturado com todos os detalhes disponíveis
+    let logrComposto = ruaVal || '';
+    if (numVal) logrComposto += (logrComposto ? `, ${numVal}` : `nº ${numVal}`);
+    if (compVal) logrComposto += (logrComposto ? ` - ${compVal}` : compVal);
+
+    const structuredParts = [
+        logrComposto,
+        bairroVal,
+        cidadeVal ? (estadoVal ? `${cidadeVal}/${estadoVal}` : cidadeVal) : estadoVal,
+        cepVal ? `CEP: ${cepVal}` : ''
+    ].filter(Boolean);
+    const structuredFullEnd = structuredParts.join(' - ');
+
+    const isCityOnly = !endCompletoVal || 
+        (cidadeVal && endCompletoVal.toUpperCase() === cidadeVal.toUpperCase()) || 
+        (cidadeVal && estadoVal && (endCompletoVal.toUpperCase() === `${cidadeVal}/${estadoVal}`.toUpperCase() || endCompletoVal.toUpperCase() === `${cidadeVal} / ${estadoVal}`.toUpperCase()));
+
+    // Se estiver apenas com a cidade, ou se tiver rua que não estava presente no texto, atualizar para o completo
+    if (isCityOnly || (ruaVal && !endCompletoVal.toUpperCase().includes(ruaVal.toUpperCase()))) {
+        endCompletoVal = structuredFullEnd || endCompletoVal;
+    }
+
+    const endStatusVal = document.getElementById('cfm-endereco-status')?.value || 'REVISADO';
+
+    const propVal = document.getElementById('cfm-proprietario')?.value?.trim() || null;
+    const telVal = document.getElementById('cfm-telefone')?.value?.trim() || null;
+    const niverVal = document.getElementById('cfm-aniversario')?.value?.trim() || null;
+
+    // Obter marcas selecionadas
+    const clientBrandsObj = {};
+    CLIENT_BRAND_COLS.forEach(brand => {
+        const toggleBtn = document.querySelector(`.cfm-brand-toggle-btn[data-brand="${brand}"]`);
+        const isActive = toggleBtn && toggleBtn.classList.contains('active');
+        clientBrandsObj[brand] = isActive ? 1 : null;
+    });
+
+    const clientData = {
+        'CLIENTE ATIVO?': statusVal,
+        'CNPJ': cnpjVal,
+        'FANTASIA': fantasiaVal,
+        'RAZAO SOCIAL': razaoVal,
+        'GRUPO': grupoVal,
+        'GRUPO REAL': grupoRealVal,
+        'CODIGO AREZZO': arezzoVal,
+        'CODIGO NEW ERA': newEraVal,
+        'CEP': cepVal,
+        'RUA': ruaVal,
+        'NUMERO': numVal,
+        'COMPLEMENTO': compVal,
+        'BAIRRO': bairroVal,
+        'CIDADE': cidadeVal,
+        'ESTADO': estadoVal,
+        'ENDERECO COMPLETO': endCompletoVal,
+        'ENDERECO?': endStatusVal,
+        'PROPRIETARIO': propVal,
+        'TELEFONE': telVal,
+        'ANIVERSARIO': niverVal,
+        ...clientBrandsObj
+    };
+
+    if (isNew) {
+        clientsMasterData.unshift(clientData);
+        await persistClientsData(`adicionou o cliente "${fantasiaVal}"`);
+        window.showNotification(`Cliente "${fantasiaVal}" cadastrado com sucesso!`, 'success');
+    } else {
+        const idx = parseInt(indexVal, 10);
+        if (idx >= 0 && idx < clientsMasterData.length) {
+            clientsMasterData[idx] = Object.assign({}, clientsMasterData[idx], clientData);
+            currentModalClient = clientsMasterData[idx];
+            await persistClientsData(`atualizou os dados do cliente "${fantasiaVal}"`);
+            window.showNotification(`Dados de "${fantasiaVal}" atualizados com sucesso!`, 'success');
+        }
+    }
+
+    closeClientFormModal();
+};
+
+window.deleteCurrentClient = async function() {
+    const indexVal = document.getElementById('cfm-client-index')?.value;
+    if (indexVal === '' || indexVal === null || indexVal === undefined) return;
+
+    const idx = parseInt(indexVal, 10);
+    const client = clientsMasterData[idx];
+    if (!client) return;
+
+    const name = client['FANTASIA'] || client['RAZAO SOCIAL'] || 'este cliente';
+    if (!confirm(`Tem certeza que deseja remover o cliente "${name}" da base de dados?`)) {
+        return;
+    }
+
+    clientsMasterData.splice(idx, 1);
+    await persistClientsData(`excluiu o cliente "${name}"`);
+    closeClientFormModal();
+    closeClientDetailModal();
+    window.showNotification(`Cliente "${name}" excluído.`, 'success');
+};
+
+
 
