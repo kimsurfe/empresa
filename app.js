@@ -667,10 +667,14 @@ function setupGlobalListeners() {
             const remoteList = doc.data().list;
             if (remoteList.length > 0) {
                 clientsMasterData = remoteList;
+                window.clientsMasterData = clientsMasterData;
                 localStorage.setItem('empresa_clients_custom_data', JSON.stringify(clientsMasterData));
                 const sidebarBadge = document.getElementById('sidebar-clients-count');
                 if (sidebarBadge) sidebarBadge.textContent = clientsMasterData.length;
                 populateClientsDatalists();
+                if (typeof window.applyIndicatorsFilter === 'function') {
+                    try { window.applyIndicatorsFilter(); } catch (e) {}
+                }
                 if (sessionStorage.getItem('last_active_tab') === 'clients') {
                     applyClientsFilter();
                 }
@@ -3669,6 +3673,7 @@ function escapeHTML(str) {
 const CLIENT_BRAND_COLS = ['BAW', 'EVOKE', 'NEW ERA', 'LOST', 'MCD', 'MORMAII', 'STANCE', 'STEP DEFEND', 'VANS'];
 
 let clientsMasterData = [];
+window.clientsMasterData = clientsMasterData;
 let clientsFilteredData = [];
 let clientsCurrentPage = 1;
 let clientsPageSize = 25;
@@ -3690,6 +3695,7 @@ window.initClientsModule = function() {
         console.error('Erro ao carregar dados de clientes:', e);
         clientsMasterData = window.INITIAL_CLIENTS_DATA || [];
     }
+    window.clientsMasterData = clientsMasterData;
 
     const sidebarBadge = document.getElementById('sidebar-clients-count');
     if (sidebarBadge) {
@@ -4429,6 +4435,9 @@ window.handleUploadClientsExcel = function(event) {
 // --------------------------------------------------------------------------
 
 async function persistClientsData(actionMessage = 'atualizou a base de clientes') {
+    // Sincronizar no escopo global
+    window.clientsMasterData = clientsMasterData;
+
     // 1. Salvar no localStorage local imediatamente para resposta de 0 ms
     localStorage.setItem('empresa_clients_custom_data', JSON.stringify(clientsMasterData));
 
@@ -4439,6 +4448,14 @@ async function persistClientsData(actionMessage = 'atualizou a base de clientes'
     }
     populateClientsDatalists();
     applyClientsFilter();
+
+    // Atualizar módulo de Indicadores se estiver carregado
+    if (typeof window.applyIndicatorsFilter === 'function') {
+        try { window.applyIndicatorsFilter(); } catch (e) {}
+    }
+    if (typeof window.populateAllIndCMS === 'function') {
+        try { window.populateAllIndCMS(); } catch (e) {}
+    }
 
     // 3. Salvar no Firestore para sincronização em tempo real entre todos os usuários
     if (isFirebaseConnected && window.db) {
@@ -5227,7 +5244,11 @@ window.lookupCnpjData = async function() {
                         <span class="sync-client-tag">Cliente: ${escapeHTML(clientName)}</span>
                     </div>
                     <div class="sync-card-desc">
-                        Este CNPJ já pertence ao cliente <strong>"${escapeHTML(clientName)}"</strong> no sistema. Os dados cadastrais oficiais obtidos da <strong>${norm.fonteConsulta}</strong> foram mesclados e sincronizados com o cadastro existente.
+                        Este CNPJ já pertence ao cliente <strong>"${escapeHTML(clientName)}"</strong> no sistema. Os dados cadastrais oficiais obtidos da <strong>${norm.fonteConsulta}</strong> foram mesclados e sincronizados com o formulário.
+                        <div style="margin-top: 0.45rem; padding: 0.35rem 0.6rem; background: rgba(234,179,8,0.15); border: 1px solid rgba(234,179,8,0.3); border-radius: 6px; color: #fef08a; font-size: 0.8rem; display: flex; align-items: center; gap: 0.4rem;">
+                            <i class='bx bx-info-circle' style="font-size: 1rem; color: #facc15;"></i>
+                            <span>Clique em <strong>"Concluir e Salvar Vínculo Agora"</strong> para efetivar as alterações e sumir com a pendência no relatório.</span>
+                        </div>
                     </div>
                     <div class="sync-card-badges">
                         <span class="sync-pill preserved" title="Marcas, códigos e grupos do cliente foram mantidos intactos">
@@ -5241,6 +5262,9 @@ window.lookupCnpjData = async function() {
                         </span>
                     </div>
                     <div class="sync-card-buttons">
+                        <button type="button" class="btn-sync-save-now" onclick="window.saveClientFormData()" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 6px; padding: 0.45rem 0.85rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; box-shadow: 0 2px 6px rgba(16,185,129,0.35); transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                            <i class='bx bx-check-double'></i> Concluir e Salvar Vínculo Agora
+                        </button>
                         <button type="button" class="btn-sync-toggle-diff" onclick="window.toggleSyncDiffDetails()">
                             <i class='bx bx-list-check'></i> Ver O que Foi Sincronizado
                         </button>

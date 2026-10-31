@@ -416,9 +416,7 @@
         const clientList = document.getElementById('ind-cms-client-list');
         if (clientList) {
             const clientsSet = new Set();
-            const baseClients = (window.clientsMasterData && window.clientsMasterData.length > 0)
-                ? window.clientsMasterData
-                : (window.INITIAL_CLIENTS_DATA || []);
+            const baseClients = getActiveClientsList();
 
             baseClients.forEach(c => {
                 const fant = (c['FANTASIA'] || c['NOME FANTASIA'] || '').toString().trim();
@@ -611,25 +609,57 @@
         applyIndicatorsFilter();
     };
 
+    // Obtém a lista atualizada de clientes (window -> localStorage -> INITIAL_CLIENTS_DATA)
+    function getActiveClientsList() {
+        if (window.clientsMasterData && Array.isArray(window.clientsMasterData) && window.clientsMasterData.length > 0) {
+            return window.clientsMasterData;
+        }
+        try {
+            const saved = localStorage.getItem('empresa_clients_custom_data');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    window.clientsMasterData = parsed;
+                    return parsed;
+                }
+            }
+        } catch (e) {
+            console.error('Erro ao ler clientes do localStorage no módulo de indicadores:', e);
+        }
+        return window.INITIAL_CLIENTS_DATA || [];
+    }
+
     // Cria mapa de clientes para cruzamento
     function buildClientsMap() {
         const map = new Map();
-        const baseClients = (window.clientsMasterData && window.clientsMasterData.length > 0)
-            ? window.clientsMasterData
-            : (window.INITIAL_CLIENTS_DATA || []);
+        const baseClients = getActiveClientsList();
 
         baseClients.forEach(c => {
-            const cleanC = cleanDigits(c['CNPJ']);
+            const rawCnpj = (c['CNPJ'] || '').toString();
+            const cleanC = cleanDigits(rawCnpj);
             if (cleanC) {
                 map.set(cleanC, c);
+                map.set(cleanC.padStart(14, '0'), c);
             }
             const neCod = (c['CODIGO NEW ERA'] || '').toString().trim();
             if (neCod && neCod !== '-' && neCod !== 'None') {
                 map.set(`NE_${neCod}`, c);
+                const cleanNe = cleanDigits(neCod);
+                if (cleanNe) map.set(`NE_${cleanNe}`, c);
+            }
+            const arezzoCod = (c['CODIGO AREZZO'] || '').toString().trim();
+            if (arezzoCod && arezzoCod !== '-' && arezzoCod !== 'None') {
+                map.set(`AR_${arezzoCod}`, c);
+                const cleanAr = cleanDigits(arezzoCod);
+                if (cleanAr) map.set(`AR_${cleanAr}`, c);
             }
             const fant = (c['FANTASIA'] || c['NOME FANTASIA'] || '').toString().trim().toUpperCase();
             if (fant) {
                 map.set(`FANT_${fant}`, c);
+            }
+            const razao = (c['RAZAO SOCIAL'] || c['RAZÃO SOCIAL'] || '').toString().trim().toUpperCase();
+            if (razao) {
+                map.set(`RAZAO_${razao}`, c);
             }
         });
         return map;
@@ -637,10 +667,23 @@
 
     function resolveClientForItem(item, clientsMap) {
         if (!clientsMap) return null;
-        if (item.c && clientsMap.has(item.c)) return clientsMap.get(item.c);
-        if (item.cli && clientsMap.has(`NE_${item.cli}`)) return clientsMap.get(`NE_${item.cli}`);
+        if (item.c) {
+            const cleanC = cleanDigits(item.c);
+            if (cleanC) {
+                if (clientsMap.has(cleanC)) return clientsMap.get(cleanC);
+                if (clientsMap.has(cleanC.padStart(14, '0'))) return clientsMap.get(cleanC.padStart(14, '0'));
+            }
+        }
+        if (item.cli) {
+            const cliStr = item.cli.toString().trim();
+            if (clientsMap.has(`NE_${cliStr}`)) return clientsMap.get(`NE_${cliStr}`);
+            const cleanCli = cleanDigits(cliStr);
+            if (cleanCli && clientsMap.has(`NE_${cleanCli}`)) return clientsMap.get(`NE_${cleanCli}`);
+        }
         const fantUpper = (item.f || '').trim().toUpperCase();
         if (fantUpper && clientsMap.has(`FANT_${fantUpper}`)) return clientsMap.get(`FANT_${fantUpper}`);
+        const razaoUpper = (item.z || '').trim().toUpperCase();
+        if (razaoUpper && clientsMap.has(`RAZAO_${razaoUpper}`)) return clientsMap.get(`RAZAO_${razaoUpper}`);
         return null;
     }
 
