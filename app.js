@@ -4603,8 +4603,8 @@ window.openEditClientByIndex = function(index) {
     document.getElementById('cfm-endereco-status').value = client['ENDERECO?'] || 'REVISADO';
 
     document.getElementById('cfm-proprietario').value = client['PROPRIETARIO'] || '';
-    document.getElementById('cfm-telefone').value = client['TELEFONE'] || '';
-    document.getElementById('cfm-aniversario').value = client['ANIVERSARIO'] || '';
+    document.getElementById('cfm-telefone').value = window.formatTelefone(client['TELEFONE'] || '');
+    document.getElementById('cfm-aniversario').value = window.formatAniversario(client['ANIVERSARIO'] || '');
 
     renderFormBrandToggles(client);
 
@@ -4759,8 +4759,10 @@ window.saveClientFormData = async function() {
     const endStatusVal = document.getElementById('cfm-endereco-status')?.value || 'REVISADO';
 
     const propVal = document.getElementById('cfm-proprietario')?.value?.trim()?.toUpperCase() || null;
-    const telVal = document.getElementById('cfm-telefone')?.value?.trim()?.toUpperCase() || null;
-    const niverVal = document.getElementById('cfm-aniversario')?.value?.trim()?.toUpperCase() || null;
+    const rawTel = document.getElementById('cfm-telefone')?.value?.trim() || '';
+    const telVal = (window.formatTelefone ? window.formatTelefone(rawTel) : rawTel) || null;
+    const rawNiver = document.getElementById('cfm-aniversario')?.value?.trim() || '';
+    const niverVal = (window.formatAniversario ? window.formatAniversario(rawNiver) : rawNiver) || null;
 
     // Obter marcas selecionadas
     const clientBrandsObj = {};
@@ -4893,6 +4895,32 @@ window.formatCNPJ = function(value) {
     if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
     if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
     return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+};
+
+window.formatTelefone = function(val) {
+    if (!val) return '';
+    const digits = val.toString().replace(/\D/g, '').slice(0, 11);
+    if (digits.length > 10) {
+        return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+    } else if (digits.length > 6) {
+        return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+    } else if (digits.length > 2) {
+        return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    } else if (digits.length > 0) {
+        return digits;
+    }
+    return '';
+};
+
+window.formatAniversario = function(val) {
+    if (!val) return '';
+    const digits = val.toString().replace(/\D/g, '').slice(0, 8);
+    if (digits.length > 4) {
+        return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    } else if (digits.length > 2) {
+        return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+    return digits;
 };
 
 function showCnpjFeedback(msg, type = 'info') {
@@ -5094,7 +5122,7 @@ window.lookupCnpjData = async function() {
             document.getElementById('cfm-proprietario').value = existingClient['PROPRIETARIO'];
         }
         if (existingClient['ANIVERSARIO'] && !document.getElementById('cfm-aniversario').value) {
-            document.getElementById('cfm-aniversario').value = existingClient['ANIVERSARIO'];
+            document.getElementById('cfm-aniversario').value = window.formatAniversario ? window.formatAniversario(existingClient['ANIVERSARIO']) : existingClient['ANIVERSARIO'];
         }
 
         const deleteBtn = document.getElementById('cfm-delete-btn');
@@ -5217,7 +5245,7 @@ window.lookupCnpjData = async function() {
         if (norm.uf) document.getElementById('cfm-estado').value = norm.uf;
 
         if (norm.telefone && !document.getElementById('cfm-telefone').value) {
-            document.getElementById('cfm-telefone').value = norm.telefone;
+            document.getElementById('cfm-telefone').value = window.formatTelefone ? window.formatTelefone(norm.telefone) : norm.telefone;
         }
 
         window.updateFormEnderecoCompleto();
@@ -5332,7 +5360,7 @@ window.lookupCnpjData = async function() {
     if (norm.uf) document.getElementById('cfm-estado').value = norm.uf;
 
     if (norm.telefone && !document.getElementById('cfm-telefone').value) {
-        document.getElementById('cfm-telefone').value = norm.telefone;
+        document.getElementById('cfm-telefone').value = window.formatTelefone ? window.formatTelefone(norm.telefone) : norm.telefone;
     }
 
     // Atualiza composição de endereço completo
@@ -5391,6 +5419,26 @@ document.addEventListener('input', function(e) {
             return;
         }
 
+        // Máscara Telefone em tempo real: (13) 3273-2560 ou (11) 98765-4321
+        if (el.id === 'cfm-telefone') {
+            const raw = el.value;
+            const formatted = window.formatTelefone(raw);
+            if (raw !== formatted && raw.length <= 15) {
+                el.value = formatted;
+            }
+            return;
+        }
+
+        // Máscara Aniversário em tempo real: DD/MM/AAAA ou DD/MM
+        if (el.id === 'cfm-aniversario') {
+            const raw = el.value;
+            const formatted = window.formatAniversario(raw);
+            if (raw !== formatted && raw.length <= 10) {
+                el.value = formatted;
+            }
+            return;
+        }
+
         // Todos os outros campos de texto: forçar MAIÚSCULAS
         if (el.tagName === 'INPUT' && (el.type === 'text' || !el.type)) {
             const start = el.selectionStart;
@@ -5402,6 +5450,18 @@ document.addEventListener('input', function(e) {
                     el.setSelectionRange(start, end);
                 }
             }
+        }
+    }
+});
+
+// Ao sair do campo (focusout/blur), garante formatação completa
+document.addEventListener('focusout', function(e) {
+    const el = e.target;
+    if (el && el.closest('#client-edit-form')) {
+        if (el.id === 'cfm-telefone' && el.value) {
+            el.value = window.formatTelefone(el.value);
+        } else if (el.id === 'cfm-aniversario' && el.value) {
+            el.value = window.formatAniversario(el.value);
         }
     }
 });
