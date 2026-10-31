@@ -4778,6 +4778,19 @@ window.saveClientFormData = async function() {
     };
 
     if (isNew) {
+        // Proteção contra duplicação: se o CNPJ informado já existir na base, atualiza o existente
+        if (cnpjVal) {
+            const cleanC = cleanDigits(cnpjVal);
+            const dupIdx = clientsMasterData.findIndex(c => cleanDigits(c['CNPJ']) === cleanC);
+            if (dupIdx !== -1) {
+                clientsMasterData[dupIdx] = Object.assign({}, clientsMasterData[dupIdx], clientData);
+                currentModalClient = clientsMasterData[dupIdx];
+                await persistClientsData(`sincronizou e atualizou os dados do cliente "${fantasiaVal}"`);
+                window.showNotification(`Cadastro de "${fantasiaVal}" sincronizado e atualizado com sucesso!`, 'success');
+                closeClientFormModal();
+                return;
+            }
+        }
         clientsMasterData.unshift(clientData);
         await persistClientsData(`adicionou o cliente "${fantasiaVal}"`);
         window.showNotification(`Cliente "${fantasiaVal}" cadastrado com sucesso!`, 'success');
@@ -5022,16 +5035,53 @@ window.lookupCnpjData = async function() {
         return cleanDigits(c['CNPJ']) === clean;
     });
 
-    if (dupIndex !== -1) {
-        const existingClient = clientsMasterData[dupIndex];
-        const clientName = existingClient['FANTASIA'] || existingClient['RAZAO SOCIAL'] || 'Cliente sem nome';
-        const msg = `Este CNPJ já está cadastrado no sistema para o cliente: "${clientName}".`;
-        showCnpjFeedback(`${msg} <button type="button" class="btn-cancel" onclick="openEditClientByIndex(${dupIndex})" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; margin-left: 0.5rem; display: inline-flex; border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.15);">Ver / Editar Cadastro</button>`, 'warning');
-        window.showNotification(msg, 'warning');
+    let existingClient = null;
+    let isSyncingExisting = false;
 
-        if (!confirm(`${msg}\n\nDeseja prosseguir com a consulta e preencher os dados no formulário atual?`)) {
-            return;
+    if (dupIndex !== -1) {
+        existingClient = clientsMasterData[dupIndex];
+        isSyncingExisting = true;
+        window._lastSyncOriginalClient = JSON.parse(JSON.stringify(existingClient));
+        window._lastSyncDupIndex = dupIndex;
+
+        // Se o formulário estava em modo "Novo Cliente", vincula ao cliente existente para evitar duplicações
+        const indexInput = document.getElementById('cfm-client-index');
+        if (indexInput) indexInput.value = dupIndex;
+
+        const titleEl = document.getElementById('cfm-modal-title');
+        const subEl = document.getElementById('cfm-modal-subtitle');
+        const iconEl = document.getElementById('cfm-header-icon');
+        const clientName = existingClient['FANTASIA'] || existingClient['RAZAO SOCIAL'] || 'Cliente sem nome';
+
+        if (titleEl) titleEl.textContent = 'Editar Cliente (Sincronização)';
+        if (subEl) subEl.textContent = `Sincronizando com o cadastro de "${clientName}"`;
+        if (iconEl) iconEl.innerHTML = "<i class='bx bx-sync'></i>";
+
+        // Carrega marcas e campos internos existentes para garantir que não sejam perdidos
+        renderFormBrandToggles(existingClient);
+
+        // Preserva campos internos
+        if (existingClient['GRUPO'] && !document.getElementById('cfm-grupo').value) {
+            document.getElementById('cfm-grupo').value = existingClient['GRUPO'];
         }
+        if (existingClient['GRUPO REAL'] && !document.getElementById('cfm-grupo-real').value) {
+            document.getElementById('cfm-grupo-real').value = existingClient['GRUPO REAL'];
+        }
+        if (existingClient['CODIGO AREZZO'] && !document.getElementById('cfm-cod-arezzo').value) {
+            document.getElementById('cfm-cod-arezzo').value = existingClient['CODIGO AREZZO'];
+        }
+        if (existingClient['CODIGO NEW ERA'] && !document.getElementById('cfm-cod-new-era').value) {
+            document.getElementById('cfm-cod-new-era').value = existingClient['CODIGO NEW ERA'];
+        }
+        if (existingClient['PROPRIETARIO'] && !document.getElementById('cfm-proprietario').value) {
+            document.getElementById('cfm-proprietario').value = existingClient['PROPRIETARIO'];
+        }
+        if (existingClient['ANIVERSARIO'] && !document.getElementById('cfm-aniversario').value) {
+            document.getElementById('cfm-aniversario').value = existingClient['ANIVERSARIO'];
+        }
+
+        const deleteBtn = document.getElementById('cfm-delete-btn');
+        if (deleteBtn) deleteBtn.style.display = 'inline-flex';
     }
 
     // 2. Estado visual de carregamento no botão
@@ -5042,7 +5092,7 @@ window.lookupCnpjData = async function() {
         btn.innerHTML = "<i class='bx bx-loader-alt bx-spin'></i> <span>Consultando Receita Federal...</span>";
     }
 
-    showCnpjFeedback('Consultando dados cadastrais (Fonte primária: Receita Federal)...', 'info');
+    showCnpjFeedback('Consultando dados cadastrais oficiais...', 'info');
 
     let responseData = null;
     let sourceUsed = '';
@@ -5107,13 +5157,140 @@ window.lookupCnpjData = async function() {
         return;
     }
 
-    // 6. Normalização e Preenchimento dos dados
+    // 6. Normalização e Preenchimento/Sincronização dos dados
     const norm = normalizeCnpjResponse(responseData, sourceUsed);
     if (!norm) {
         showCnpjFeedback('Estrutura de dados não reconhecida. Preencha os campos manualmente.', 'error');
         return;
     }
 
+    // Se estamos sincronizando com um cliente existente na base
+    if (isSyncingExisting && existingClient) {
+        const clientName = existingClient['FANTASIA'] || existingClient['RAZAO SOCIAL'] || 'Cliente sem nome';
+        const oldRazao = existingClient['RAZAO SOCIAL'] || '';
+        const oldEnd = existingClient['ENDERECO COMPLETO'] || `${existingClient['CIDADE'] || ''}/${existingClient['ESTADO'] || ''}`;
+
+        // 1. Razão Social: Atualiza com a Razão Social oficial
+        if (norm.razaoSocial) document.getElementById('cfm-razao').value = norm.razaoSocial;
+
+        // 2. Nome Fantasia: Se já existia nome comercial, preserva; caso contrário preenche
+        const oldFantasia = existingClient['FANTASIA'] || '';
+        if (oldFantasia) {
+            document.getElementById('cfm-fantasia').value = oldFantasia;
+        } else if (norm.nomeFantasia) {
+            document.getElementById('cfm-fantasia').value = norm.nomeFantasia;
+        } else if (norm.razaoSocial) {
+            document.getElementById('cfm-fantasia').value = norm.razaoSocial;
+        }
+
+        // 3. Status Cadastral
+        if (norm.statusAtivo === 'NAO') {
+            document.getElementById('cfm-status').value = 'NAO';
+        } else if (existingClient['CLIENTE ATIVO?']) {
+            document.getElementById('cfm-status').value = (existingClient['CLIENTE ATIVO?'].toString().trim().toUpperCase() === 'NAO') ? 'NAO' : 'SIM';
+        }
+
+        // 4. Endereço oficial
+        if (norm.cep) document.getElementById('cfm-cep').value = norm.cep;
+        if (norm.logradouro) document.getElementById('cfm-rua').value = norm.logradouro;
+        if (norm.numero) document.getElementById('cfm-numero').value = norm.numero;
+        if (norm.complemento) document.getElementById('cfm-complemento').value = norm.complemento;
+        if (norm.bairro) document.getElementById('cfm-bairro').value = norm.bairro;
+        if (norm.municipio) document.getElementById('cfm-cidade').value = norm.municipio;
+        if (norm.uf) document.getElementById('cfm-estado').value = norm.uf;
+
+        if (norm.telefone && !document.getElementById('cfm-telefone').value) {
+            document.getElementById('cfm-telefone').value = norm.telefone;
+        }
+
+        window.updateFormEnderecoCompleto();
+
+        // Badge de status no topo
+        const badge = document.getElementById('cfm-cnpj-badge');
+        if (badge) {
+            badge.innerHTML = `<i class='bx bx-check-shield'></i> ${norm.fonteConsulta} (${norm.situacaoCadastral || 'ATIVA'})`;
+            badge.style.display = 'inline-flex';
+        }
+
+        // Renderiza o card de sincronização visual interativo
+        const feedbackEl = document.getElementById('cfm-cnpj-feedback');
+        if (feedbackEl) {
+            feedbackEl.className = 'cfm-cnpj-feedback success';
+            feedbackEl.style.display = 'block';
+            feedbackEl.innerHTML = `
+                <div class="cfm-sync-card">
+                    <div class="sync-card-header">
+                        <div class="sync-card-title">
+                            <i class='bx bx-git-merge' style="color: #818cf8; font-size: 1.15rem;"></i>
+                            <span>Sincronização com Cadastro Existente Concluída</span>
+                        </div>
+                        <span class="sync-client-tag">Cliente: ${escapeHTML(clientName)}</span>
+                    </div>
+                    <div class="sync-card-desc">
+                        Este CNPJ já pertence ao cliente <strong>"${escapeHTML(clientName)}"</strong> no sistema. Os dados cadastrais oficiais obtidos da <strong>${norm.fonteConsulta}</strong> foram mesclados e sincronizados com o cadastro existente.
+                    </div>
+                    <div class="sync-card-badges">
+                        <span class="sync-pill preserved" title="Marcas, códigos e grupos do cliente foram mantidos intactos">
+                            <i class='bx bx-check-circle'></i> Marcas & Códigos Preservados
+                        </span>
+                        <span class="sync-pill updated" title="Razão social e endereço foram atualizados com os dados oficiais">
+                            <i class='bx bx-refresh'></i> Razão Social & Endereço Sincronizados
+                        </span>
+                        <span class="sync-pill status" title="Situação cadastral na Receita Federal">
+                            <i class='bx bx-shield-quarter'></i> Situação: ${norm.situacaoCadastral || 'ATIVA'}
+                        </span>
+                    </div>
+                    <div class="sync-card-buttons">
+                        <button type="button" class="btn-sync-toggle-diff" onclick="window.toggleSyncDiffDetails()">
+                            <i class='bx bx-list-check'></i> Ver O que Foi Sincronizado
+                        </button>
+                        <button type="button" class="btn-sync-revert" onclick="window.revertClientSync(${dupIndex})">
+                            <i class='bx bx-undo'></i> Restaurar Cadastro Anterior
+                        </button>
+                    </div>
+                    <div id="cfm-sync-diff-details" style="display: none; margin-top: 0.65rem; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 0.65rem;">
+                        <table class="sync-diff-table">
+                            <thead>
+                                <tr>
+                                    <th>Campo</th>
+                                    <th>No Cadastro Anterior</th>
+                                    <th>Sincronizado (${norm.fonteConsulta})</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Razão Social</strong></td>
+                                    <td class="diff-old">${escapeHTML(oldRazao || '-')}</td>
+                                    <td class="diff-new">${escapeHTML(norm.razaoSocial || '-')}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Endereço</strong></td>
+                                    <td class="diff-old">${escapeHTML(oldEnd || '-')}</td>
+                                    <td class="diff-new">${escapeHTML(document.getElementById('cfm-endereco-completo').value || '-')}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Situação Cadastral</strong></td>
+                                    <td class="diff-old">${escapeHTML(existingClient['CLIENTE ATIVO?'] || 'SIM')}</td>
+                                    <td class="diff-new">${escapeHTML(norm.situacaoCadastral || 'ATIVA')} (${norm.statusAtivo === 'SIM' ? 'ATIVO' : 'INATIVO'})</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Marcas & Códigos</strong></td>
+                                    <td colspan="2" style="color: #a7f3d0; font-weight: 500;">
+                                        <i class='bx bx-lock-alt'></i> Preservados: New Era (${existingClient['CODIGO NEW ERA'] || '-'}), Arezzo (${existingClient['CODIGO AREZZO'] || '-'}), Grupo (${existingClient['GRUPO'] || '-'})
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.showNotification(`Cadastro de "${clientName}" sincronizado com sucesso via ${norm.fonteConsulta}!`, 'success');
+        return;
+    }
+
+    // Fluxo padrão para novo cliente inexistente
     if (norm.razaoSocial) document.getElementById('cfm-razao').value = norm.razaoSocial;
     if (norm.nomeFantasia) {
         document.getElementById('cfm-fantasia').value = norm.nomeFantasia;
@@ -5146,6 +5323,23 @@ window.lookupCnpjData = async function() {
 
     showCnpjFeedback(`Dados cadastrais encontrados via <strong>${norm.fonteConsulta}</strong>. Situação: <strong>${norm.situacaoCadastral || 'ATIVA'}</strong>. Confira as informações antes de salvar.`, 'success');
     window.showNotification(`Dados cadastrais encontrados via ${norm.fonteConsulta}! Confira as informações antes de salvar.`, 'success');
+};
+
+window.revertClientSync = function(idx) {
+    if (idx >= 0 && idx < clientsMasterData.length) {
+        const client = window._lastSyncOriginalClient || clientsMasterData[idx];
+        openEditClient(client, idx);
+        showCnpjFeedback(`Cadastro restaurado para os dados originais de "${client['FANTASIA'] || client['RAZAO SOCIAL']}".`, 'info');
+        window.showNotification('Dados originais do cliente restaurados.', 'info');
+    }
+};
+
+window.toggleSyncDiffDetails = function() {
+    const el = document.getElementById('cfm-sync-diff-details');
+    if (el) {
+        const isHidden = (el.style.display === 'none' || !el.style.display);
+        el.style.display = isHidden ? 'block' : 'none';
+    }
 };
 
 // Event listener para garantir MAIÚSCULAS ao digitar nos campos de cadastro e máscara de CNPJ/CEP
