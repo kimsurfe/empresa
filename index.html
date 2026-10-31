@@ -21,7 +21,7 @@
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     
     <!-- CSS Customizado -->
-    <link rel="stylesheet" href="style.css?v=20">
+    <link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
     <div class="app-container">
@@ -99,6 +99,17 @@
                     </button>
                 </div>
 
+                <!-- MENU INDICADORES -->
+                <div style="margin-bottom: 0.5rem;">
+                    <button id="nav-indicators-btn" class="sidebar-nav-btn" onclick="switchTab('indicators')">
+                        <div style="display:flex; align-items:center; gap:0.75rem;">
+                            <i class='bx bx-line-chart'></i>
+                            <span class="nav-text">Indicadores</span>
+                        </div>
+                        <span class="badge" style="font-size: 0.7rem; padding: 2px 7px; border-radius: 10px; background: rgba(16, 185, 129, 0.2); color: var(--success-color); font-weight: 600;">BI</span>
+                    </button>
+                </div>
+
 
 
             </nav>
@@ -117,6 +128,7 @@
                         <button id="tab-day" class="tab-btn"><i class='bx bx-calendar-event'></i> Diário</button>
                         <button id="tab-kanban" class="tab-btn"><i class='bx bx-purchase-tag'></i> Marca</button>
                         <button id="tab-clients" class="tab-btn"><i class='bx bx-id-card'></i> Clientes</button>
+                        <button id="tab-indicators" class="tab-btn"><i class='bx bx-line-chart'></i> Indicadores</button>
                     </div>
                 </div>
 
@@ -605,6 +617,612 @@
                 </div>
             </div>
 
+            <!-- VIEW: INDICADORES (BI & DASHBOARD COMERCIAL) -->
+            <div id="view-indicators" class="view-container">
+                <div class="view-header" style="justify-content: space-between; align-items: center; display: flex; flex-wrap: wrap; gap: 1rem; width: 100%; margin-bottom: 1.25rem;">
+                    <div class="view-title-group" style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <h1 style="margin: 0; font-size: 1.6rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.6rem;">
+                            <i class='bx bx-line-chart' style="color: var(--accent-color);"></i> Indicadores Comerciais
+                        </h1>
+                        <span class="subtitle" style="color: var(--text-secondary); font-size: 0.9rem;" id="indicators-subtitle">
+                            Análise estratégica de vendas (Faturamento Bruto (Gross)) — NEW ERA • Atualizado em: 31/10/2026
+                        </span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                        <input type="file" id="billing-file-input" accept=".xlsx,.xls" style="display: none;" onchange="handleUploadBillingExcel(event)">
+                        <button type="button" class="btn-indicators-secondary" onclick="document.getElementById('billing-file-input').click()" title="Importar ou atualizar planilha de faturamento">
+                            <i class='bx bx-upload'></i> Atualizar Faturamento (.xlsx)
+                        </button>
+                        <button type="button" class="btn-indicators-export" onclick="exportIndicatorsSummaryToExcel()" title="Exportar dados consolidados em planilha Excel">
+                            <i class='bx bx-file'></i> Exportar Relatório
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CARD DE FILTROS POWER BI COM SELEÇÃO MÚLTIPLA -->
+                <div class="indicators-filter-card">
+                    <div class="indicators-filter-grid">
+                        <!-- Filtro Marca (Multi-Select) -->
+                        <div class="ind-input-group">
+                            <label><i class='bx bx-purchase-tag'></i> Marca</label>
+                            <div class="ind-cms" id="ind-cms-brand">
+                                <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-brand', event)">
+                                    <span class="ind-cms-label" id="ind-cms-brand-label">NEW ERA</span>
+                                    <i class='bx bx-chevron-down'></i>
+                                </button>
+                                <div class="ind-cms-dropdown hidden" id="ind-cms-brand-dropdown">
+                                    <div class="ind-cms-tools">
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('brand', true)">Todas</button>
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('brand', false)">Limpar</button>
+                                    </div>
+                                    <div class="ind-cms-options-list" id="ind-cms-brand-list">
+                                        <label class="ind-cms-option"><input type="checkbox" value="NEW ERA" checked onchange="onIndCMSCheckboxChange('brand')"> <span class="ind-cms-option-label">NEW ERA</span></label>
+                                        <label class="ind-cms-option"><input type="checkbox" value="VANS" disabled onchange="onIndCMSCheckboxChange('brand')"> <span class="ind-cms-option-label">VANS (Em breve)</span></label>
+                                        <label class="ind-cms-option"><input type="checkbox" value="EVOKE" disabled onchange="onIndCMSCheckboxChange('brand')"> <span class="ind-cms-option-label">EVOKE (Em breve)</span></label>
+                                        <label class="ind-cms-option"><input type="checkbox" value="MORMAII" disabled onchange="onIndCMSCheckboxChange('brand')"> <span class="ind-cms-option-label">MORMAII (Em breve)</span></label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtro Métrica / Base de Cálculo -->
+                        <div class="ind-input-group">
+                            <label for="filter-ind-metric"><i class='bx bx-dollar-circle'></i> Base de Cálculo</label>
+                            <select id="filter-ind-metric" class="ind-select" onchange="applyIndicatorsFilter()">
+                                <option value="gross" selected>Valor Gross (Bruto)</option>
+                                <option value="net">Valor Net (Líquido)</option>
+                            </select>
+                        </div>
+
+                        <!-- Filtro Visualização dos Dados (Valores / Peças / Os Dois) -->
+                        <div class="ind-input-group">
+                            <label for="filter-ind-kpi-mode"><i class='bx bx-slider-alt'></i> Exibição dos KPIs</label>
+                            <select id="filter-ind-kpi-mode" class="ind-select" onchange="onKpiDisplayModeChange(this.value)">
+                                <option value="both" selected>Valores e Peças (Os Dois)</option>
+                                <option value="values">Somente Valores (R$)</option>
+                                <option value="pieces">Somente Peças (Qtd)</option>
+                            </select>
+                        </div>
+
+                        <!-- Filtro Ano (Multi-Select) -->
+                        <div class="ind-input-group">
+                            <label><i class='bx bx-calendar'></i> Ano</label>
+                            <div class="ind-cms" id="ind-cms-year">
+                                <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-year', event)">
+                                    <span class="ind-cms-label" id="ind-cms-year-label">2026</span>
+                                    <i class='bx bx-chevron-down'></i>
+                                </button>
+                                <div class="ind-cms-dropdown hidden" id="ind-cms-year-dropdown">
+                                    <div class="ind-cms-tools">
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('year', true)">Todos</button>
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('year', false)">Limpar</button>
+                                    </div>
+                                    <div class="ind-cms-options-list" id="ind-cms-year-list">
+                                        <!-- Preenchido dinamicamente via JS -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtro Semestre (Multi-Select) -->
+                        <div class="ind-input-group">
+                            <label><i class='bx bx-time-five'></i> Semestre</label>
+                            <div class="ind-cms" id="ind-cms-semester">
+                                <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-semester', event)">
+                                    <span class="ind-cms-label" id="ind-cms-semester-label">2º Semestre</span>
+                                    <i class='bx bx-chevron-down'></i>
+                                </button>
+                                <div class="ind-cms-dropdown hidden" id="ind-cms-semester-dropdown">
+                                    <div class="ind-cms-tools">
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('semester', true)">Todos</button>
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('semester', false)">Limpar</button>
+                                    </div>
+                                    <div class="ind-cms-options-list" id="ind-cms-semester-list">
+                                        <label class="ind-cms-option"><input type="checkbox" value="1" onchange="onIndCMSCheckboxChange('semester')"> <span class="ind-cms-option-label">1º Semestre (Jan - Jun)</span></label>
+                                        <label class="ind-cms-option"><input type="checkbox" value="2" checked onchange="onIndCMSCheckboxChange('semester')"> <span class="ind-cms-option-label">2º Semestre (Jul - Dez)</span></label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Data Inicial -->
+                        <div class="ind-input-group">
+                            <label for="filter-ind-start-date"><i class='bx bx-calendar-alt'></i> Data Inicial</label>
+                            <input type="date" id="filter-ind-start-date" class="ind-input" onchange="onIndicatorsCustomDateChange()">
+                        </div>
+
+                        <!-- Data Final -->
+                        <div class="ind-input-group">
+                            <label for="filter-ind-end-date"><i class='bx bx-calendar-alt'></i> Data Final</label>
+                            <input type="date" id="filter-ind-end-date" class="ind-input" onchange="onIndicatorsCustomDateChange()">
+                        </div>
+                    </div>
+
+                    <!-- LINHA 2 DE FILTROS: CLIENTE, GRUPO, GRUPO REAL, DIVISÃO / CLASSE E NOTA FISCAL (MULTI-SELECT) -->
+                    <div class="indicators-filter-grid-secondary">
+                        <!-- Filtro Razão Social / Nome Fantasia (Multi-Select com Busca) -->
+                        <div class="ind-input-group">
+                            <label><i class='bx bx-search'></i> Razão Social / Nome Fantasia</label>
+                            <div class="ind-cms" id="ind-cms-client">
+                                <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-client', event)">
+                                    <span class="ind-cms-label" id="ind-cms-client-label">Todos os Clientes</span>
+                                    <i class='bx bx-chevron-down'></i>
+                                </button>
+                                <div class="ind-cms-dropdown hidden" id="ind-cms-client-dropdown" style="min-width: 320px;">
+                                    <div class="ind-cms-tools">
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('client', true)">Todos</button>
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('client', false)">Limpar</button>
+                                    </div>
+                                    <div class="ind-cms-search-box">
+                                        <i class='bx bx-search'></i>
+                                        <input type="text" class="ind-cms-search-input" placeholder="Pesquisar cliente ou razão..." oninput="filterIndCMSOptions('client', this.value)">
+                                    </div>
+                                    <div class="ind-cms-options-list" id="ind-cms-client-list">
+                                        <!-- Preenchido dinamicamente com Fantasia - Razão Social -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtro Grupo (Multi-Select com Busca) -->
+                        <div class="ind-input-group">
+                            <label><i class='bx bx-network-chart'></i> Grupo</label>
+                            <div class="ind-cms" id="ind-cms-group">
+                                <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-group', event)">
+                                    <span class="ind-cms-label" id="ind-cms-group-label">Todos os Grupos</span>
+                                    <i class='bx bx-chevron-down'></i>
+                                </button>
+                                <div class="ind-cms-dropdown hidden" id="ind-cms-group-dropdown">
+                                    <div class="ind-cms-tools">
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('group', true)">Todos</button>
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('group', false)">Limpar</button>
+                                    </div>
+                                    <div class="ind-cms-search-box">
+                                        <i class='bx bx-search'></i>
+                                        <input type="text" class="ind-cms-search-input" placeholder="Pesquisar grupo..." oninput="filterIndCMSOptions('group', this.value)">
+                                    </div>
+                                    <div class="ind-cms-options-list" id="ind-cms-group-list">
+                                        <!-- Preenchido dinamicamente -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtro Grupo Real (Multi-Select com Busca) -->
+                        <div class="ind-input-group">
+                            <label><i class='bx bx-git-repo-forked'></i> Grupo Real</label>
+                            <div class="ind-cms" id="ind-cms-group-real">
+                                <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-group-real', event)">
+                                    <span class="ind-cms-label" id="ind-cms-group-real-label">Todos os Grupos Reais</span>
+                                    <i class='bx bx-chevron-down'></i>
+                                </button>
+                                <div class="ind-cms-dropdown hidden" id="ind-cms-group-real-dropdown">
+                                    <div class="ind-cms-tools">
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('group-real', true)">Todos</button>
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('group-real', false)">Limpar</button>
+                                    </div>
+                                    <div class="ind-cms-search-box">
+                                        <i class='bx bx-search'></i>
+                                        <input type="text" class="ind-cms-search-input" placeholder="Pesquisar grupo real..." oninput="filterIndCMSOptions('group-real', this.value)">
+                                    </div>
+                                    <div class="ind-cms-options-list" id="ind-cms-group-real-list">
+                                        <!-- Preenchido dinamicamente -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtro Divisão / Classe (Multi-Select) -->
+                        <div class="ind-input-group">
+                            <label><i class='bx bx-layer'></i> Divisão / Classe</label>
+                            <div class="ind-cms" id="ind-cms-class">
+                                <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-class', event)">
+                                    <span class="ind-cms-label" id="ind-cms-class-label">Todas as Divisões</span>
+                                    <i class='bx bx-chevron-down'></i>
+                                </button>
+                                <div class="ind-cms-dropdown hidden" id="ind-cms-class-dropdown">
+                                    <div class="ind-cms-tools">
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('class', true)">Todas</button>
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('class', false)">Limpar</button>
+                                    </div>
+                                    <div class="ind-cms-options-list" id="ind-cms-class-list">
+                                        <!-- Preenchido dinamicamente -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtro Nota Fiscal (Multi-Select com Busca) -->
+                        <div class="ind-input-group">
+                            <label><i class='bx bx-receipt'></i> Nota Fiscal</label>
+                            <div class="ind-cms" id="ind-cms-nf">
+                                <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-nf', event)">
+                                    <span class="ind-cms-label" id="ind-cms-nf-label">Todas as NFs</span>
+                                    <i class='bx bx-chevron-down'></i>
+                                </button>
+                                <div class="ind-cms-dropdown hidden" id="ind-cms-nf-dropdown">
+                                    <div class="ind-cms-tools">
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('nf', true)">Todas</button>
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('nf', false)">Limpar</button>
+                                    </div>
+                                    <div class="ind-cms-search-box">
+                                        <i class='bx bx-search'></i>
+                                        <input type="text" class="ind-cms-search-input" placeholder="Pesquisar número de NF..." oninput="filterIndCMSOptions('nf', this.value)">
+                                    </div>
+                                    <div class="ind-cms-options-list" id="ind-cms-nf-list">
+                                        <!-- Preenchido dinamicamente -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botão Limpar -->
+                        <div class="ind-filter-actions">
+                            <button type="button" class="btn-ind-clear" onclick="clearIndicatorsFilter()" title="Redefinir filtros para o padrão">
+                                <i class='bx bx-reset'></i> Limpar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CABEÇALHO DA SEÇÃO DE KPIS COM SELETOR DE MODO -->
+                <div class="kpi-section-header">
+                    <div class="kpi-section-title">
+                        <i class='bx bx-bar-chart-alt-2' style="color: var(--accent-color);"></i> Indicadores Principais
+                    </div>
+                    <div class="kpi-mode-switcher">
+                        <button type="button" class="btn-kpi-mode active" data-mode="both" onclick="onKpiDisplayModeChange('both')" title="Exibir valores em R$ e quantidade de peças juntos">
+                            <i class='bx bx-layer'></i> Os Dois
+                        </button>
+                        <button type="button" class="btn-kpi-mode" data-mode="values" onclick="onKpiDisplayModeChange('values')" title="Exibir somente valores financeiros em R$">
+                            <i class='bx bx-dollar'></i> Valores (R$)
+                        </button>
+                        <button type="button" class="btn-kpi-mode" data-mode="pieces" onclick="onKpiDisplayModeChange('pieces')" title="Exibir somente quantidade física em peças">
+                            <i class='bx bx-package'></i> Peças (Qtd)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CARDS DE INDICADORES PRINCIPAIS (KPIS) -->
+                <div class="indicators-kpis-grid">
+                    <!-- KPI 1: Faturamento Total / Volume Total -->
+                    <div class="kpi-card highlight-accent">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-total-title">Faturamento Total</span>
+                            <div class="kpi-icon-badge" id="kpi-total-icon"><i class='bx bx-dollar-circle'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value" id="kpi-total-revenue">R$ 0,00</div>
+                            <div class="kpi-sub-badge" id="kpi-total-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-total-orders">0 pedidos faturados</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 2: Faturamento Mês Atual / Volume no Mês -->
+                    <div class="kpi-card highlight-emerald">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-month-title">Faturamento no Mês</span>
+                            <div class="kpi-icon-badge" id="kpi-month-icon"><i class='bx bx-trending-up'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value" id="kpi-month-revenue">R$ 0,00</div>
+                            <div class="kpi-sub-badge" id="kpi-month-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-month-caption">Mês de referência</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 3: Faturamento do Dia / Volume do Dia -->
+                    <div class="kpi-card highlight-amber">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-day-title">Faturamento do Dia</span>
+                            <div class="kpi-icon-badge" id="kpi-day-icon"><i class='bx bx-calendar-check'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value" id="kpi-day-revenue">R$ 0,00</div>
+                            <div class="kpi-sub-badge" id="kpi-day-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-day-date">-</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 4: Clientes com Faturamento -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Clientes Faturados</span>
+                            <div class="kpi-icon-badge"><i class='bx bx-store-alt'></i></div>
+                        </div>
+                        <div class="kpi-value font-mono" id="kpi-active-clients">0</div>
+                        <div class="kpi-footer">
+                            <span id="kpi-clients-coverage">lojas com compras ativas</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 5: Redes / Grupos Atendidos -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Redes / Grupos</span>
+                            <div class="kpi-icon-badge"><i class='bx bx-sitemap'></i></div>
+                        </div>
+                        <div class="kpi-value font-mono" id="kpi-active-groups">0</div>
+                        <div class="kpi-footer">
+                            <span id="kpi-groups-coverage">redes corporativas</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 6: Ticket Médio / Média por Cliente -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-ticket-title">Ticket Médio</span>
+                            <div class="kpi-icon-badge" id="kpi-ticket-icon"><i class='bx bx-receipt'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value font-mono" id="kpi-avg-ticket">R$ 0,00</div>
+                            <div class="kpi-sub-badge" id="kpi-ticket-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-ticket-footer">por cliente faturado</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEÇÃO DE GRÁFICOS (POWER BI STYLE) -->
+                <div class="indicators-charts-section">
+                    <!-- Painel Comparativo Multi-Ano (Ativado quando > 1 ano selecionado) -->
+                    <div id="indicators-comparison-panel" class="chart-panel-card chart-full-width comparison-card" style="display: none;">
+                        <div class="chart-header" style="flex-wrap: wrap; gap: 0.85rem; align-items: center;">
+                            <div class="chart-title-group">
+                                <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                                    <h3><i class='bx bx-git-compare' style="color: #6366f1;"></i> Comparativo Entre Anos Selecionados</h3>
+                                    <span id="comparison-years-badge" class="comparison-badge">2024 vs 2025</span>
+                                </div>
+                                <span class="chart-subtitle">Análise comparativa direta dos indicadores entre os anos marcados no filtro</span>
+                            </div>
+                            
+                            <!-- Pílulas de Seleção das 8 Métricas Solicitadas -->
+                            <div class="comparison-pills-bar">
+                                <div class="comparison-pills-cluster">
+                                    <span class="comparison-cluster-title">Geral:</span>
+                                    <button type="button" class="btn-comp-pill active" data-metric="monthly" onclick="switchComparisonMetric('monthly')">
+                                        <i class='bx bx-calendar'></i> Faturamento Mensal
+                                    </button>
+                                    <button type="button" class="btn-comp-pill" data-metric="group-real" onclick="switchComparisonMetric('group-real')">
+                                        <i class='bx bx-buildings'></i> Grupo Real
+                                    </button>
+                                    <button type="button" class="btn-comp-pill" data-metric="client" onclick="switchComparisonMetric('client')">
+                                        <i class='bx bx-store'></i> Clientes
+                                    </button>
+                                    <button type="button" class="btn-comp-pill" data-metric="network" onclick="switchComparisonMetric('network')">
+                                        <i class='bx bx-network-chart'></i> Redes
+                                    </button>
+                                    <button type="button" class="btn-comp-pill" data-metric="group" onclick="switchComparisonMetric('group')">
+                                        <i class='bx bx-group'></i> Grupos
+                                    </button>
+                                </div>
+                                <div class="comparison-pills-cluster">
+                                    <span class="comparison-cluster-title">Desempenho Produtos:</span>
+                                    <button type="button" class="btn-comp-pill" data-metric="product" onclick="switchComparisonMetric('product')">
+                                        <i class='bx bx-barcode'></i> Produtos
+                                    </button>
+                                    <button type="button" class="btn-comp-pill" data-metric="subgroup" onclick="switchComparisonMetric('subgroup')">
+                                        <i class='bx bx-category'></i> Sub-Grupos
+                                    </button>
+                                    <button type="button" class="btn-comp-pill" data-metric="class" onclick="switchComparisonMetric('class')">
+                                        <i class='bx bx-box'></i> Divisão / Classe
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-canvas-container" style="height: 380px;">
+                            <canvas id="chart-comparison"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Gráfico 1: Evolução Diária -->
+                    <div class="chart-panel-card chart-full-width">
+                        <div class="chart-header">
+                            <div class="chart-title-group">
+                                <h3><i class='bx bx-pulse' style="color: var(--accent-color);"></i> Evolução Diária do Faturamento</h3>
+                                <span class="chart-subtitle">Faturamento por dia com curva de tendência e pontos interativos</span>
+                            </div>
+                            <div class="chart-tools">
+                                <span class="chart-badge-info" id="chart-daily-count">0 dias</span>
+                            </div>
+                        </div>
+                        <div class="chart-canvas-container" style="height: 320px;">
+                            <canvas id="chart-daily-revenue"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Gráfico 2: Comparativo Mensal -->
+                    <div class="chart-panel-card chart-half-width">
+                        <div class="chart-header">
+                            <div class="chart-title-group">
+                                <h3><i class='bx bx-bar-chart-alt-2' style="color: #10b981;"></i> Faturamento Mensal</h3>
+                                <span class="chart-subtitle">Comparativo de vendas por mês</span>
+                            </div>
+                        </div>
+                        <div class="chart-canvas-container" style="height: 290px;">
+                            <canvas id="chart-monthly-revenue"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Gráfico 3: Faturamento por Grupo Real -->
+                    <div class="chart-panel-card chart-half-width">
+                        <div class="chart-header">
+                            <div class="chart-title-group">
+                                <h3><i class='bx bx-pie-chart-alt-2' style="color: #f59e0b;"></i> Faturamento por Grupo Real</h3>
+                                <span class="chart-subtitle">Distribuição entre os principais grupos econômicos</span>
+                            </div>
+                        </div>
+                        <div class="chart-canvas-container" style="height: 290px;">
+                            <canvas id="chart-group-revenue"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEÇÃO DE RANKINGS COMERCIAIS -->
+                <div class="indicators-rankings-section">
+                    <div class="ranking-header-title" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.75rem;">
+                        <div>
+                            <h2><i class='bx bx-trophy' style="color: #f59e0b;"></i> Rankings Comerciais</h2>
+                            <span style="color: var(--text-secondary); font-size: 0.85rem;">Maiores desempenhos em vendas no período selecionado</span>
+                        </div>
+                        <div class="ranking-limit-control" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--text-secondary);">
+                            <label for="ranking-limit-select"><i class='bx bx-list-ol'></i> Exibir:</label>
+                            <select id="ranking-limit-select" class="ind-select" style="padding: 0.32rem 0.65rem; font-size: 0.82rem; width: auto; min-width: 110px;" onchange="setRankingLimit(this.value)">
+                                <option value="10" selected>Top 10</option>
+                                <option value="20">Top 20</option>
+                                <option value="30">Top 30</option>
+                                <option value="50">Top 50</option>
+                                <option value="all">Todos os Dados</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="rankings-grid">
+                        <!-- Ranking 1: TOP CLIENTES -->
+                        <div class="ranking-panel-card">
+                            <div class="ranking-card-header">
+                                <div class="ranking-card-title">
+                                    <i class='bx bx-store'></i> Clientes
+                                </div>
+                                <span class="ranking-card-badge">Por Fantasia</span>
+                            </div>
+                            <div class="ranking-table-wrapper" id="ranking-clients-container">
+                                <!-- Injetado via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Ranking 2: TOP REDES (GRUPO) -->
+                        <div class="ranking-panel-card">
+                            <div class="ranking-card-header">
+                                <div class="ranking-card-title">
+                                    <i class='bx bx-network-chart'></i> Redes
+                                </div>
+                                <span class="ranking-card-badge">Grupo</span>
+                            </div>
+                            <div class="ranking-table-wrapper" id="ranking-networks-container">
+                                <!-- Injetado via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Ranking 3: TOP GRUPOS (GRUPO REAL) -->
+                        <div class="ranking-panel-card">
+                            <div class="ranking-card-header">
+                                <div class="ranking-card-title">
+                                    <i class='bx bx-buildings'></i> Grupos
+                                </div>
+                                <span class="ranking-card-badge">Grupo Real</span>
+                            </div>
+                            <div class="ranking-table-wrapper" id="ranking-groups-container">
+                                <!-- Injetado via JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SEÇÃO DE RANKINGS DE PRODUTOS -->
+                    <div class="ranking-header-title" style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.75rem;">
+                        <div>
+                            <h2><i class='bx bx-purchase-tag' style="color: #6366f1;"></i> Desempenho de Produtos</h2>
+                            <span style="color: var(--text-secondary); font-size: 0.85rem;">Referências mais vendidas, modelos, divisões e maiores notas fiscais emitidas</span>
+                        </div>
+                        <div class="ranking-limit-control" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--text-secondary);">
+                            <label for="ranking-limit-select-products"><i class='bx bx-list-ol'></i> Exibir:</label>
+                            <select id="ranking-limit-select-products" class="ind-select" style="padding: 0.32rem 0.65rem; font-size: 0.82rem; width: auto; min-width: 110px;" onchange="setRankingLimit(this.value)">
+                                <option value="10" selected>Top 10</option>
+                                <option value="20">Top 20</option>
+                                <option value="30">Top 30</option>
+                                <option value="50">Top 50</option>
+                                <option value="all">Todos os Dados</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="rankings-grid-4">
+                        <!-- Ranking 4: TOP PRODUTOS -->
+                        <div class="ranking-panel-card">
+                            <div class="ranking-card-header">
+                                <div class="ranking-card-title">
+                                    <i class='bx bx-barcode'></i> Produtos
+                                </div>
+                                <span class="ranking-card-badge">Referências</span>
+                            </div>
+                            <div class="ranking-table-wrapper" id="ranking-products-container">
+                                <!-- Injetado via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Ranking 5: TOP SUB-GRUPOS -->
+                        <div class="ranking-panel-card">
+                            <div class="ranking-card-header">
+                                <div class="ranking-card-title">
+                                    <i class='bx bx-category'></i> Sub-Grupos
+                                </div>
+                                <span class="ranking-card-badge">Modelos</span>
+                            </div>
+                            <div class="ranking-table-wrapper" id="ranking-subgroups-container">
+                                <!-- Injetado via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Ranking 6: TOP CLASSE PRODUTO -->
+                        <div class="ranking-panel-card">
+                            <div class="ranking-card-header">
+                                <div class="ranking-card-title">
+                                    <i class='bx bx-layer'></i> Divisão / Classe
+                                </div>
+                                <span class="ranking-card-badge">Volume</span>
+                            </div>
+                            <div class="ranking-table-wrapper" id="ranking-classes-container">
+                                <!-- Injetado via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Ranking 7: MAIORES NOTAS FISCAIS -->
+                        <div class="ranking-panel-card">
+                            <div class="ranking-card-header">
+                                <div class="ranking-card-title">
+                                    <i class='bx bx-receipt'></i> Notas Fiscais
+                                </div>
+                                <span class="ranking-card-badge">Faturamento</span>
+                            </div>
+                            <div class="ranking-table-wrapper" id="ranking-nfs-container">
+                                <!-- Injetado via JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEÇÃO DE AUDITORIA / CONFERÊNCIA DE CNPJS NÃO VINCULADOS -->
+                <div class="indicators-audit-card" id="indicators-audit-section" style="display: none;">
+                    <div class="audit-header" onclick="toggleAuditDetails()" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 0.6rem;">
+                            <i class='bx bx-info-circle' style="color: var(--warning-color); font-size: 1.3rem;"></i>
+                            <div>
+                                <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-primary);">Conferência da Base: CNPJs sem Vínculo Cadastral</h4>
+                                <span style="font-size: 0.8rem; color: var(--text-secondary);" id="audit-summary-caption">
+                                    Alguns faturamentos foram contabilizados mas seus CNPJs ainda não constam na lista central de clientes.
+                                </span>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="badge" id="audit-count-badge" style="background: rgba(245, 158, 11, 0.15); color: var(--warning-color); font-weight: 600; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem;">0 CNPJs</span>
+                            <i class='bx bx-chevron-down' id="audit-chevron" style="font-size: 1.2rem; color: var(--text-secondary);"></i>
+                        </div>
+                    </div>
+                    <div id="audit-details-body" style="display: none; margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid rgba(255,255,255,0.06);">
+                        <div class="audit-table-wrapper" id="audit-table-container">
+                            <!-- Preenchido via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 
 
         </main>
@@ -1031,8 +1649,22 @@
 
                 <!-- Seção 1: Dados Cadastrais & Identificação -->
                 <div class="cfm-section-card">
-                    <div class="cfm-section-title"><i class='bx bx-id-card'></i> Identificação & Status</div>
+                    <div class="cfm-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span><i class='bx bx-id-card'></i> Identificação & Status</span>
+                        <span id="cfm-cnpj-badge" class="cfm-cnpj-badge" style="display: none;"></span>
+                    </div>
                     <div class="cfm-form-grid">
+                        <div class="form-group col-span-2">
+                            <label for="cfm-cnpj">CNPJ</label>
+                            <div class="cfm-cnpj-input-group">
+                                <input type="text" id="cfm-cnpj" class="cfm-input font-mono" placeholder="00.000.000/0000-00" maxlength="18" autocomplete="off">
+                                <button type="button" id="cfm-btn-lookup-cnpj" class="btn-lookup-cnpj" onclick="lookupCnpjData()">
+                                    <i class='bx bx-search-alt-2'></i>
+                                    <span>BUSCAR DADOS DO CNPJ</span>
+                                </button>
+                            </div>
+                            <div id="cfm-cnpj-feedback" class="cfm-cnpj-feedback" style="display: none;"></div>
+                        </div>
                         <div class="form-group">
                             <label for="cfm-status">Status do Cliente *</label>
                             <select id="cfm-status" class="cfm-input" required>
@@ -1041,8 +1673,8 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="cfm-cnpj">CNPJ</label>
-                            <input type="text" id="cfm-cnpj" class="cfm-input font-mono" placeholder="00.000.000/0000-00" autocomplete="off">
+                            <label for="cfm-cod-arezzo">Código Arezzo</label>
+                            <input type="text" id="cfm-cod-arezzo" class="cfm-input font-mono" placeholder="Ex: 304385" autocomplete="off">
                         </div>
                         <div class="form-group col-span-2">
                             <label for="cfm-fantasia">Nome Fantasia *</label>
@@ -1060,11 +1692,7 @@
                             <label for="cfm-grupo-real">Grupo Real</label>
                             <input type="text" id="cfm-grupo-real" list="clients-grupo-real-datalist" class="cfm-input" placeholder="Selecione ou digite..." autocomplete="off">
                         </div>
-                        <div class="form-group">
-                            <label for="cfm-cod-arezzo">Código Arezzo</label>
-                            <input type="text" id="cfm-cod-arezzo" class="cfm-input font-mono" placeholder="Ex: 304385" autocomplete="off">
-                        </div>
-                        <div class="form-group">
+                        <div class="form-group col-span-2">
                             <label for="cfm-cod-new-era">Código New Era</label>
                             <input type="text" id="cfm-cod-new-era" class="cfm-input font-mono" placeholder="Ex: 12345" autocomplete="off">
                         </div>
@@ -1212,13 +1840,20 @@
     <!-- SheetJS (Excel) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
+    <!-- Chart.js (Dashboard & Indicadores Power BI) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
     <!-- Dados Iniciais de Clientes (Extraídos do OneDrive) -->
-    <script src="clients-data.js?v=20"></script>
+    <script src="clients-data.js?v=21"></script>
+
+    <!-- Dados Iniciais de Faturamento (NEW ERA) -->
+    <script src="billing-data.js?v=21"></script>
 
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="firebase-config.js?v=20"></script>
-    <script src="app.js?v=20"></script>
+    <script src="firebase-config.js?v=21"></script>
+    <script src="app.js?v=21"></script>
+    <script src="indicators.js?v=21"></script>
 </body>
 </html>

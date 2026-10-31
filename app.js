@@ -67,11 +67,13 @@ const tabDashboard = document.getElementById('tab-dashboard');
 const tabDay = document.getElementById('tab-day');
 const tabKanban = document.getElementById('tab-kanban');
 const tabClients = document.getElementById('tab-clients');
+const tabIndicators = document.getElementById('tab-indicators');
 const viewDashboard = document.getElementById('view-dashboard');
 const viewDay = document.getElementById('view-day');
 const viewKanban = document.getElementById('view-kanban');
 const viewBrand = document.getElementById('view-brand');
 const viewClients = document.getElementById('view-clients');
+const viewIndicators = document.getElementById('view-indicators');
 
 // Elementos da DOM - Tarefas e Header
 const currentDayTitleEl = document.getElementById('current-day-title');
@@ -382,6 +384,7 @@ async function init() {
     tabDay.addEventListener('click', () => switchTab('day'));
     tabKanban.addEventListener('click', () => switchTab('kanban'));
     if (tabClients) tabClients.addEventListener('click', () => switchTab('clients'));
+    if (tabIndicators) tabIndicators.addEventListener('click', () => switchTab('indicators'));
 
     // Calendário Navegação (Global)
     prevMonthBtn.addEventListener('click', () => changeMonth(-1));
@@ -422,6 +425,7 @@ async function init() {
     selectDate(lastDate);
 
     if (window.initClientsModule) window.initClientsModule();
+    if (window.initIndicatorsModule) window.initIndicatorsModule();
 
     const lastTab = sessionStorage.getItem('last_active_tab') || 'dashboard';
     if (lastTab === 'brand') {
@@ -512,21 +516,25 @@ function switchTab(tab) {
     tabDay.classList.remove('active');
     tabKanban.classList.remove('active');
     if (tabClients) tabClients.classList.remove('active');
+    if (tabIndicators) tabIndicators.classList.remove('active');
     
     const navDashboardBtn = document.getElementById('nav-dashboard-btn');
     const navDayBtn = document.getElementById('nav-day-btn');
     const navBrandsBtn = document.getElementById('nav-brands-btn');
     const navClientsBtn = document.getElementById('nav-clients-btn');
+    const navIndicatorsBtn = document.getElementById('nav-indicators-btn');
     if(navDashboardBtn) navDashboardBtn.classList.remove('active');
     if(navDayBtn) navDayBtn.classList.remove('active');
     if(navBrandsBtn) navBrandsBtn.classList.remove('active');
     if(navClientsBtn) navClientsBtn.classList.remove('active');
+    if(navIndicatorsBtn) navIndicatorsBtn.classList.remove('active');
     
     if (viewDashboard) viewDashboard.classList.remove('active');
     viewDay.classList.remove('active');
     viewKanban.classList.remove('active');
     viewBrand.classList.remove('active');
     if (viewClients) viewClients.classList.remove('active');
+    if (viewIndicators) viewIndicators.classList.remove('active');
     
     // Remover a classe active de todas as marcas do sidebar
     document.querySelectorAll('.sidebar-brand-item').forEach(el => el.classList.remove('active'));
@@ -571,6 +579,13 @@ function switchTab(tab) {
         if (viewClients) viewClients.classList.add('active');
         currentViewBrand = null;
         if (window.renderClientsView) window.renderClientsView();
+    } else if (tab === 'indicators') {
+        if (window.logUserAccess) window.logUserAccess('Painel de Indicadores (BI)');
+        if (tabIndicators) tabIndicators.classList.add('active');
+        if (navIndicatorsBtn) navIndicatorsBtn.classList.add('active');
+        if (viewIndicators) viewIndicators.classList.add('active');
+        currentViewBrand = null;
+        if (window.renderIndicatorsView) window.renderIndicatorsView();
     }
 }
 
@@ -4453,6 +4468,10 @@ window.openNewClientModal = function() {
     document.getElementById('cfm-header-icon').innerHTML = "<i class='bx bx-user-plus'></i>";
     document.getElementById('cfm-client-index').value = '';
 
+    hideCnpjFeedback();
+    const badge = document.getElementById('cfm-cnpj-badge');
+    if (badge) badge.style.display = 'none';
+
     document.getElementById('cfm-status').value = 'SIM';
     document.getElementById('cfm-cnpj').value = '';
     document.getElementById('cfm-fantasia').value = '';
@@ -4517,22 +4536,26 @@ window.openEditClientByIndex = function(index) {
 
     if (!client) return;
 
+    hideCnpjFeedback();
+    const badge = document.getElementById('cfm-cnpj-badge');
+    if (badge) badge.style.display = 'none';
+
     document.getElementById('cfm-modal-title').textContent = 'Editar Cliente';
     document.getElementById('cfm-modal-subtitle').textContent = client['FANTASIA'] || client['RAZAO SOCIAL'] || 'Atualizar dados da loja';
     document.getElementById('cfm-header-icon').innerHTML = "<i class='bx bx-edit'></i>";
     document.getElementById('cfm-client-index').value = masterIndex !== -1 ? masterIndex : index;
 
     document.getElementById('cfm-status').value = (client['CLIENTE ATIVO?'] || '').toString().trim().toUpperCase() === 'NAO' ? 'NAO' : 'SIM';
-    document.getElementById('cfm-cnpj').value = client['CNPJ'] || '';
-    document.getElementById('cfm-fantasia').value = client['FANTASIA'] || '';
-    document.getElementById('cfm-razao').value = client['RAZAO SOCIAL'] || '';
-    document.getElementById('cfm-grupo').value = client['GRUPO'] || '';
-    document.getElementById('cfm-grupo-real').value = client['GRUPO REAL'] || '';
-    document.getElementById('cfm-cod-arezzo').value = client['CODIGO AREZZO'] || '';
-    document.getElementById('cfm-cod-new-era').value = client['CODIGO NEW ERA'] || '';
+    document.getElementById('cfm-cnpj').value = window.formatCNPJ(client['CNPJ'] || '');
+    document.getElementById('cfm-fantasia').value = (client['FANTASIA'] || '').toUpperCase();
+    document.getElementById('cfm-razao').value = (client['RAZAO SOCIAL'] || '').toUpperCase();
+    document.getElementById('cfm-grupo').value = (client['GRUPO'] || '').toUpperCase();
+    document.getElementById('cfm-grupo-real').value = (client['GRUPO REAL'] || '').toUpperCase();
+    document.getElementById('cfm-cod-arezzo').value = (client['CODIGO AREZZO'] || '').toUpperCase();
+    document.getElementById('cfm-cod-new-era').value = (client['CODIGO NEW ERA'] || '').toUpperCase();
 
     document.getElementById('cfm-cep').value = client['CEP'] || '';
-    document.getElementById('cfm-rua').value = client['RUA'] || '';
+    document.getElementById('cfm-rua').value = (client['RUA'] || '').toUpperCase();
     document.getElementById('cfm-numero').value = client['NUMERO'] || '';
     document.getElementById('cfm-complemento').value = client['COMPLEMENTO'] || '';
     document.getElementById('cfm-bairro').value = client['BAIRRO'] || '';
@@ -4647,10 +4670,10 @@ window.lookupCep = async function(cepVal) {
         const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
         const data = await res.json();
         if (!data.erro) {
-            if (data.logradouro) document.getElementById('cfm-rua').value = data.logradouro;
-            if (data.bairro) document.getElementById('cfm-bairro').value = data.bairro;
-            if (data.localidade) document.getElementById('cfm-cidade').value = data.localidade;
-            if (data.uf) document.getElementById('cfm-estado').value = data.uf;
+            if (data.logradouro) document.getElementById('cfm-rua').value = data.logradouro.toUpperCase();
+            if (data.bairro) document.getElementById('cfm-bairro').value = data.bairro.toUpperCase();
+            if (data.localidade) document.getElementById('cfm-cidade').value = data.localidade.toUpperCase();
+            if (data.uf) document.getElementById('cfm-estado').value = data.uf.toUpperCase();
 
             // Atualiza imediatamente o endereço completo
             window.updateFormEnderecoCompleto();
@@ -4668,7 +4691,7 @@ window.lookupCep = async function(cepVal) {
 
 window.saveClientFormData = async function() {
     const statusVal = document.getElementById('cfm-status')?.value || 'SIM';
-    const fantasiaVal = document.getElementById('cfm-fantasia')?.value?.trim();
+    const fantasiaVal = document.getElementById('cfm-fantasia')?.value?.trim()?.toUpperCase();
     if (!fantasiaVal) {
         window.showNotification('Informe o Nome Fantasia da loja.', 'error');
         document.getElementById('cfm-fantasia')?.focus();
@@ -4678,25 +4701,25 @@ window.saveClientFormData = async function() {
     const indexVal = document.getElementById('cfm-client-index')?.value;
     const isNew = (indexVal === '' || indexVal === null || indexVal === undefined);
 
-    const cnpjVal = document.getElementById('cfm-cnpj')?.value?.trim() || null;
-    const razaoVal = document.getElementById('cfm-razao')?.value?.trim() || null;
-    const grupoVal = document.getElementById('cfm-grupo')?.value?.trim() || null;
-    const grupoRealVal = document.getElementById('cfm-grupo-real')?.value?.trim() || null;
-    const arezzoVal = document.getElementById('cfm-cod-arezzo')?.value?.trim() || null;
-    const newEraVal = document.getElementById('cfm-cod-new-era')?.value?.trim() || null;
+    const cnpjVal = document.getElementById('cfm-cnpj')?.value?.trim()?.toUpperCase() || null;
+    const razaoVal = document.getElementById('cfm-razao')?.value?.trim()?.toUpperCase() || null;
+    const grupoVal = document.getElementById('cfm-grupo')?.value?.trim()?.toUpperCase() || null;
+    const grupoRealVal = document.getElementById('cfm-grupo-real')?.value?.trim()?.toUpperCase() || null;
+    const arezzoVal = document.getElementById('cfm-cod-arezzo')?.value?.trim()?.toUpperCase() || null;
+    const newEraVal = document.getElementById('cfm-cod-new-era')?.value?.trim()?.toUpperCase() || null;
 
-    const cepVal = document.getElementById('cfm-cep')?.value?.trim() || null;
-    const ruaVal = document.getElementById('cfm-rua')?.value?.trim() || null;
-    const numVal = document.getElementById('cfm-numero')?.value?.trim() || null;
-    const compVal = document.getElementById('cfm-complemento')?.value?.trim() || null;
-    const bairroVal = document.getElementById('cfm-bairro')?.value?.trim() || null;
-    const cidadeVal = document.getElementById('cfm-cidade')?.value?.trim() || null;
+    const cepVal = document.getElementById('cfm-cep')?.value?.trim()?.toUpperCase() || null;
+    const ruaVal = document.getElementById('cfm-rua')?.value?.trim()?.toUpperCase() || null;
+    const numVal = document.getElementById('cfm-numero')?.value?.trim()?.toUpperCase() || null;
+    const compVal = document.getElementById('cfm-complemento')?.value?.trim()?.toUpperCase() || null;
+    const bairroVal = document.getElementById('cfm-bairro')?.value?.trim()?.toUpperCase() || null;
+    const cidadeVal = document.getElementById('cfm-cidade')?.value?.trim()?.toUpperCase() || null;
     const estadoVal = document.getElementById('cfm-estado')?.value?.trim()?.toUpperCase() || null;
-    let endCompletoVal = document.getElementById('cfm-endereco-completo')?.value?.trim() || null;
+    let endCompletoVal = document.getElementById('cfm-endereco-completo')?.value?.trim()?.toUpperCase() || null;
 
     // Compor endereço estruturado com todos os detalhes disponíveis
     let logrComposto = ruaVal || '';
-    if (numVal) logrComposto += (logrComposto ? `, ${numVal}` : `nº ${numVal}`);
+    if (numVal) logrComposto += (logrComposto ? `, ${numVal}` : `Nº ${numVal}`);
     if (compVal) logrComposto += (logrComposto ? ` - ${compVal}` : compVal);
 
     const structuredParts = [
@@ -4718,9 +4741,9 @@ window.saveClientFormData = async function() {
 
     const endStatusVal = document.getElementById('cfm-endereco-status')?.value || 'REVISADO';
 
-    const propVal = document.getElementById('cfm-proprietario')?.value?.trim() || null;
-    const telVal = document.getElementById('cfm-telefone')?.value?.trim() || null;
-    const niverVal = document.getElementById('cfm-aniversario')?.value?.trim() || null;
+    const propVal = document.getElementById('cfm-proprietario')?.value?.trim()?.toUpperCase() || null;
+    const telVal = document.getElementById('cfm-telefone')?.value?.trim()?.toUpperCase() || null;
+    const niverVal = document.getElementById('cfm-aniversario')?.value?.trim()?.toUpperCase() || null;
 
     // Obter marcas selecionadas
     const clientBrandsObj = {};
@@ -4790,6 +4813,380 @@ window.deleteCurrentClient = async function() {
     closeClientDetailModal();
     window.showNotification(`Cliente "${name}" excluído.`, 'success');
 };
+
+/* ==========================================================================
+   CONSULTA AUTOMÁTICA DE CNPJ NO CADASTRO DE CLIENTES
+   Fontes: 1. Receita Federal (publica.cnpj.ws) | 2. Brasil API (contingência)
+   ========================================================================== */
+
+window.isValidCNPJ = function(cnpj) {
+    if (!cnpj) return false;
+    const clean = cnpj.toString().replace(/\D/g, '');
+    if (clean.length !== 14) return false;
+    
+    // Elimina CNPJs com todos os dígitos iguais
+    if (/^(\d)\1+$/.test(clean)) return false;
+
+    // Validação do 1º dígito verificador
+    let tamanho = 12;
+    let numeros = clean.substring(0, tamanho);
+    let digitos = clean.substring(tamanho);
+    let soma = 0;
+    let pos = tamanho - 7;
+    for (let i = tamanho; i >= 1; i--) {
+        soma += parseInt(numeros.charAt(tamanho - i), 10) * pos--;
+        if (pos < 2) pos = 9;
+    }
+    let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+    if (resultado !== parseInt(digitos.charAt(0), 10)) return false;
+
+    // Validação do 2º dígito verificador
+    tamanho = 13;
+    numeros = clean.substring(0, tamanho);
+    soma = 0;
+    pos = tamanho - 7;
+    for (let i = tamanho; i >= 1; i--) {
+        soma += parseInt(numeros.charAt(tamanho - i), 10) * pos--;
+        if (pos < 2) pos = 9;
+    }
+    resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+    if (resultado !== parseInt(digitos.charAt(1), 10)) return false;
+
+    return true;
+};
+
+window.formatCNPJ = function(value) {
+    if (!value) return '';
+    let digits = value.toString().replace(/\D/g, '').slice(0, 14);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+    if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
+    if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+    return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+};
+
+function showCnpjFeedback(msg, type = 'info') {
+    const el = document.getElementById('cfm-cnpj-feedback');
+    if (!el) return;
+    el.className = `cfm-cnpj-feedback ${type}`;
+    let icon = "<i class='bx bx-info-circle' style='font-size: 1.15rem; flex-shrink: 0;'></i>";
+    if (type === 'success') icon = "<i class='bx bx-check-circle' style='font-size: 1.15rem; flex-shrink: 0;'></i>";
+    else if (type === 'warning') icon = "<i class='bx bx-error' style='font-size: 1.15rem; flex-shrink: 0;'></i>";
+    else if (type === 'error') icon = "<i class='bx bx-x-circle' style='font-size: 1.15rem; flex-shrink: 0;'></i>";
+    el.innerHTML = `${icon} <div>${msg}</div>`;
+    el.style.display = 'flex';
+}
+
+function hideCnpjFeedback() {
+    const el = document.getElementById('cfm-cnpj-feedback');
+    if (el) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+    }
+}
+
+function normalizeCnpjResponse(data, source) {
+    if (!data) return null;
+
+    let res = {
+        cnpj: '',
+        razaoSocial: '',
+        nomeFantasia: '',
+        cep: '',
+        logradouro: '',
+        numero: '',
+        complemento: '',
+        bairro: '',
+        municipio: '',
+        uf: '',
+        telefone: '',
+        email: '',
+        situacaoCadastral: '',
+        statusAtivo: 'SIM',
+        fonteConsulta: source
+    };
+
+    if (source === 'Receita Federal') {
+        const est = data.estabelecimento || {};
+        res.cnpj = est.cnpj || data.cnpj || '';
+        res.razaoSocial = data.razao_social || '';
+        res.nomeFantasia = est.nome_fantasia || data.nome_fantasia || '';
+        res.cep = est.cep || '';
+
+        const tipoLogr = (est.tipo_logradouro || '').trim();
+        const logr = (est.logradouro || '').trim();
+        res.logradouro = tipoLogr && !logr.toUpperCase().startsWith(tipoLogr.toUpperCase())
+            ? `${tipoLogr} ${logr}`.trim()
+            : logr || tipoLogr;
+
+        res.numero = est.numero || '';
+        res.complemento = est.complemento || '';
+        res.bairro = est.bairro || '';
+        res.municipio = est.cidade?.nome || '';
+        res.uf = est.estado?.sigla || '';
+
+        const ddd = est.ddd1 || '';
+        const tel = est.telefone1 || '';
+        if (ddd && tel) res.telefone = `(${ddd}) ${tel}`;
+        else if (tel) res.telefone = tel;
+
+        res.email = est.email || '';
+        res.situacaoCadastral = est.situacao_cadastral || '';
+
+        const sitUpper = res.situacaoCadastral.toUpperCase();
+        if (sitUpper.includes('BAIXADA') || sitUpper.includes('INAPTA') || sitUpper.includes('SUSPENSA') || sitUpper.includes('NULA')) {
+            res.statusAtivo = 'NAO';
+        } else {
+            res.statusAtivo = 'SIM';
+        }
+    } else {
+        // Brasil API
+        res.cnpj = data.cnpj || '';
+        res.razaoSocial = data.razao_social || '';
+        res.nomeFantasia = data.nome_fantasia || '';
+        res.cep = data.cep || '';
+
+        const tipoLogr = (data.descricao_tipo_de_logradouro || '').trim();
+        const logr = (data.logradouro || '').trim();
+        res.logradouro = tipoLogr && !logr.toUpperCase().startsWith(tipoLogr.toUpperCase())
+            ? `${tipoLogr} ${logr}`.trim()
+            : logr || tipoLogr;
+
+        res.numero = data.numero || '';
+        res.complemento = data.complemento || '';
+        res.bairro = data.bairro || '';
+        res.municipio = data.municipio || '';
+        res.uf = data.uf || '';
+
+        const telRaw = (data.ddd_telefone_1 || '').trim();
+        if (telRaw) {
+            const digits = telRaw.replace(/\D/g, '');
+            if (digits.length === 10) {
+                res.telefone = `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+            } else if (digits.length === 11) {
+                res.telefone = `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+            } else {
+                res.telefone = telRaw;
+            }
+        }
+
+        res.email = data.email || '';
+        res.situacaoCadastral = data.descricao_situacao_cadastral || (data.situacao_cadastral === 2 ? 'ATIVA' : '');
+
+        const sitUpper = (res.situacaoCadastral || '').toUpperCase();
+        if (sitUpper.includes('BAIXADA') || sitUpper.includes('INAPTA') || sitUpper.includes('SUSPENSA') || sitUpper.includes('NULA')) {
+            res.statusAtivo = 'NAO';
+        } else {
+            res.statusAtivo = 'SIM';
+        }
+    }
+
+    const cepClean = (res.cep || '').replace(/\D/g, '');
+    if (cepClean.length === 8) {
+        res.cep = `${cepClean.slice(0, 5)}-${cepClean.slice(5)}`;
+    }
+
+    // Normalizar todos os campos de texto para MAIÚSCULO
+    for (let k in res) {
+        if (typeof res[k] === 'string' && k !== 'fonteConsulta') {
+            res[k] = res[k].toUpperCase().trim();
+        }
+    }
+
+    return res;
+}
+
+window.lookupCnpjData = async function() {
+    const cnpjInput = document.getElementById('cfm-cnpj');
+    if (!cnpjInput) return;
+
+    const rawVal = cnpjInput.value || '';
+    const clean = cleanDigits(rawVal);
+
+    if (!clean || clean.length !== 14 || !window.isValidCNPJ(clean)) {
+        showCnpjFeedback('O CNPJ informado é inválido. Verifique os números e tente novamente.', 'error');
+        window.showNotification('O CNPJ informado é inválido. Verifique os números e tente novamente.', 'error');
+        cnpjInput.focus();
+        return;
+    }
+
+    // Formata o campo de CNPJ visualmente
+    cnpjInput.value = window.formatCNPJ(clean);
+
+    // 1. Verificação de duplicidade na base atual de clientes
+    const currentFormIdx = document.getElementById('cfm-client-index')?.value;
+    const currentIdxInt = (currentFormIdx !== '' && currentFormIdx !== null && currentFormIdx !== undefined) ? parseInt(currentFormIdx, 10) : -1;
+
+    const dupIndex = clientsMasterData.findIndex((c, idx) => {
+        if (currentIdxInt >= 0 && idx === currentIdxInt) return false;
+        return cleanDigits(c['CNPJ']) === clean;
+    });
+
+    if (dupIndex !== -1) {
+        const existingClient = clientsMasterData[dupIndex];
+        const clientName = existingClient['FANTASIA'] || existingClient['RAZAO SOCIAL'] || 'Cliente sem nome';
+        const msg = `Este CNPJ já está cadastrado no sistema para o cliente: "${clientName}".`;
+        showCnpjFeedback(`${msg} <button type="button" class="btn-cancel" onclick="openEditClientByIndex(${dupIndex})" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; margin-left: 0.5rem; display: inline-flex; border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.15);">Ver / Editar Cadastro</button>`, 'warning');
+        window.showNotification(msg, 'warning');
+
+        if (!confirm(`${msg}\n\nDeseja prosseguir com a consulta e preencher os dados no formulário atual?`)) {
+            return;
+        }
+    }
+
+    // 2. Estado visual de carregamento no botão
+    const btn = document.getElementById('cfm-btn-lookup-cnpj');
+    const originalBtnHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = "<i class='bx bx-loader-alt bx-spin'></i> <span>Consultando Receita Federal...</span>";
+    }
+
+    showCnpjFeedback('Consultando dados cadastrais (Fonte primária: Receita Federal)...', 'info');
+
+    let responseData = null;
+    let sourceUsed = '';
+
+    const fetchWithTimeout = async (url, timeoutMs = 7000) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const resp = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            return resp;
+        } catch (err) {
+            clearTimeout(timeoutId);
+            throw err;
+        }
+    };
+
+    // 3. Tentativa Fonte Primária: Receita Federal (publica.cnpj.ws)
+    try {
+        const resPrimary = await fetchWithTimeout(`https://publica.cnpj.ws/cnpj/${clean}`, 7000);
+        if (resPrimary.ok) {
+            const jsonPrimary = await resPrimary.json();
+            if (jsonPrimary && (jsonPrimary.razao_social || jsonPrimary.estabelecimento)) {
+                responseData = jsonPrimary;
+                sourceUsed = 'Receita Federal';
+            }
+        }
+    } catch (ePrimary) {
+        console.warn('Fonte primária (Receita Federal) falhou ou timeout:', ePrimary);
+    }
+
+    // 4. Tentativa Fonte Secundária / Contingência: Brasil API
+    if (!responseData) {
+        showCnpjFeedback('Não foi possível consultar a fonte principal. Tentando a fonte alternativa (Brasil API)...', 'info');
+        if (btn) {
+            btn.innerHTML = "<i class='bx bx-loader-alt bx-spin'></i> <span>Consultando Brasil API...</span>";
+        }
+        try {
+            const resSecondary = await fetchWithTimeout(`https://brasilapi.com.br/api/cnpj/v1/${clean}`, 7000);
+            if (resSecondary.ok) {
+                const jsonSecondary = await resSecondary.json();
+                if (jsonSecondary && (jsonSecondary.razao_social || jsonSecondary.cnpj)) {
+                    responseData = jsonSecondary;
+                    sourceUsed = 'Brasil API';
+                }
+            }
+        } catch (eSecondary) {
+            console.warn('Fonte secundária (Brasil API) falhou ou timeout:', eSecondary);
+        }
+    }
+
+    // Restaurar botão
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalBtnHtml || "<i class='bx bx-search-alt-2'></i> <span>BUSCAR DADOS DO CNPJ</span>";
+    }
+
+    // 5. Se ambas falharem
+    if (!responseData) {
+        showCnpjFeedback('Não foi possível consultar os dados deste CNPJ no momento. Verifique sua conexão ou preencha manualmente.', 'error');
+        window.showNotification('Não foi possível consultar os dados deste CNPJ no momento.', 'error');
+        return;
+    }
+
+    // 6. Normalização e Preenchimento dos dados
+    const norm = normalizeCnpjResponse(responseData, sourceUsed);
+    if (!norm) {
+        showCnpjFeedback('Estrutura de dados não reconhecida. Preencha os campos manualmente.', 'error');
+        return;
+    }
+
+    if (norm.razaoSocial) document.getElementById('cfm-razao').value = norm.razaoSocial;
+    if (norm.nomeFantasia) {
+        document.getElementById('cfm-fantasia').value = norm.nomeFantasia;
+    } else if (!document.getElementById('cfm-fantasia').value && norm.razaoSocial) {
+        document.getElementById('cfm-fantasia').value = norm.razaoSocial;
+    }
+
+    if (norm.statusAtivo) document.getElementById('cfm-status').value = norm.statusAtivo;
+    if (norm.cep) document.getElementById('cfm-cep').value = norm.cep;
+    if (norm.logradouro) document.getElementById('cfm-rua').value = norm.logradouro;
+    if (norm.numero) document.getElementById('cfm-numero').value = norm.numero;
+    if (norm.complemento) document.getElementById('cfm-complemento').value = norm.complemento;
+    if (norm.bairro) document.getElementById('cfm-bairro').value = norm.bairro;
+    if (norm.municipio) document.getElementById('cfm-cidade').value = norm.municipio;
+    if (norm.uf) document.getElementById('cfm-estado').value = norm.uf;
+
+    if (norm.telefone && !document.getElementById('cfm-telefone').value) {
+        document.getElementById('cfm-telefone').value = norm.telefone;
+    }
+
+    // Atualiza composição de endereço completo
+    window.updateFormEnderecoCompleto();
+
+    // Badge de status no topo do modal
+    const badge = document.getElementById('cfm-cnpj-badge');
+    if (badge) {
+        badge.innerHTML = `<i class='bx bx-check-shield'></i> ${norm.fonteConsulta} (${norm.situacaoCadastral || 'ATIVA'})`;
+        badge.style.display = 'inline-flex';
+    }
+
+    showCnpjFeedback(`Dados cadastrais encontrados via <strong>${norm.fonteConsulta}</strong>. Situação: <strong>${norm.situacaoCadastral || 'ATIVA'}</strong>. Confira as informações antes de salvar.`, 'success');
+    window.showNotification(`Dados cadastrais encontrados via ${norm.fonteConsulta}! Confira as informações antes de salvar.`, 'success');
+};
+
+// Event listener para garantir MAIÚSCULAS ao digitar nos campos de cadastro e máscara de CNPJ/CEP
+document.addEventListener('input', function(e) {
+    const el = e.target;
+    if (el && el.closest('#client-edit-form')) {
+        // Máscara CNPJ em tempo real
+        if (el.id === 'cfm-cnpj') {
+            const raw = el.value;
+            const formatted = window.formatCNPJ(raw);
+            if (raw !== formatted && raw.length <= 18) {
+                el.value = formatted;
+            }
+            return;
+        }
+
+        // Máscara CEP em tempo real
+        if (el.id === 'cfm-cep') {
+            let digits = el.value.replace(/\D/g, '').slice(0, 8);
+            if (digits.length > 5) {
+                el.value = `${digits.slice(0, 5)}-${digits.slice(5)}`;
+            } else {
+                el.value = digits;
+            }
+            return;
+        }
+
+        // Todos os outros campos de texto: forçar MAIÚSCULAS
+        if (el.tagName === 'INPUT' && (el.type === 'text' || !el.type)) {
+            const start = el.selectionStart;
+            const end = el.selectionEnd;
+            const upper = el.value.toUpperCase();
+            if (el.value !== upper) {
+                el.value = upper;
+                if (start !== null && end !== null) {
+                    el.setSelectionRange(start, end);
+                }
+            }
+        }
+    }
+});
 
 
 

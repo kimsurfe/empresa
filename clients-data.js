@@ -1,9 +1,10 @@
-// Base de dados inicial dos clientes carregada da planilha LISTA NOME FANTASIA - CNPJ.xlsx
+// Base mestre de clientes do sistema KR GESTÃO
+// Atualizada com Códigos NEW ERA cruzados do Faturamento
 window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 304385,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "15835",
     "GRUPO REAL": null,
     "GRUPO": "AGUA DO MAR",
     "CNPJ": "06.186.194/0001-48",
@@ -251,7 +252,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": null,
     "CLIENTE ATIVO?": "NÃO",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "14054",
     "GRUPO REAL": "BOARDXTREME",
     "GRUPO": "BOARDXTREME",
     "CNPJ": "07.519.066/0001-31",
@@ -406,7 +407,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 304476,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "10311",
     "GRUPO REAL": "CANAL 1",
     "GRUPO": "CANAL 1",
     "CNPJ": "03.050.731/0001-30",
@@ -468,7 +469,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 305287,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "23560",
     "GRUPO REAL": "CAPIVARAS SKATESHOP",
     "GRUPO": "CAPIVARAS SKATESHOP",
     "CNPJ": "23.794.024/0001-65",
@@ -809,7 +810,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 305198,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "23280",
     "GRUPO REAL": "EVEREST",
     "GRUPO": "EVEREST",
     "CNPJ": "60.356.607/0002-11",
@@ -840,7 +841,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 305738,
     "CLIENTE ATIVO?": "NÃO",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "24882",
     "GRUPO REAL": "EVEREST",
     "GRUPO": "EVEREST",
     "CNPJ": "33.675.632/0001-04",
@@ -871,7 +872,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 304517,
     "CLIENTE ATIVO?": "NÃO",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "21195",
     "GRUPO REAL": "EVEREST",
     "GRUPO": "EVEREST",
     "CNPJ": "19.871.146/0001-30",
@@ -902,7 +903,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 306813,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "25189",
     "GRUPO REAL": "EVEREST",
     "GRUPO": "EVEREST",
     "CNPJ": "36.731.524/0001-08",
@@ -1150,7 +1151,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 304551,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "13523",
     "GRUPO REAL": "HAWAII",
     "GRUPO": "HAWAII",
     "CNPJ": "03.708.661/0001-64",
@@ -1770,7 +1771,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 326546,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "28465",
     "GRUPO REAL": "IMPACT SKATE",
     "GRUPO": "IMPACT",
     "CNPJ": "54.887.217/0001-94",
@@ -2018,7 +2019,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 304279,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "24359",
     "GRUPO REAL": "IMPORT PRODUTOS",
     "GRUPO": "IMPORT",
     "CNPJ": "31.605.105/0001-06",
@@ -2080,7 +2081,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 93178,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "29028",
     "GRUPO REAL": "JOA CALCADOS",
     "GRUPO": "JOA CALCADOS",
     "CNPJ": "14.279.714/0001-95",
@@ -2111,7 +2112,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 301538,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "29006",
     "GRUPO REAL": "JOA CALCADOS",
     "GRUPO": "JOA CALCADOS",
     "CNPJ": "20.854.926/0001-51",
@@ -2142,7 +2143,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 305135,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "27226",
     "GRUPO REAL": "LIFE CORE",
     "GRUPO": "LIFE CORE",
     "CNPJ": "17.112.820/0001-78",
@@ -2235,7 +2236,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 44557,
     "CLIENTE ATIVO?": "NÃO",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "12671",
     "GRUPO REAL": "NELLISE",
     "GRUPO": "PHYTON",
     "CNPJ": "04.170.342/0001-00",
@@ -2297,7 +2298,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 16285,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "28315",
     "GRUPO REAL": "OSCAR",
     "GRUPO": "OSCAR CALCADOS",
     "CNPJ": "50.915.875/0003-53",
@@ -2483,7 +2484,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 305637,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "29143",
     "GRUPO REAL": "OSCAR",
     "GRUPO": "OSCAR CALCADOS",
     "CNPJ": "48.973.705/0013-55",
@@ -2948,7 +2949,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 326459,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "28419",
     "GRUPO REAL": "SEA NORTH",
     "GRUPO": "SEA NORTH",
     "CNPJ": "49.937.867/0001-67",
@@ -3010,7 +3011,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 305913,
     "CLIENTE ATIVO?": "NÃO",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "24621",
     "GRUPO REAL": "SK8SHOP",
     "GRUPO": "SK8SHOP",
     "CNPJ": "32.901.875/0001-50",
@@ -3041,7 +3042,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 305912,
     "CLIENTE ATIVO?": "NÃO",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "23952",
     "GRUPO REAL": "SK8SHOP",
     "GRUPO": "SK8SHOP",
     "CNPJ": "26.116.028/0001-82",
@@ -3072,7 +3073,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 315220,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "22405",
     "GRUPO REAL": "SK8SHOP",
     "GRUPO": "SK8SHOP",
     "CNPJ": "18.846.401/0001-22",
@@ -3382,7 +3383,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 304735,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "1249",
     "GRUPO REAL": "STHILL REOPAIPO",
     "GRUPO": "STHILL",
     "CNPJ": "00.906.389/0001-39",
@@ -3506,7 +3507,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 304740,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "19937",
     "GRUPO REAL": "STHILL REOPAIPO",
     "GRUPO": "STHILL",
     "CNPJ": "00.906.389/0006-43",
@@ -3630,7 +3631,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 307151,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "25437",
     "GRUPO REAL": "STHILL RODRIGO",
     "GRUPO": "STHILL",
     "CNPJ": "38.448.489/0001-31",
@@ -3692,7 +3693,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 305187,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "23418",
     "GRUPO REAL": "STHILL SILVIO",
     "GRUPO": "STHILL",
     "CNPJ": "24.892.522/0001-03",
@@ -4374,7 +4375,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 304863,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "21714",
     "GRUPO REAL": "TOW IN",
     "GRUPO": "TOW IN",
     "CNPJ": "11.235.612/0001-80",
@@ -4529,7 +4530,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 305342,
     "CLIENTE ATIVO?": "NÃO",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "19281",
     "GRUPO REAL": "TRIBOS JACAREI",
     "GRUPO": "TRIBOS",
     "CNPJ": "07.883.893/0001-00",
@@ -4560,7 +4561,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 305222,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "14667",
     "GRUPO REAL": "TUA RUA",
     "GRUPO": "TUA RUA",
     "CNPJ": "08.909.832/0001-37",
@@ -4591,7 +4592,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 304882,
     "CLIENTE ATIVO?": "NÃO",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "18867",
     "GRUPO REAL": "VAHLENT",
     "GRUPO": "VAHLENT",
     "CNPJ": "14.217.712/0001-71",
@@ -4684,7 +4685,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 304868,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "17639",
     "GRUPO REAL": "VISUAL SHOPPING",
     "GRUPO": "VISUAL",
     "CNPJ": "05.546.842/0001-67",
@@ -5893,7 +5894,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 328885,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "6230",
     "GRUPO REAL": "OSCAR",
     "GRUPO": "OSCAR CALCADOS",
     "CNPJ": "50.915.875/0020-54",
@@ -5986,7 +5987,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 328312,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "24841",
     "GRUPO REAL": "UFIT",
     "GRUPO": "UFIT",
     "CNPJ": "31.708.734/0001-53",
@@ -6017,7 +6018,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 322409,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "12834",
     "GRUPO REAL": "RENSZ",
     "GRUPO": "RENSZ",
     "CNPJ": "03.893.411/0001-41",
@@ -6048,7 +6049,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 322412,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "13517",
     "GRUPO REAL": "RENSZ",
     "GRUPO": "RENSZ",
     "CNPJ": "06.150.087/0001-60",
@@ -6079,7 +6080,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 322410,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "13518",
     "GRUPO REAL": "RENSZ",
     "GRUPO": "RENSZ",
     "CNPJ": "07.997.535/0001-28",
@@ -6141,7 +6142,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 322408,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "18405",
     "GRUPO REAL": "RENSZ",
     "GRUPO": "RENSZ",
     "CNPJ": "14.120.476/0001-70",
@@ -6203,7 +6204,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 322399,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "26607",
     "GRUPO REAL": "RENSZ",
     "GRUPO": "RENSZ",
     "CNPJ": "21.967.878/0001-70",
@@ -6234,7 +6235,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 322405,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "26608",
     "GRUPO REAL": "RENSZ",
     "GRUPO": "RENSZ",
     "CNPJ": "31.823.245/0001-42",
@@ -6296,7 +6297,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 329372,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "29565",
     "GRUPO REAL": "SUNPEAK",
     "GRUPO": "SUNPEAK",
     "CNPJ": "59.706.592/0001-04",
@@ -6327,7 +6328,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 330341,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "29094",
     "GRUPO REAL": "EVEREST",
     "GRUPO": "EVEREST",
     "CNPJ": "48.564.871/0001-64",
@@ -6358,7 +6359,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 330342,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "30023",
     "GRUPO REAL": "EVEREST",
     "GRUPO": "EVEREST",
     "CNPJ": "61.149.364/0001-22",
@@ -6389,7 +6390,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 326304,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "28015",
     "GRUPO REAL": "PAQUETA",
     "GRUPO": "OSCAR CALCADOS",
     "CNPJ": "49.961.545/0055-46",
@@ -7536,7 +7537,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 330123,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "16637",
     "GRUPO REAL": "FRAGA IN SURF",
     "GRUPO": "FRAGA IN SURF",
     "CNPJ": 56258007000162,
@@ -7846,7 +7847,7 @@ window.INITIAL_CLIENTS_DATA = [
   {
     "CODIGO AREZZO": 332546,
     "CLIENTE ATIVO?": "SIM",
-    "CODIGO NEW ERA": null,
+    "CODIGO NEW ERA": "29965",
     "GRUPO REAL": "JOA CALCADOS",
     "GRUPO": "JOA CALCADOS",
     "CNPJ": "44.380.017/0001-97",
