@@ -4150,14 +4150,14 @@ function renderClientsTable() {
         <table class="clients-table">
             <thead>
                 <tr>
-                    <th style="width: 175px; min-width: 175px; white-space: nowrap;">CNPJ</th>
-                    <th style="min-width: 240px;">Razão Social / Nome Fantasia</th>
-                    <th style="width: 115px; white-space: nowrap;">Grupo</th>
-                    <th style="width: 115px; white-space: nowrap;">Grupo Real</th>
-                    <th style="width: 135px; white-space: nowrap;">Cidade / UF</th>
-                    <th style="text-align: center; width: 120px; white-space: nowrap;">Status</th>
-                    <th style="min-width: 210px; width: 240px;">Marcas</th>
-                    <th style="text-align: right; width: 130px; white-space: nowrap;">Ações</th>
+                    <th style="width: 140px; white-space: nowrap;">CNPJ</th>
+                    <th style="min-width: 180px;">Razão Social / Nome Fantasia</th>
+                    <th style="width: 90px; white-space: nowrap;">Grupo</th>
+                    <th style="width: 90px; white-space: nowrap;">Grupo Real</th>
+                    <th style="width: 105px; white-space: nowrap;">Cidade / UF</th>
+                    <th style="text-align: center; width: 85px; white-space: nowrap;">Status</th>
+                    <th style="width: 180px;">Marcas</th>
+                    <th style="text-align: right; width: 85px; white-space: nowrap;">Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -4168,31 +4168,24 @@ function renderClientsTable() {
         const clientStatus = window.getClientGeneralStatus(client);
         const statusBadge = window.renderClientStatusBadge(clientStatus);
 
-        // Marcas que o cliente possui com status e cores
+        // Marcas que o cliente possui apenas com a cor simbolizando o status (SEM CÓDIGO JUNTO)
         const brandTags = [];
         CLIENT_BRAND_COLS.forEach(brand => {
             const bStatus = window.getClientBrandStatus(client, brand);
             if (bStatus === 'INATIVO') return;
 
-            const val = client[brand];
-            const isCode = val && val !== 'SIM' && val !== 'ATIVO' && val !== '1' && !String(val).includes('FIDELIZAD') && !String(val).includes('FECHAD');
-            const codeSubpill = isCode ? `<span class="brand-tag-code">${escapeHTML(val)}</span>` : '';
-
             if (bStatus === 'ATIVO') {
-                const titleStr = isCode ? `${brand} (Cód: ${escapeHTML(val)}): Cliente comprando da marca` : `${brand}: Cliente comprando da marca`;
-                brandTags.push(`<span class="client-brand-mini-tag brand-status-ativo" title="${titleStr}">${escapeHTML(brand)}${codeSubpill}</span>`);
+                brandTags.push(`<span class="client-brand-mini-tag brand-status-ativo" title="${escapeHTML(brand)}: Ativo">${escapeHTML(brand)}</span>`);
             } else if (bStatus === 'NAO_FIDELIZADO') {
-                const titleStr = isCode ? `${brand} (Cód: ${escapeHTML(val)}): Não fidelizado` : `${brand}: Já comprou, não compra mais atualmente`;
-                brandTags.push(`<span class="client-brand-mini-tag brand-status-nao-fidelizado" title="${titleStr}">${escapeHTML(brand)}${codeSubpill}</span>`);
+                brandTags.push(`<span class="client-brand-mini-tag brand-status-nao-fidelizado" title="${escapeHTML(brand)}: Não Fidelizado">${escapeHTML(brand)}</span>`);
             } else if (bStatus === 'LOJA_FECHADA') {
-                const titleStr = isCode ? `${brand} (Cód: ${escapeHTML(val)}): Loja fechada` : `${brand}: Loja fechada`;
-                brandTags.push(`<span class="client-brand-mini-tag brand-status-loja-fechada" title="${titleStr}">${escapeHTML(brand)}${codeSubpill}</span>`);
+                brandTags.push(`<span class="client-brand-mini-tag brand-status-loja-fechada" title="${escapeHTML(brand)}: Loja Fechada">${escapeHTML(brand)}</span>`);
             }
         });
 
         const brandsHtml = brandTags.length > 0
             ? brandTags.join('')
-            : `<span style="color: rgba(255,255,255,0.3); font-size: 0.75rem;">Nenhuma</span>`;
+            : `<span style="color: rgba(255,255,255,0.3); font-size: 0.72rem;">-</span>`;
 
         const cidadeUf = [client['CIDADE'], client['ESTADO']].filter(Boolean).join(' / ') || '-';
         const fantasia = client['FANTASIA'] || '-';
@@ -4203,24 +4196,24 @@ function renderClientsTable() {
 
         tableHtml += `
             <tr onclick="openClientDetailModal(${globalIdx})">
-                <td class="font-mono client-cnpj-cell" style="white-space: nowrap; font-weight: 600; color: var(--accent-color); font-size: 0.82rem;">
+                <td class="font-mono client-cnpj-cell" style="white-space: nowrap; font-weight: 600; color: var(--accent-color); font-size: 0.8rem;">
                     ${escapeHTML(cnpjFormatted)}
                 </td>
                 <td>
-                    <div style="font-weight: 700; color: var(--text-primary); font-size: 0.88rem; margin-bottom: 2px;">
+                    <div style="font-weight: 700; color: var(--text-primary); font-size: 0.84rem; margin-bottom: 2px;">
                         ${escapeHTML(fantasia)}
                     </div>
-                    <div style="font-size: 0.77rem; color: var(--text-secondary); max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(razao)}">
+                    <div style="font-size: 0.74rem; color: var(--text-secondary); max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(razao)}">
                         ${escapeHTML(razao)}
                     </div>
                 </td>
-                <td style="color: var(--text-secondary); font-size: 0.82rem; white-space: nowrap;">${escapeHTML(grupo)}</td>
-                <td style="color: var(--text-secondary); font-size: 0.82rem; white-space: nowrap;">${escapeHTML(grupoReal)}</td>
-                <td style="white-space: nowrap; font-size: 0.82rem; font-weight: 500;">${escapeHTML(cidadeUf)}</td>
+                <td style="color: var(--text-secondary); font-size: 0.78rem; white-space: nowrap;">${escapeHTML(grupo)}</td>
+                <td style="color: var(--text-secondary); font-size: 0.78rem; white-space: nowrap;">${escapeHTML(grupoReal)}</td>
+                <td style="white-space: nowrap; font-size: 0.78rem; font-weight: 500;">${escapeHTML(cidadeUf)}</td>
                 <td style="text-align: center; white-space: nowrap;">${statusBadge}</td>
                 <td><div class="client-brands-container">${brandsHtml}</div></td>
                 <td style="text-align: right;" onclick="event.stopPropagation()">
-                    <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                    <div style="display: inline-flex; gap: 0.3rem; justify-content: flex-end;">
                         <button type="button" class="btn-table-action" onclick="openClientDetailModal(${globalIdx})" title="Ver ficha completa">
                             <i class='bx bx-show'></i>
                         </button>
@@ -4228,7 +4221,7 @@ function renderClientsTable() {
                             <i class='bx bx-edit'></i>
                         </button>
                         <button type="button" class="btn-table-action btn-table-task" onclick="createTaskForClient(${globalIdx})" title="Criar tarefa para este cliente">
-                            <i class='bx bx-plus'></i> Tarefa
+                            <i class='bx bx-plus'></i>
                         </button>
                     </div>
                 </td>
@@ -4940,78 +4933,48 @@ function renderFormBrandToggles(clientData = {}) {
     CLIENT_BRAND_COLS.forEach(brand => {
         const bStatus = window.getClientBrandStatus(clientData, brand);
 
-        let codeVal = '';
-        let inputId = '';
-        let inputPlaceholder = 'Ex: Código na Marca';
-        let helperLabel = `Código ${brand}:`;
-
+        // Obter código existente se houver
         const rawVal = clientData[brand];
-        const isNotCode = (rawVal === 'SIM' || rawVal === 'sim' || rawVal === 1 || rawVal === '1' || rawVal === 'null' || rawVal === 'ATIVO' || String(rawVal).includes('FIDELIZAD') || String(rawVal).includes('FECHAD'));
-        codeVal = (!isNotCode && rawVal) ? String(rawVal) : '';
-
-        if (brand === 'NEW ERA') {
-            inputId = 'cfm-cod-new-era';
-            inputPlaceholder = 'Ex: 10311 (Código New Era)';
-        } else if (brand === 'VANS') {
-            inputId = 'cfm-cod-arezzo';
-            inputPlaceholder = 'Ex: 304476 (Código Arezzo / Vans)';
-        } else {
-            inputId = `cfm-brand-code-${brand.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        const isNotCode = !rawVal || rawVal === 'SIM' || rawVal === 'sim' || rawVal === 1 || rawVal === '1' || rawVal === 'null' || rawVal === 'ATIVO' || String(rawVal).includes('FIDELIZAD') || String(rawVal).includes('FECHAD');
+        let codeVal = isNotCode ? '' : String(rawVal).trim();
+        if (!codeVal && brand === 'NEW ERA' && clientData['CODIGO NEW ERA']) {
+            codeVal = String(clientData['CODIGO NEW ERA']).trim();
+        }
+        if (!codeVal && brand === 'VANS' && clientData['CODIGO AREZZO']) {
+            codeVal = String(clientData['CODIGO AREZZO']).trim();
         }
 
-        const safeCode = codeVal ? codeVal.trim() : '';
+        const safeCode = (codeVal && codeVal !== 'null' && codeVal !== 'undefined') ? codeVal : '';
 
-        let statusTagClass = 'status-inativo';
-        let statusTagLabel = 'Inativo';
-        if (bStatus === 'ATIVO') {
-            statusTagClass = 'status-ativo';
-            statusTagLabel = 'Ativo (Comprando)';
-        } else if (bStatus === 'NAO_FIDELIZADO') {
-            statusTagClass = 'status-nao-fidelizado';
-            statusTagLabel = 'Não Fidelizado';
-        } else if (bStatus === 'LOJA_FECHADA') {
-            statusTagClass = 'status-loja-fechada';
-            statusTagLabel = 'Loja Fechada';
-        }
+        let statusClass = 'status-inativo';
+        if (bStatus === 'ATIVO') statusClass = 'status-ativo';
+        else if (bStatus === 'NAO_FIDELIZADO') statusClass = 'status-nao-fidelizado';
+        else if (bStatus === 'LOJA_FECHADA') statusClass = 'status-loja-fechada';
 
-        const isActive = (bStatus !== 'INATIVO');
+        const selectClass = `select-${bStatus.toLowerCase().replace(/_/g, '-')}`;
 
         html += `
-            <div class="cfm-brand-card ${isActive ? 'active' : ''} ${statusTagClass}" data-brand="${escapeHTML(brand)}" data-status="${bStatus}">
-                <div class="cfm-brand-card-top" onclick="cycleFormBrandStatus('${escapeHTML(brand)}')">
-                    <div class="cfm-brand-check-wrapper">
-                        <i class='bx ${isActive ? 'bx-check-square' : 'bx-square'} cfm-brand-check-icon'></i>
-                        <span class="cfm-brand-title">${escapeHTML(brand)}</span>
-                    </div>
-                    <span class="cfm-brand-status-tag ${statusTagClass}">
-                        ${statusTagLabel}
-                    </span>
-                </div>
-                <div class="cfm-brand-status-options">
-                    <button type="button" class="cfm-brand-status-btn btn-opt-ativo ${bStatus === 'ATIVO' ? 'active' : ''}" onclick="setFormBrandStatus('${escapeHTML(brand)}', 'ATIVO')" title="Cliente comprando da marca">
-                        <span class="status-dot dot-green"></span> Ativo
-                    </button>
-                    <button type="button" class="cfm-brand-status-btn btn-opt-nao-fidelizado ${bStatus === 'NAO_FIDELIZADO' ? 'active' : ''}" onclick="setFormBrandStatus('${escapeHTML(brand)}', 'NAO_FIDELIZADO')" title="Já comprou e não compra mais atualmente">
-                        <span class="status-dot dot-orange"></span> Não Fideliz.
-                    </button>
-                    <button type="button" class="cfm-brand-status-btn btn-opt-inativo ${bStatus === 'INATIVO' ? 'active' : ''}" onclick="setFormBrandStatus('${escapeHTML(brand)}', 'INATIVO')" title="Cliente não tem cadastro na marca">
-                        <span class="status-dot dot-gray"></span> Inativo
-                    </button>
-                    <button type="button" class="cfm-brand-status-btn btn-opt-loja-fechada ${bStatus === 'LOJA_FECHADA' ? 'active' : ''}" onclick="setFormBrandStatus('${escapeHTML(brand)}', 'LOJA_FECHADA')" title="Cliente com loja fechada">
-                        <span class="status-dot dot-red"></span> Fechado
-                    </button>
-                </div>
-                <div class="cfm-brand-card-input-wrap">
-                    <label for="${inputId}">${helperLabel}</label>
-                    <div class="cfm-brand-input-box">
-                        <i class='bx bx-barcode'></i>
-                        <input type="text" 
-                            id="${inputId}" 
-                            class="cfm-input font-mono cfm-brand-code-input" 
+            <div class="cfm-brand-card ${statusClass}" data-brand="${escapeHTML(brand)}" data-status="${bStatus}">
+                <div class="cfm-brand-card-top">
+                    <span class="cfm-brand-title">${escapeHTML(brand)}</span>
+                    <select class="cfm-brand-status-select ${selectClass}" 
                             data-brand="${escapeHTML(brand)}" 
-                            placeholder="${inputPlaceholder}" 
+                            onchange="onBrandStatusSelectChange('${escapeHTML(brand)}', this.value)">
+                        <option value="ATIVO" ${bStatus === 'ATIVO' ? 'selected' : ''}>🟢 Ativo</option>
+                        <option value="NAO_FIDELIZADO" ${bStatus === 'NAO_FIDELIZADO' ? 'selected' : ''}>🟠 Não Fidelizado</option>
+                        <option value="INATIVO" ${bStatus === 'INATIVO' ? 'selected' : ''}>⚪ Inativo</option>
+                        <option value="LOJA_FECHADA" ${bStatus === 'LOJA_FECHADA' ? 'selected' : ''}>🔴 Loja Fechada</option>
+                    </select>
+                </div>
+                <div class="cfm-brand-card-bottom">
+                    <div class="cfm-brand-code-box">
+                        <i class='bx bx-hash'></i>
+                        <input type="text" 
+                            class="cfm-brand-code-input font-mono" 
+                            data-brand="${escapeHTML(brand)}" 
+                            placeholder="Código ${escapeHTML(brand)} (opcional)" 
                             value="${escapeHTML(safeCode)}" 
-                            oninput="onBrandCodeChanged('${escapeHTML(brand)}', this.value)"
+                            oninput="onBrandCodeInput('${escapeHTML(brand)}', this.value)"
                             autocomplete="off">
                     </div>
                 </div>
@@ -5021,96 +4984,72 @@ function renderFormBrandToggles(clientData = {}) {
     container.innerHTML = html;
 }
 
-window.setFormBrandStatus = function(brand, newStatus) {
+window.onBrandStatusSelectChange = function(brand, newStatus) {
     const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
     if (!card) return;
 
     card.setAttribute('data-status', newStatus);
-
-    // Atualizar classes do card
     card.classList.remove('status-ativo', 'status-nao-fidelizado', 'status-inativo', 'status-loja-fechada');
-    const input = card.querySelector('.cfm-brand-code-input');
-    const icon = card.querySelector('.cfm-brand-check-icon');
-    const statusTag = card.querySelector('.cfm-brand-status-tag');
 
-    // Atualizar botões
-    card.querySelectorAll('.cfm-brand-status-btn').forEach(btn => btn.classList.remove('active'));
-    let activeBtnClass = 'btn-opt-inativo';
-    let tagClass = 'status-inativo';
-    let tagLabel = 'Inativo';
-
-    if (newStatus === 'ATIVO') {
-        card.classList.add('active', 'status-ativo');
-        activeBtnClass = 'btn-opt-ativo';
-        tagClass = 'status-ativo';
-        tagLabel = 'Ativo (Comprando)';
-        if (icon) icon.className = 'bx bx-check-square cfm-brand-check-icon';
-        if (input && !input.value.trim()) input.focus();
-    } else if (newStatus === 'NAO_FIDELIZADO') {
-        card.classList.add('active', 'status-nao-fidelizado');
-        activeBtnClass = 'btn-opt-nao-fidelizado';
-        tagClass = 'status-nao-fidelizado';
-        tagLabel = 'Não Fidelizado';
-        if (icon) icon.className = 'bx bx-check-square cfm-brand-check-icon';
-    } else if (newStatus === 'LOJA_FECHADA') {
-        card.classList.add('active', 'status-loja-fechada');
-        activeBtnClass = 'btn-opt-loja-fechada';
-        tagClass = 'status-loja-fechada';
-        tagLabel = 'Loja Fechada';
-        if (icon) icon.className = 'bx bx-check-square cfm-brand-check-icon';
-    } else {
-        card.classList.remove('active');
-        card.classList.add('status-inativo');
-        activeBtnClass = 'btn-opt-inativo';
-        tagClass = 'status-inativo';
-        tagLabel = 'Inativo';
-        if (icon) icon.className = 'bx bx-square cfm-brand-check-icon';
-        if (input) input.value = '';
+    const select = card.querySelector('.cfm-brand-status-select');
+    if (select) {
+        select.className = `cfm-brand-status-select select-${newStatus.toLowerCase().replace(/_/g, '-')}`;
     }
 
-    const activeBtn = card.querySelector(`.cfm-brand-status-btn.${activeBtnClass}`);
-    if (activeBtn) activeBtn.classList.add('active');
+    if (newStatus === 'ATIVO') {
+        card.classList.add('status-ativo');
+    } else if (newStatus === 'NAO_FIDELIZADO') {
+        card.classList.add('status-nao-fidelizado');
+    } else if (newStatus === 'LOJA_FECHADA') {
+        card.classList.add('status-loja-fechada');
+    } else {
+        card.classList.add('status-inativo');
+    }
+};
 
-    if (statusTag) {
-        statusTag.className = `cfm-brand-status-tag ${tagClass}`;
-        statusTag.textContent = tagLabel;
+window.setFormBrandStatus = function(brand, newStatus) {
+    const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
+    if (!card) return;
+    const select = card.querySelector('.cfm-brand-status-select');
+    if (select) {
+        select.value = newStatus;
+    }
+    window.onBrandStatusSelectChange(brand, newStatus);
+};
+
+window.onBrandCodeInput = function(brand, value) {
+    const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
+    if (!card) return;
+    const select = card.querySelector('.cfm-brand-status-select');
+    const trimmed = (value || '').trim();
+    // Se digitou código e estava inativo, ativa automaticamente na marca
+    if (trimmed && select && select.value === 'INATIVO') {
+        select.value = 'ATIVO';
+        window.onBrandStatusSelectChange(brand, 'ATIVO');
     }
 };
 
 window.cycleFormBrandStatus = function(brand) {
     const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
     if (!card) return;
-    const current = card.getAttribute('data-status') || 'INATIVO';
-    // Alterna de Inativo para Ativo e vice-versa no clique do topo
-    if (current === 'INATIVO') {
-        window.setFormBrandStatus(brand, 'ATIVO');
-    } else {
-        window.setFormBrandStatus(brand, 'INATIVO');
-    }
+    const select = card.querySelector('.cfm-brand-status-select');
+    if (!select) return;
+    const current = select.value || 'INATIVO';
+    const nextStatus = (current === 'INATIVO') ? 'ATIVO' : 'INATIVO';
+    select.value = nextStatus;
+    window.onBrandStatusSelectChange(brand, nextStatus);
 };
 
 window.toggleFormBrandCard = window.cycleFormBrandStatus;
-
-window.onBrandCodeChanged = function(brand, value) {
-    const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
-    if (!card) return;
-
-    const trimmed = (value || '').trim();
-    if (trimmed) {
-        const current = card.getAttribute('data-status');
-        if (current !== 'ATIVO') {
-            window.setFormBrandStatus(brand, 'ATIVO');
-        }
-    }
-};
+window.onBrandCodeChanged = window.onBrandCodeInput;
 
 window.onClientFormStatusChange = function(statusVal) {
-    // Se o cliente for marcado como LOJA FECHADA, atualizar cards que estejam ativos
+    // Se o cliente for marcado como LOJA FECHADA, atualizar marcas que estejam ativas
     if (statusVal === 'LOJA_FECHADA') {
         document.querySelectorAll('.cfm-brand-card').forEach(card => {
             const b = card.getAttribute('data-brand');
-            const st = card.getAttribute('data-status');
-            if (st !== 'INATIVO') {
+            const select = card.querySelector('.cfm-brand-status-select');
+            if (select && select.value !== 'INATIVO') {
                 window.setFormBrandStatus(b, 'LOJA_FECHADA');
             }
         });
@@ -5236,22 +5175,27 @@ window.saveClientFormData = async function() {
     const rawNiver = document.getElementById('cfm-aniversario')?.value?.trim() || '';
     const niverVal = (window.formatAniversario ? window.formatAniversario(rawNiver) : rawNiver) || null;
 
-    // Obter marcas selecionadas, status e códigos
+    // Obter marcas selecionadas e status
     const clientBrandsObj = {};
     CLIENT_BRAND_COLS.forEach(brand => {
         const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
-        const status = card ? (card.getAttribute('data-status') || (card.classList.contains('active') ? 'ATIVO' : 'INATIVO')) : 'INATIVO';
-        const input = card ? card.querySelector('.cfm-brand-code-input') : null;
-        const code = input ? input.value.trim().toUpperCase() : '';
+        const statusSelect = card ? card.querySelector('.cfm-brand-status-select') : null;
+        const status = statusSelect ? statusSelect.value : (card ? card.getAttribute('data-status') : 'INATIVO');
+        const codeInput = card ? card.querySelector('.cfm-brand-code-input') : null;
+        const code = codeInput ? codeInput.value.trim().toUpperCase() : '';
+
+        // Salvar status específico
+        clientBrandsObj[brand + '_STATUS'] = status;
 
         if (status === 'ATIVO') {
             clientBrandsObj[brand] = code || 'SIM';
         } else if (status === 'NAO_FIDELIZADO') {
-            clientBrandsObj[brand] = 'NÃO FIDELIZADO';
+            clientBrandsObj[brand] = code || 'NÃO FIDELIZADO';
         } else if (status === 'LOJA_FECHADA') {
             clientBrandsObj[brand] = 'LOJA FECHADA';
         } else {
             clientBrandsObj[brand] = null;
+            clientBrandsObj[brand + '_STATUS'] = 'INATIVO';
         }
     });
 
