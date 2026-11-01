@@ -3247,49 +3247,143 @@ body:not(.is-admin) .admin-only {
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
 }
 
-/* Grid de Seleção de Marcas (Toggles) */
-.cfm-brands-toggle-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+/* Grid de Seleção de Marcas & Códigos */
+.cfm-brands-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
 }
 
-.cfm-brand-toggle-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0.5rem 0.9rem;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
+.cfm-brand-card {
+    background: rgba(15, 23, 42, 0.45);
     border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    font-size: 0.82rem;
-    font-weight: 600;
+    border-radius: 10px;
+    padding: 0.75rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cfm-brand-card:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    background: rgba(30, 41, 59, 0.4);
+}
+
+.cfm-brand-card.active {
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.6);
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.15);
+}
+
+.cfm-brand-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     cursor: pointer;
     user-select: none;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.cfm-brand-check-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.cfm-brand-check-icon {
+    font-size: 1.15rem;
+    color: var(--text-secondary);
     transition: all 0.2s ease;
 }
 
-.cfm-brand-toggle-btn:hover {
-    color: var(--text-primary);
-    border-color: rgba(255, 255, 255, 0.25);
-    background: rgba(255, 255, 255, 0.06);
-}
-
-.cfm-brand-toggle-btn.active {
-    background: rgba(99, 102, 241, 0.25);
-    border-color: var(--accent-color);
-    color: #ffffff;
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
-}
-
-.cfm-brand-toggle-btn .toggle-icon {
-    font-size: 1rem;
-    transition: transform 0.2s;
-}
-
-.cfm-brand-toggle-btn.active .toggle-icon {
+.cfm-brand-card.active .cfm-brand-check-icon {
     color: #10b981;
+    transform: scale(1.08);
+}
+
+.cfm-brand-title {
+    font-weight: 700;
+    font-size: 0.86rem;
+    color: var(--text-primary);
+    letter-spacing: 0.3px;
+}
+
+.cfm-brand-status-tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.2s ease;
+}
+
+.cfm-brand-status-tag.active {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+.cfm-brand-card-input-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.cfm-brand-card-input-wrap label {
+    font-size: 0.73rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.cfm-brand-card.active .cfm-brand-card-input-wrap label {
+    color: #a5b4fc;
+}
+
+.cfm-brand-input-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.cfm-brand-input-box i {
+    position: absolute;
+    left: 0.65rem;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    pointer-events: none;
+    transition: color 0.2s;
+}
+
+.cfm-brand-card.active .cfm-brand-input-box i {
+    color: var(--accent-color);
+}
+
+.cfm-brand-code-input {
+    width: 100%;
+    padding: 0.45rem 0.65rem 0.45rem 2rem !important;
+    font-size: 0.82rem !important;
+    border-radius: 6px !important;
+    background: rgba(15, 23, 42, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: var(--text-primary) !important;
+    transition: all 0.2s ease !important;
+}
+
+.cfm-brand-card.active .cfm-brand-code-input {
+    border-color: rgba(99, 102, 241, 0.45) !important;
+    background: rgba(15, 23, 42, 0.9) !important;
+}
+
+.cfm-brand-code-input:focus {
+    border-color: var(--accent-color) !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
 }
 
 /* ==========================================================================

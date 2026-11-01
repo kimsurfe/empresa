@@ -3733,6 +3733,13 @@ window.isClientBrandActive = function(client, brand) {
             return true;
         }
     }
+    // Caso especial: para VANS, se houver 'CODIGO AREZZO' preenchido, o cliente fica ativo na marca
+    if (brand === 'VANS' && client['CODIGO AREZZO']) {
+        const ar = String(client['CODIGO AREZZO']).trim();
+        if (ar && ar !== '0' && ar.toLowerCase() !== 'null' && ar.toLowerCase() !== 'undefined') {
+            return true;
+        }
+    }
     return false;
 };
 const isClientBrandActive = window.isClientBrandActive;
@@ -4432,8 +4439,10 @@ window.exportClientsToExcel = function() {
             CLIENT_BRAND_COLS.forEach(brand => {
                 if (brand === 'NEW ERA') {
                     row[brand] = c['NEW ERA'] || c['CODIGO NEW ERA'] || (isClientBrandActive(c, brand) ? 'SIM' : '');
+                } else if (brand === 'VANS') {
+                    row[brand] = c['VANS'] || c['CODIGO AREZZO'] || (isClientBrandActive(c, brand) ? 'SIM' : '');
                 } else {
-                    row[brand] = isClientBrandActive(c, brand) ? 'SIM' : '';
+                    row[brand] = c[brand] || (isClientBrandActive(c, brand) ? 'SIM' : '');
                 }
             });
 
@@ -4590,8 +4599,6 @@ window.openNewClientModal = function() {
     document.getElementById('cfm-razao').value = '';
     document.getElementById('cfm-grupo').value = '';
     document.getElementById('cfm-grupo-real').value = '';
-    document.getElementById('cfm-cod-arezzo').value = '';
-    document.getElementById('cfm-cod-new-era').value = '';
 
     document.getElementById('cfm-cep').value = '';
     document.getElementById('cfm-rua').value = '';
@@ -4656,12 +4663,6 @@ window.openClientFormForEdit = function(client, masterIndex) {
 
         const grupoRealEl = document.getElementById('cfm-grupo-real');
         if (grupoRealEl) grupoRealEl.value = safeUpper(client['GRUPO REAL']);
-
-        const codArezzoEl = document.getElementById('cfm-cod-arezzo');
-        if (codArezzoEl) codArezzoEl.value = safeUpper(client['CODIGO AREZZO']);
-
-        const codNewEraEl = document.getElementById('cfm-cod-new-era');
-        if (codNewEraEl) codNewEraEl.value = safeUpper(client['CODIGO NEW ERA']);
 
         const cepEl = document.getElementById('cfm-cep');
         if (cepEl) cepEl.value = safeStr(client['CEP']);
@@ -4787,27 +4788,116 @@ function renderFormBrandToggles(clientData = {}) {
     let html = '';
     CLIENT_BRAND_COLS.forEach(brand => {
         const isActive = isClientBrandActive(clientData, brand);
+
+        let codeVal = '';
+        let inputId = '';
+        let inputPlaceholder = 'Ex: Código ou SIM';
+        let helperLabel = 'Código:';
+
+        if (brand === 'NEW ERA') {
+            inputId = 'cfm-cod-new-era';
+            const rawNe = clientData['CODIGO NEW ERA'] || (clientData['NEW ERA'] && clientData['NEW ERA'] !== 'SIM' && clientData['NEW ERA'] !== 1 && clientData['NEW ERA'] !== '1' ? clientData['NEW ERA'] : '');
+            codeVal = (rawNe && rawNe !== 'null') ? String(rawNe) : '';
+            inputPlaceholder = 'Ex: 10311 (Código New Era)';
+            helperLabel = 'Código New Era:';
+        } else if (brand === 'VANS') {
+            inputId = 'cfm-cod-arezzo';
+            const rawAr = clientData['CODIGO AREZZO'] || (clientData['VANS'] && clientData['VANS'] !== 'SIM' && clientData['VANS'] !== 1 && clientData['VANS'] !== '1' ? clientData['VANS'] : '');
+            codeVal = (rawAr && rawAr !== 'null') ? String(rawAr) : '';
+            inputPlaceholder = 'Ex: 304476 (Código Arezzo / Vans)';
+            helperLabel = 'Código Arezzo / Vans:';
+        } else {
+            const rawVal = clientData[brand];
+            codeVal = (rawVal && rawVal !== 'SIM' && rawVal !== 'sim' && rawVal !== 1 && rawVal !== '1' && rawVal !== 'null') ? String(rawVal) : '';
+            inputId = `cfm-brand-code-${brand.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+            inputPlaceholder = 'Ex: Código ou SIM';
+            helperLabel = `Código ${brand}:`;
+        }
+
+        const safeCode = codeVal ? codeVal.trim() : '';
+
         html += `
-            <button type="button" class="cfm-brand-toggle-btn ${isActive ? 'active' : ''}" data-brand="${escapeHTML(brand)}" onclick="toggleFormBrandBtn(this)">
-                <i class='bx ${isActive ? 'bx-check-square' : 'bx-square'} toggle-icon'></i>
-                <span>${escapeHTML(brand)}</span>
-            </button>
+            <div class="cfm-brand-card ${isActive ? 'active' : ''}" data-brand="${escapeHTML(brand)}">
+                <div class="cfm-brand-card-top" onclick="toggleFormBrandCard('${escapeHTML(brand)}')">
+                    <div class="cfm-brand-check-wrapper">
+                        <i class='bx ${isActive ? 'bx-check-square' : 'bx-square'} cfm-brand-check-icon'></i>
+                        <span class="cfm-brand-title">${escapeHTML(brand)}</span>
+                    </div>
+                    <span class="cfm-brand-status-tag ${isActive ? 'active' : ''}">
+                        ${isActive ? 'Habilitado' : 'Desativado'}
+                    </span>
+                </div>
+                <div class="cfm-brand-card-input-wrap">
+                    <label for="${inputId}">${helperLabel}</label>
+                    <div class="cfm-brand-input-box">
+                        <i class='bx bx-barcode'></i>
+                        <input type="text" 
+                            id="${inputId}" 
+                            class="cfm-input font-mono cfm-brand-code-input" 
+                            data-brand="${escapeHTML(brand)}" 
+                            placeholder="${inputPlaceholder}" 
+                            value="${escapeHTML(safeCode)}" 
+                            oninput="onBrandCodeChanged('${escapeHTML(brand)}', this.value)"
+                            autocomplete="off">
+                    </div>
+                </div>
+            </div>
         `;
     });
     container.innerHTML = html;
 }
 
-window.toggleFormBrandBtn = function(btn) {
-    btn.classList.toggle('active');
-    const icon = btn.querySelector('.toggle-icon');
-    if (icon) {
-        if (btn.classList.contains('active')) {
-            icon.className = 'bx bx-check-square toggle-icon';
-        } else {
-            icon.className = 'bx bx-square toggle-icon';
+window.toggleFormBrandCard = function(brand) {
+    const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
+    if (!card) return;
+
+    const isCurrentlyActive = card.classList.contains('active');
+    const input = card.querySelector('.cfm-brand-code-input');
+    const icon = card.querySelector('.cfm-brand-check-icon');
+    const statusTag = card.querySelector('.cfm-brand-status-tag');
+
+    if (isCurrentlyActive) {
+        card.classList.remove('active');
+        if (icon) icon.className = 'bx bx-square cfm-brand-check-icon';
+        if (statusTag) {
+            statusTag.className = 'cfm-brand-status-tag';
+            statusTag.textContent = 'Desativado';
+        }
+        if (input) input.value = '';
+    } else {
+        card.classList.add('active');
+        if (icon) icon.className = 'bx bx-check-square cfm-brand-check-icon';
+        if (statusTag) {
+            statusTag.className = 'cfm-brand-status-tag active';
+            statusTag.textContent = 'Habilitado';
+        }
+        if (input) {
+            input.focus();
         }
     }
 };
+
+window.onBrandCodeChanged = function(brand, value) {
+    const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
+    if (!card) return;
+
+    const icon = card.querySelector('.cfm-brand-check-icon');
+    const statusTag = card.querySelector('.cfm-brand-status-tag');
+    const trimmed = (value || '').trim();
+
+    if (trimmed) {
+        if (!card.classList.contains('active')) {
+            card.classList.add('active');
+            if (icon) icon.className = 'bx bx-check-square cfm-brand-check-icon';
+            if (statusTag) {
+                statusTag.className = 'cfm-brand-status-tag active';
+                statusTag.textContent = 'Habilitado';
+            }
+        }
+    }
+};
+
+window.toggleFormBrandBtn = window.toggleFormBrandCard;
 
 window.closeClientFormModal = function() {
     const modal = document.getElementById('client-form-modal');
@@ -4886,8 +4976,8 @@ window.saveClientFormData = async function() {
     const razaoVal = document.getElementById('cfm-razao')?.value?.trim()?.toUpperCase() || null;
     const grupoVal = document.getElementById('cfm-grupo')?.value?.trim()?.toUpperCase() || null;
     const grupoRealVal = document.getElementById('cfm-grupo-real')?.value?.trim()?.toUpperCase() || null;
-    const arezzoVal = document.getElementById('cfm-cod-arezzo')?.value?.trim()?.toUpperCase() || null;
-    const newEraVal = document.getElementById('cfm-cod-new-era')?.value?.trim()?.toUpperCase() || null;
+    let arezzoVal = null;
+    let newEraVal = null;
 
     const cepVal = document.getElementById('cfm-cep')?.value?.trim()?.toUpperCase() || null;
     const ruaVal = document.getElementById('cfm-rua')?.value?.trim()?.toUpperCase() || null;
@@ -4928,15 +5018,28 @@ window.saveClientFormData = async function() {
     const rawNiver = document.getElementById('cfm-aniversario')?.value?.trim() || '';
     const niverVal = (window.formatAniversario ? window.formatAniversario(rawNiver) : rawNiver) || null;
 
-    // Obter marcas selecionadas
+    // Obter marcas selecionadas e respectivos códigos
     const clientBrandsObj = {};
     CLIENT_BRAND_COLS.forEach(brand => {
-        const toggleBtn = document.querySelector(`.cfm-brand-toggle-btn[data-brand="${brand}"]`);
-        const isActive = toggleBtn && toggleBtn.classList.contains('active');
-        if (brand === 'NEW ERA') {
-            clientBrandsObj[brand] = isActive ? (newEraVal || 'SIM') : null;
+        const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
+        const isActive = card && card.classList.contains('active');
+        const input = card ? card.querySelector('.cfm-brand-code-input') : null;
+        const code = input ? input.value.trim().toUpperCase() : '';
+
+        if (isActive) {
+            if (brand === 'NEW ERA') {
+                newEraVal = code || null;
+                clientBrandsObj['NEW ERA'] = code || 'SIM';
+            } else if (brand === 'VANS') {
+                arezzoVal = code || null;
+                clientBrandsObj['VANS'] = code || 'SIM';
+            } else {
+                clientBrandsObj[brand] = code || 'SIM';
+            }
         } else {
-            clientBrandsObj[brand] = isActive ? 'SIM' : null;
+            if (brand === 'NEW ERA') newEraVal = null;
+            if (brand === 'VANS') arezzoVal = null;
+            clientBrandsObj[brand] = null;
         }
     });
 

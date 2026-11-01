@@ -21,7 +21,7 @@
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     
     <!-- CSS Customizado -->
-    <link rel="stylesheet" href="style.css?v=48">
+    <link rel="stylesheet" href="style.css?v=52">
 </head>
 <body>
     <div class="app-container">
@@ -2064,20 +2064,16 @@
                             </div>
                             <div id="cfm-cnpj-feedback" class="cfm-cnpj-feedback" style="display: none;"></div>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group col-span-2">
                             <label for="cfm-status">Status do Cliente *</label>
                             <select id="cfm-status" class="cfm-input" required>
                                 <option value="SIM">SIM (Cliente Ativo)</option>
                                 <option value="NAO">NÃO (Cliente Inativo)</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="cfm-cod-arezzo">Código Arezzo</label>
-                            <input type="text" id="cfm-cod-arezzo" class="cfm-input font-mono" placeholder="Ex: 304385" autocomplete="off">
-                        </div>
                         <div class="form-group col-span-2">
                             <label for="cfm-fantasia">Nome Fantasia *</label>
-                            <input type="text" id="cfm-fantasia" class="cfm-input" placeholder="Ex: Central Surf Shopping Metr´" required autocomplete="off">
+                            <input type="text" id="cfm-fantasia" class="cfm-input" placeholder="Ex: Central Surf Shopping Metrô" required autocomplete="off">
                         </div>
                         <div class="form-group col-span-2">
                             <label for="cfm-razao">Razão Social</label>
@@ -2091,21 +2087,22 @@
                             <label for="cfm-grupo-real">Grupo Real</label>
                             <input type="text" id="cfm-grupo-real" list="clients-grupo-real-datalist" class="cfm-input" placeholder="Selecione ou digite..." autocomplete="off">
                         </div>
-                        <div class="form-group col-span-2">
-                            <label for="cfm-cod-new-era">Código New Era</label>
-                            <input type="text" id="cfm-cod-new-era" class="cfm-input font-mono" placeholder="Ex: 12345" autocomplete="off">
-                        </div>
                     </div>
                 </div>
 
-                <!-- Seção 2: Marcas que Trabalha -->
+                <!-- Seção 2: Marcas que Trabalha & Códigos -->
                 <div class="cfm-section-card">
-                    <div class="cfm-section-title"><i class='bx bx-purchase-tag'></i> Marcas que a Loja Trabalha</div>
-                    <span style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem; display: block;">
-                        Clique nas marcas para ativar ou desativar o atendimento a esta loja:
+                    <div class="cfm-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span><i class='bx bx-purchase-tag'></i> Marcas que a Loja Trabalha & Códigos</span>
+                        <span style="font-size: 0.78rem; color: var(--text-secondary); font-weight: 400;">
+                            Ative a marca e informe o código da loja
+                        </span>
+                    </div>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem; display: block;">
+                        Marque as marcas que a loja trabalha e informe o código de cada uma (ex: New Era, Vans, etc.):
                     </span>
-                    <div class="cfm-brands-toggle-grid" id="cfm-brands-toggle-grid">
-                        <!-- Gerado dinamicamente via JS com botões toggle -->
+                    <div class="cfm-brands-grid" id="cfm-brands-toggle-grid">
+                        <!-- Gerado dinamicamente via JS com cards de cada marca e input de código -->
                     </div>
                 </div>
 
@@ -2271,7 +2268,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <!-- Dados Iniciais de Clientes (Extraídos do OneDrive) -->
-    <script src="clients-data.js?v=51"></script>
+    <script src="clients-data.js?v=52"></script>
 
     <!-- Dados Iniciais de Faturamento (NEW ERA) -->
     <script src="billing-data.js?v=48"></script>
@@ -2283,7 +2280,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js?v=28"></script>
-    <script src="app.js?v=51"></script>
+    <script src="app.js?v=52"></script>
     <script src="indicators.js?v=48" charset="UTF-8"></script>
 </body>
 </html>
