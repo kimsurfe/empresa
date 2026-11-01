@@ -30,13 +30,13 @@
     let lastCompFilteredBilling = [];
     let lastCompFilteredExtrato = [];
 
-    // Estado de OrdenaÃ§Ã£o e Agrupamento das Tabelas de Confronto
+    // Estado de Ordenação e Agrupamento das Tabelas de Confronto
     let compDateSortCol = 'date';
-    let compDateSortDir = 'desc'; // 'desc' (maior para menor / mais recente) ou 'asc' (menor para maior)
-    let compDateGroupByMonth = true; // Por padrÃ£o agrupa pelo mÃªs
+    let compDateSortDir = 'asc'; // 'asc' (crescente do mês/data) ou 'desc'
+    let compDateGroupByMonth = true; // Por padrão agrupa pelo mês
     let compDateCollapsedMonths = new Set();
     let compMonthSortCol = 'key';
-    let compMonthSortDir = 'desc';
+    let compMonthSortDir = 'asc'; // 'asc' (crescente do mês)
     let compCnpjSortCol = 'totalV';
     let compCnpjSortDir = 'desc';
 
@@ -148,15 +148,7 @@
             btn.classList.toggle('active', btn.dataset.mode === mode);
         });
 
-        // Re-renderizar se houver dados filtrados
-        if (billingFilteredData && billingFilteredData.length > 0) {
-            const clientsMap = buildClientsMap();
-            const metricSelect = document.getElementById('filter-ind-metric');
-            const metricVal = metricSelect ? metricSelect.value : 'gross';
-            updateKpiCards(billingFilteredData, clientsMap, metricVal);
-            renderRankings(billingFilteredData, clientsMap);
-            renderCharts(billingFilteredData, clientsMap);
-        }
+        applyIndicatorsFilter();
     };
 
     let latestReportDate = '08/10/2026';
@@ -1150,7 +1142,7 @@
             billingFilteredData = [...bFiltered, ...eFiltered];
 
             if (subtitleEl) {
-                subtitleEl.innerHTML = `Confronto Comercial: Pedidos a Entregar vs Faturamento Realizado (${metricLabel}) — NEW ERA &nbsp;•&nbsp; Base: CNPJ, Data e Mês &nbsp;•&nbsp; Atualizado em: ${latestReportDate}`;
+                subtitleEl.innerHTML = `Confronto Comercial: Pedidos a Entregar vs Faturamento Realizado (${metricLabel}) &mdash; NEW ERA &nbsp;&bull;&nbsp; Base: CNPJ, Data e Mês &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
             }
 
             updateComparisonKpis(bFiltered, eFiltered, clientsMap, metricVal);
@@ -1166,9 +1158,9 @@
         // Atualizar subtítulo com indicação da métrica e data do último relatório atualizado
         if (subtitleEl) {
             if (currentDatasetType === 'extrato') {
-                subtitleEl.innerHTML = `Extrato de Pedidos a Entregar (${metricLabel}) — NEW ERA &nbsp;•&nbsp; Base: <strong>Data Entrega</strong> &nbsp;•&nbsp; Atualizado em: ${latestReportDate}`;
+                subtitleEl.innerHTML = `Extrato de Pedidos a Entregar (${metricLabel}) &mdash; NEW ERA &nbsp;&bull;&nbsp; Base: <strong>Data Entrega</strong> &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
             } else {
-                subtitleEl.innerHTML = `Análise estratégica de vendas (${metricLabel}) — NEW ERA &nbsp;•&nbsp; Atualizado em: ${latestReportDate}`;
+                subtitleEl.innerHTML = `Análise estratégica de vendas (${metricLabel}) &mdash; NEW ERA &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
             }
         }
 
@@ -1184,6 +1176,22 @@
     // --------------------------------------------------------------------------
     // 1. CARDS DE INDICADORES (KPIS)
     // --------------------------------------------------------------------------
+    function adjustKpiTextFit() {
+        const kpiValues = document.querySelectorAll('.indicators-kpis-grid .kpi-value');
+        kpiValues.forEach(el => {
+            const len = (el.textContent || '').trim().length;
+            if (len >= 16) {
+                el.classList.add('kpi-val-extra-long');
+                el.classList.remove('kpi-val-long');
+            } else if (len >= 13) {
+                el.classList.add('kpi-val-long');
+                el.classList.remove('kpi-val-extra-long');
+            } else {
+                el.classList.remove('kpi-val-long', 'kpi-val-extra-long');
+            }
+        });
+    }
+
     function updateKpiCards(data, clientsMap, metricVal = 'gross') {
         let totalRevenue = 0;
         let totalPieces = 0;
@@ -1246,7 +1254,21 @@
 
         if (cardMonth) cardMonth.style.display = isExtrato ? 'none' : '';
         if (cardDay) cardDay.style.display = isExtrato ? 'none' : '';
-        if (cardPieces) cardPieces.style.display = isExtrato ? '' : 'none';
+        if (cardPieces) {
+            cardPieces.style.display = isExtrato ? '' : 'none';
+            cardPieces.classList.remove('highlight-emerald', 'highlight-accent');
+            cardPieces.classList.add('highlight-blue');
+        }
+        const cardTotKpi = document.getElementById('kpi-card-total');
+        if (cardTotKpi) {
+            if (isExtrato) {
+                cardTotKpi.classList.remove('highlight-emerald', 'highlight-accent');
+                cardTotKpi.classList.add('highlight-blue');
+            } else {
+                cardTotKpi.classList.remove('highlight-blue', 'highlight-accent');
+                cardTotKpi.classList.add('highlight-emerald');
+            }
+        }
         if (cardOrders) cardOrders.style.display = isExtrato ? '' : 'none';
 
         // KPI 1: Booking Total / Faturamento Total
@@ -1422,6 +1444,8 @@
                 elTicketFooter.textContent = isPiecesOnly ? 'peças por cliente faturado' : 'por cliente faturado';
             }
         }
+
+        adjustKpiTextFit();
     }
 
     // --------------------------------------------------------------------------
@@ -1784,8 +1808,10 @@
 
         const ctx = canvas.getContext('2d');
         const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-        gradient.addColorStop(0, 'rgba(99, 102, 241, 0.45)');
-        gradient.addColorStop(1, 'rgba(99, 102, 241, 0.02)');
+        const dailyColor = isExtrato ? '#3b82f6' : '#10b981';
+        const dailyRgb = isExtrato ? '59, 130, 246' : '16, 185, 129';
+        gradient.addColorStop(0, `rgba(${dailyRgb}, 0.45)`);
+        gradient.addColorStop(1, `rgba(${dailyRgb}, 0.02)`);
 
         chartDailyInstance = new Chart(ctx, {
             type: 'line',
@@ -1794,12 +1820,12 @@
                 datasets: [{
                     label: isPiecesMode ? (isExtrato ? 'Volume Programado (Peças)' : 'Volume (Peças)') : (isExtrato ? 'Booking Programado (R$)' : 'Faturamento (R$)'),
                     data: values,
-                    borderColor: '#6366f1',
+                    borderColor: dailyColor,
                     borderWidth: 2.5,
                     backgroundColor: gradient,
                     fill: true,
                     tension: 0.35,
-                    pointBackgroundColor: '#6366f1',
+                    pointBackgroundColor: dailyColor,
                     pointBorderColor: '#ffffff',
                     pointBorderWidth: 1.5,
                     pointRadius: sortedDays.length > 50 ? 2 : 4,
@@ -1899,8 +1925,8 @@
                 datasets: [{
                     label: isPiecesMode ? (isExtrato ? 'Volume Mensal (Peças)' : 'Volume Mensal (Peças)') : (isExtrato ? 'Planejamento Mensal (R$)' : 'Faturamento Mensal (R$)'),
                     data: values,
-                    backgroundColor: 'rgba(16, 185, 129, 0.8)',
-                    hoverBackgroundColor: '#10b981',
+                    backgroundColor: isExtrato ? 'rgba(59, 130, 246, 0.85)' : 'rgba(16, 185, 129, 0.85)',
+                    hoverBackgroundColor: isExtrato ? '#3b82f6' : '#10b981',
                     borderRadius: 6,
                     borderSkipped: false
                 }]
@@ -3031,19 +3057,28 @@
         const pctFat = grandTotal > 0 ? (fatTotal / grandTotal * 100) : 0;
         const pctExt = grandTotal > 0 ? (extTotal / grandTotal * 100) : 0;
 
+        const isPiecesOnly = (currentKpiDisplayMode === 'pieces');
+        const isBoth = (currentKpiDisplayMode === 'both');
+
         // KPI 1: Faturamento Realizado
         const cardTotal = document.getElementById('kpi-card-total');
         if (cardTotal) {
             cardTotal.style.display = 'block';
+            cardTotal.classList.remove('highlight-blue', 'highlight-accent');
+            cardTotal.classList.add('highlight-emerald');
             const titleEl = document.getElementById('kpi-total-title');
             const revEl = document.getElementById('kpi-total-revenue');
             const subEl = document.getElementById('kpi-total-sub');
             const footEl = document.getElementById('kpi-total-footer');
-            if (titleEl) titleEl.textContent = 'Faturamento Realizado';
-            if (revEl) revEl.textContent = formatBRL(fatTotal);
+            if (titleEl) titleEl.textContent = isPiecesOnly ? 'Faturamento Realizado (Peças)' : 'Faturamento Realizado';
+            if (revEl) revEl.textContent = isPiecesOnly ? `${numberFormatter.format(fatPieces)} pçs` : formatBRL(fatTotal);
             if (subEl) {
-                subEl.style.display = 'inline-block';
-                subEl.textContent = `${fatPieces.toLocaleString('pt-BR')} peças`;
+                if (isBoth) {
+                    subEl.style.display = 'inline-block';
+                    subEl.textContent = `${numberFormatter.format(fatPieces)} peças`;
+                } else {
+                    subEl.style.display = 'none';
+                }
             }
             if (footEl) footEl.textContent = 'vendas faturadas no período';
         }
@@ -3052,12 +3087,14 @@
         const cardPieces = document.getElementById('kpi-card-pieces');
         if (cardPieces) {
             cardPieces.style.display = 'block';
+            cardPieces.classList.remove('highlight-emerald', 'highlight-accent');
+            cardPieces.classList.add('highlight-blue');
             const titleEl = document.getElementById('kpi-pieces-title');
             const valEl = document.getElementById('kpi-total-pieces-val');
             const footEl = document.getElementById('kpi-pieces-footer');
-            if (titleEl) titleEl.textContent = 'A Entregar (Carteira)';
-            if (valEl) valEl.textContent = formatBRL(extTotal);
-            if (footEl) footEl.textContent = `${extPieces.toLocaleString('pt-BR')} peças programadas`;
+            if (titleEl) titleEl.textContent = isPiecesOnly ? 'A Entregar (Peças)' : 'A Entregar (Carteira)';
+            if (valEl) valEl.textContent = isPiecesOnly ? `${numberFormatter.format(extPieces)} pçs` : formatBRL(extTotal);
+            if (footEl) footEl.textContent = isBoth ? `${numberFormatter.format(extPieces)} peças programadas` : (isPiecesOnly ? 'pedidos programados em carteira' : 'valor em carteira a entregar');
         }
 
         // KPI 3: Total Geral Previsto
@@ -3067,9 +3104,9 @@
             const titleEl = document.getElementById('kpi-orders-title');
             const valEl = document.getElementById('kpi-unique-orders-val');
             const footEl = document.getElementById('kpi-orders-footer');
-            if (titleEl) titleEl.textContent = 'Total Geral Previsto';
-            if (valEl) valEl.textContent = formatBRL(grandTotal);
-            if (footEl) footEl.textContent = `${grandPieces.toLocaleString('pt-BR')} peças consolidadas`;
+            if (titleEl) titleEl.textContent = isPiecesOnly ? 'Total Geral Previsto (Peças)' : 'Total Geral Previsto';
+            if (valEl) valEl.textContent = isPiecesOnly ? `${numberFormatter.format(grandPieces)} pçs` : formatBRL(grandTotal);
+            if (footEl) footEl.textContent = isBoth ? `${numberFormatter.format(grandPieces)} peças consolidadas` : (isPiecesOnly ? 'volume consolidado faturado + carteira' : 'projeção consolidada de vendas');
         }
 
         // KPI 4: % Realizado vs Carteira
@@ -3117,6 +3154,8 @@
         if (cardMonth) cardMonth.style.display = 'none';
         const cardDay = document.getElementById('kpi-card-day');
         if (cardDay) cardDay.style.display = 'none';
+
+        adjustKpiTextFit();
     }
 
     window.setComparisonChartDisplayMode = function(mode) {
@@ -3130,8 +3169,28 @@
         renderComparisonCharts(lastCompFilteredBilling, lastCompFilteredExtrato, clientsMap);
     };
 
+    // Datalabels flutuantes sobre barras desativados a pedido do usuario: os totais consolidados sao exibidos na legenda
+    const comparisonDataLabelsPlugin = {
+        id: 'compDataLabels',
+        afterDatasetsDraw() {}
+    };
+
     function renderComparisonCharts(bData, eData, clientsMap) {
         if (!window.Chart) return;
+
+        const isPieces = (compChartDisplayMode === 'pieces');
+
+        // Totais consolidados para exibição nas legendas dos gráficos
+        const totFatV = bData.reduce((acc, it) => acc + (it.v || 0), 0);
+        const totFatQ = bData.reduce((acc, it) => acc + (it.q || 0), 0);
+        const totExtV = eData.reduce((acc, it) => acc + (it.v || 0), 0);
+        const totExtQ = eData.reduce((acc, it) => acc + (it.q || 0), 0);
+        const totGrandV = totFatV + totExtV;
+        const totGrandQ = totFatQ + totExtQ;
+
+        const fatLegendLabel = isPieces ? `${totFatQ.toLocaleString('pt-BR')} pçs` : formatBRL(totFatV);
+        const extLegendLabel = isPieces ? `${totExtQ.toLocaleString('pt-BR')} pçs` : formatBRL(totExtV);
+        const grandLegendLabel = isPieces ? `${totGrandQ.toLocaleString('pt-BR')} pçs` : formatBRL(totGrandV);
 
         // 1. Confronto Mensal (Faturamento vs A Entregar)
         const ctxMonthly = document.getElementById('chart-comp-monthly')?.getContext('2d');
@@ -3183,25 +3242,25 @@
                     labels,
                     datasets: [
                         {
-                            label: 'Faturamento Realizado',
+                            label: `Faturamento Realizado (${fatLegendLabel})`,
                             data: fatData,
-                            backgroundColor: 'rgba(59, 130, 246, 0.85)',
-                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(16, 185, 129, 0.85)',
+                            borderColor: '#10b981',
                             borderWidth: 1,
                             borderRadius: 4,
                             order: 2
                         },
                         {
-                            label: 'A Entregar (Carteira)',
+                            label: `A Entregar (Carteira) (${extLegendLabel})`,
                             data: extData,
-                            backgroundColor: 'rgba(16, 185, 129, 0.85)',
-                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(59, 130, 246, 0.85)',
+                            borderColor: '#3b82f6',
                             borderWidth: 1,
                             borderRadius: 4,
                             order: 3
                         },
                         {
-                            label: 'Total Consolidado',
+                            label: `Total Consolidado (${grandLegendLabel})`,
                             data: totalData,
                             type: 'line',
                             borderColor: '#f59e0b',
@@ -3240,6 +3299,7 @@
                             ticks: { color: '#94a3b8', font: { size: 11 } }
                         },
                         y: {
+                            grace: '15%',
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
                             ticks: {
                                 color: '#94a3b8',
@@ -3248,7 +3308,8 @@
                             }
                         }
                     }
-                }
+                },
+                plugins: [comparisonDataLabelsPlugin]
             });
         }
 
@@ -3264,7 +3325,7 @@
                 if (!dObj) return;
                 const iso = dObj.toISOString().split('T')[0];
                 if (!dateMap[iso]) dateMap[iso] = { label: item.d.split(' ')[0], fat: 0, ext: 0 };
-                dateMap[iso].fat += item.v || 0;
+                dateMap[iso].fat += isPieces ? (item.q || 0) : (item.v || 0);
             });
             eData.forEach(item => {
                 if (!item.d) return;
@@ -3272,7 +3333,7 @@
                 if (!dObj) return;
                 const iso = dObj.toISOString().split('T')[0];
                 if (!dateMap[iso]) dateMap[iso] = { label: item.d.split(' ')[0], fat: 0, ext: 0 };
-                dateMap[iso].ext += item.v || 0;
+                dateMap[iso].ext += isPieces ? (item.q || 0) : (item.v || 0);
             });
 
             const sortedDates = Object.keys(dateMap).sort();
@@ -3286,18 +3347,18 @@
                     labels,
                     datasets: [
                         {
-                            label: 'Faturamento do Dia',
+                            label: `Faturamento do Dia (${fatLegendLabel})`,
                             data: fatData,
-                            backgroundColor: 'rgba(59, 130, 246, 0.75)',
-                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(16, 185, 129, 0.75)',
+                            borderColor: '#10b981',
                             borderWidth: 1,
                             borderRadius: 3
                         },
                         {
-                            label: 'A Entregar no Dia',
+                            label: `A Entregar no Dia (${extLegendLabel})`,
                             data: extData,
-                            backgroundColor: 'rgba(16, 185, 129, 0.75)',
-                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(59, 130, 246, 0.75)',
+                            borderColor: '#3b82f6',
                             borderWidth: 1,
                             borderRadius: 3
                         }
@@ -3311,7 +3372,7 @@
                         legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: { size: 10 } } },
                         tooltip: {
                             callbacks: {
-                                label: ctx => ` ${ctx.dataset.label}: ${formatBRL(ctx.parsed.y || 0)}`
+                                label: ctx => ` ${ctx.dataset.label}: ${isPieces ? `${(ctx.parsed.y || 0).toLocaleString('pt-BR')} pçs` : formatBRL(ctx.parsed.y || 0)}`
                             }
                         }
                     },
@@ -3325,6 +3386,7 @@
                             }
                         },
                         y: {
+                            grace: '15%',
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
                             ticks: {
                                 color: '#94a3b8',
@@ -3333,7 +3395,8 @@
                             }
                         }
                     }
-                }
+                },
+                plugins: [comparisonDataLabelsPlugin]
             });
         }
 
@@ -3346,12 +3409,12 @@
             bData.forEach(item => {
                 const cl = (item.cl || 'Outros').trim().toUpperCase();
                 if (!classMap[cl]) classMap[cl] = { fat: 0, ext: 0 };
-                classMap[cl].fat += item.v || 0;
+                classMap[cl].fat += isPieces ? (item.q || 0) : (item.v || 0);
             });
             eData.forEach(item => {
                 const cl = (item.cl || 'Outros').trim().toUpperCase();
                 if (!classMap[cl]) classMap[cl] = { fat: 0, ext: 0 };
-                classMap[cl].ext += item.v || 0;
+                classMap[cl].ext += isPieces ? (item.q || 0) : (item.v || 0);
             });
 
             const labels = Object.keys(classMap).sort();
@@ -3364,18 +3427,18 @@
                     labels,
                     datasets: [
                         {
-                            label: 'Faturamento Realizado',
+                            label: `Faturamento Realizado (${fatLegendLabel})`,
                             data: fatData,
-                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                            borderColor: '#10b981',
                             borderWidth: 1,
                             borderRadius: 4
                         },
                         {
-                            label: 'A Entregar (Carteira)',
+                            label: `A Entregar (Carteira) (${extLegendLabel})`,
                             data: extData,
-                            backgroundColor: 'rgba(245, 158, 11, 0.8)',
-                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                            borderColor: '#3b82f6',
                             borderWidth: 1,
                             borderRadius: 4
                         }
@@ -3388,7 +3451,7 @@
                         legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: { size: 10 } } },
                         tooltip: {
                             callbacks: {
-                                label: ctx => ` ${ctx.dataset.label}: ${formatBRL(ctx.parsed.y || 0)}`
+                                label: ctx => ` ${ctx.dataset.label}: ${isPieces ? `${(ctx.parsed.y || 0).toLocaleString('pt-BR')} pçs` : formatBRL(ctx.parsed.y || 0)}`
                             }
                         }
                     },
@@ -3398,6 +3461,7 @@
                             ticks: { color: '#94a3b8', font: { size: 10 } }
                         },
                         y: {
+                            grace: '15%',
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
                             ticks: {
                                 color: '#94a3b8',
@@ -3406,7 +3470,8 @@
                             }
                         }
                     }
-                }
+                },
+                plugins: [comparisonDataLabelsPlugin]
             });
         }
     }
@@ -3485,7 +3550,7 @@
 
         // 2. Agrupar por Mês / Ano
         const monthGroupMap = new Map();
-        const monthNamesFull = ['Janeiro', 'Fevereiro', 'MarÃ§o', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        const monthNamesFull = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
         const processMonthItem = (item, isBilling) => {
             const dObj = parseDateBR(item.d);
@@ -3602,7 +3667,17 @@
                 totalQ,
                 status
             };
-        }).sort((a, b) => b.timestamp - a.timestamp);
+        }).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+        // Deixar agrupado por mês e recolhido por padrão conforme solicitado
+        compDateCollapsedMonths.clear();
+        currentCompDateList.forEach(d => {
+            if (d.monthKey) compDateCollapsedMonths.add(d.monthKey);
+        });
+        const lblExpand = document.getElementById('label-comp-date-expand-all');
+        const iconExpand = document.getElementById('icon-comp-date-expand-all');
+        if (lblExpand) lblExpand.textContent = 'Expandir Todos';
+        if (iconExpand) iconExpand.className = 'bx bx-expand-vertical';
 
         // Atualizar badge de contagem
         const totalBadge = document.getElementById('comp-table-total-badge');
@@ -3629,7 +3704,7 @@
         const tbody = document.getElementById('comp-tbody-cnpj');
         if (!tbody) return;
 
-        // Atualizar classes e Ã­cones dos cabeÃ§alhos
+        // Atualizar classes e ícones dos cabeçalhos
         const cnpjCols = ['cnpj', 'fantasia', 'rede', 'fatV', 'fatQ', 'extV', 'extQ', 'totalV', 'pctFat'];
         cnpjCols.forEach(c => {
             const th = document.getElementById(`th-cnpj-${c}`);
@@ -3661,7 +3736,7 @@
             });
         }
 
-        // OrdenaÃ§Ã£o dinÃ¢mica por cabeÃ§alho
+        // Ordenação dinâmica por cabeçalho
         filtered.sort((a, b) => {
             let res = 0;
             if (compCnpjSortCol === 'cnpj') {
@@ -3683,7 +3758,7 @@
                 <tr>
                     <td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
                         <i class='bx bx-search-alt' style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.5;"></i>
-                        Nenhum CNPJ ou loja encontrado com os critÃ©rios de busca selecionados.
+                        Nenhum CNPJ ou loja encontrado com os critérios de busca selecionados.
                     </td>
                 </tr>
             `;
@@ -3695,7 +3770,7 @@
             const isExpanded = compExpandedCnpjs.has(row.key);
             const clientTitle = row.fantasia || row.razao || 'Cliente sem nome';
             const clientSub = (row.razao && row.fantasia && row.razao.toUpperCase() !== row.fantasia.toUpperCase()) ? row.razao : '';
-            const locationText = [escapeHTML(row.cidade), escapeHTML(row.rede)].filter(Boolean).join(' <span style="opacity:0.4;">&bull;</span> ') || '-';
+            const redeText = escapeHTML(row.rede || row.cidade || '-');
 
             html += `
                 <tr class="comp-row" id="comp-row-${row.key}">
@@ -3704,10 +3779,10 @@
                         <div style="font-weight: 600; color: var(--text-primary);">${escapeHTML(clientTitle)}</div>
                         ${clientSub ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">${escapeHTML(clientSub)}</div>` : ''}
                     </td>
-                    <td style="font-size: 0.78rem; color: var(--text-secondary);">${locationText}</td>
-                    <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(row.fatV)}</td>
+                    <td style="font-size: 0.78rem; color: var(--text-secondary); font-weight: 500;">${redeText}</td>
+                    <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(row.fatV)}</td>
                     <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.fatQ.toLocaleString('pt-BR')}</td>
-                    <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(row.extV)}</td>
+                    <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(row.extV)}</td>
                     <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.extQ.toLocaleString('pt-BR')}</td>
                     <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(row.totalV)}</td>
                     <td>
@@ -3717,8 +3792,8 @@
                                 <div class="comp-bar-ext" style="width: ${row.pctExt.toFixed(1)}%;" title="A Entregar: ${row.pctExt.toFixed(1)}%"></div>
                             </div>
                             <div class="comp-progress-labels">
-                                <span style="color: #60a5fa;">${row.pctFat.toFixed(0)}% Fat</span>
-                                <span style="color: #34d399;">${row.pctExt.toFixed(0)}% Entr</span>
+                                <span style="color: #34d399;">${row.pctFat.toFixed(0)}% Fat</span>
+                                <span style="color: #60a5fa;">${row.pctExt.toFixed(0)}% Entr</span>
                             </div>
                         </div>
                     </td>
@@ -3739,10 +3814,10 @@
                                     <!-- Coluna 1: Pedidos a Entregar -->
                                     <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; padding: 0.75rem;">
                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                            <span style="font-weight: 600; color: #10b981; font-size: 0.8rem;">
+                                            <span style="font-weight: 600; color: #3b82f6; font-size: 0.8rem;">
                                                 <i class='bx bx-package'></i> Pedidos em Carteira (${row.extItemsList.length} itens)
                                             </span>
-                                            <span style="font-size: 0.75rem; color: #34d399;" class="font-mono">${formatBRL(row.extV)} | ${row.extQ} pÃ§s</span>
+                                            <span style="font-size: 0.75rem; color: #60a5fa;" class="font-mono">${formatBRL(row.extV)} | ${row.extQ.toLocaleString('pt-BR')} pçs</span>
                                         </div>
                                         <div style="max-height: 180px; overflow-y: auto;" class="custom-scrollbar">
                                             ${renderDetailItemsTable(row.extItemsList, 'Data Entrega', 'Pedido')}
@@ -3750,15 +3825,15 @@
                                     </div>
 
                                     <!-- Coluna 2: Notas Faturadas -->
-                                    <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 6px; padding: 0.75rem;">
+                                    <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; padding: 0.75rem;">
                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                            <span style="font-weight: 600; color: #3b82f6; font-size: 0.8rem;">
+                                            <span style="font-weight: 600; color: #10b981; font-size: 0.8rem;">
                                                 <i class='bx bx-receipt'></i> Notas Faturadas (${row.fatItemsList.length} itens)
                                             </span>
-                                            <span style="font-size: 0.75rem; color: #60a5fa;" class="font-mono">${formatBRL(row.fatV)} | ${row.fatQ} pÃ§s</span>
+                                            <span style="font-size: 0.75rem; color: #34d399;" class="font-mono">${formatBRL(row.fatV)} | ${row.fatQ.toLocaleString('pt-BR')} pçs</span>
                                         </div>
                                         <div style="max-height: 180px; overflow-y: auto;" class="custom-scrollbar">
-                                            ${renderDetailItemsTable(row.fatItemsList, 'Data EmissÃ£o', 'NF')}
+                                            ${renderDetailItemsTable(row.fatItemsList, 'Data Emissão', 'NF')}
                                         </div>
                                     </div>
                                 </div>
@@ -3768,6 +3843,44 @@
                 `;
             }
         });
+
+        // Linha de Total Consolidado das lojas filtradas
+        let sumFatV = 0, sumFatQ = 0, sumExtV = 0, sumExtQ = 0, sumTotalV = 0;
+        filtered.forEach(row => {
+            sumFatV += row.fatV || 0;
+            sumFatQ += row.fatQ || 0;
+            sumExtV += row.extV || 0;
+            sumExtQ += row.extQ || 0;
+            sumTotalV += row.totalV || 0;
+        });
+        const sumPctFat = sumTotalV > 0 ? (sumFatV / sumTotalV * 100) : 0;
+        const sumPctExt = sumTotalV > 0 ? (sumExtV / sumTotalV * 100) : 0;
+
+        html += `
+            <tr style="background: rgba(30, 41, 59, 0.95); font-weight: 700; border-top: 2px solid rgba(255,255,255,0.18); position: sticky; bottom: 0; z-index: 2;">
+                <td style="color: var(--accent-color, #3b82f6); text-transform: uppercase;">TOTAL (${filtered.length} ${filtered.length === 1 ? 'loja' : 'lojas'})</td>
+                <td style="color: var(--text-secondary); font-size: 0.78rem;">Consolidado das lojas listadas</td>
+                <td style="color: var(--text-secondary); font-size: 0.78rem;">-</td>
+                <td style="text-align: right; color: #34d399;" class="font-mono">${formatBRL(sumFatV)}</td>
+                <td style="text-align: right; color: #94a3b8;" class="font-mono">${sumFatQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; color: #60a5fa;" class="font-mono">${formatBRL(sumExtV)}</td>
+                <td style="text-align: right; color: #94a3b8;" class="font-mono">${sumExtQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(sumTotalV)}</td>
+                <td>
+                    <div class="comp-progress-wrap">
+                        <div class="comp-progress-bar">
+                            <div class="comp-bar-fat" style="width: ${sumPctFat.toFixed(1)}%;"></div>
+                            <div class="comp-bar-ext" style="width: ${sumPctExt.toFixed(1)}%;"></div>
+                        </div>
+                        <div class="comp-progress-labels">
+                            <span style="color: #34d399;">${sumPctFat.toFixed(0)}% Fat</span>
+                            <span style="color: #60a5fa;">${sumPctExt.toFixed(0)}% Entr</span>
+                        </div>
+                    </div>
+                </td>
+                <td></td>
+            </tr>
+        `;
 
         tbody.innerHTML = html;
     }
@@ -3811,7 +3924,7 @@
             compMonthSortDir = (compMonthSortDir === 'desc') ? 'asc' : 'desc';
         } else {
             compMonthSortCol = col;
-            compMonthSortDir = (col === 'key') ? 'desc' : 'desc';
+            compMonthSortDir = (col === 'key') ? 'asc' : 'desc';
         }
         renderCompMonthTable();
     };
@@ -3820,7 +3933,7 @@
         const tbody = document.getElementById('comp-tbody-month');
         if (!tbody) return;
 
-        // Atualizar classes e Ã­cones dos cabeÃ§alhos
+        // Atualizar classes e ícones dos cabeçalhos
         const monthCols = ['key', 'fatV', 'fatQ', 'extV', 'extQ', 'totalV', 'totalQ', 'fatStoresCount', 'extStoresCount'];
         monthCols.forEach(c => {
             const th = document.getElementById(`th-month-${c}`);
@@ -3837,7 +3950,7 @@
         });
 
         if (currentCompMonthList.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Nenhum dado mensal no perÃ­odo selecionado.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Nenhum dado mensal no período selecionado.</td></tr>`;
             return;
         }
 
@@ -3867,9 +3980,9 @@
             html += `
                 <tr>
                     <td style="font-weight: 600; color: var(--text-primary);">${escapeHTML(m.label)}</td>
-                    <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(m.fatV)}</td>
+                    <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(m.fatV)}</td>
                     <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${m.fatQ.toLocaleString('pt-BR')}</td>
-                    <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(m.extV)}</td>
+                    <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(m.extV)}</td>
                     <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${m.extQ.toLocaleString('pt-BR')}</td>
                     <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(m.totalV)}</td>
                     <td style="text-align: right; font-size: 0.78rem; font-weight: 600; color: #f8fafc;" class="font-mono">${m.totalQ.toLocaleString('pt-BR')}</td>
@@ -3880,8 +3993,8 @@
                                 <div class="comp-bar-ext" style="width: ${m.pctExt.toFixed(1)}%;"></div>
                             </div>
                             <div class="comp-progress-labels">
-                                <span style="color: #60a5fa;">${m.pctFat.toFixed(0)}% Fat</span>
-                                <span style="color: #34d399;">${m.pctExt.toFixed(0)}% Entr</span>
+                                <span style="color: #34d399;">${m.pctFat.toFixed(0)}% Fat</span>
+                                <span style="color: #60a5fa;">${m.pctExt.toFixed(0)}% Entr</span>
                             </div>
                         </div>
                     </td>
@@ -3897,9 +4010,9 @@
         html += `
             <tr style="background: rgba(30, 41, 59, 0.85); font-weight: 700; border-top: 2px solid rgba(255,255,255,0.15);">
                 <td style="color: var(--accent-color, #3b82f6); text-transform: uppercase;">Total Consolidado</td>
-                <td style="text-align: right; color: #60a5fa;" class="font-mono">${formatBRL(totFatV)}</td>
+                <td style="text-align: right; color: #34d399;" class="font-mono">${formatBRL(totFatV)}</td>
                 <td style="text-align: right; color: #94a3b8;" class="font-mono">${totFatQ.toLocaleString('pt-BR')}</td>
-                <td style="text-align: right; color: #34d399;" class="font-mono">${formatBRL(totExtV)}</td>
+                <td style="text-align: right; color: #60a5fa;" class="font-mono">${formatBRL(totExtV)}</td>
                 <td style="text-align: right; color: #94a3b8;" class="font-mono">${totExtQ.toLocaleString('pt-BR')}</td>
                 <td style="text-align: right; color: #fbbf24;" class="font-mono">${formatBRL(totGrandV)}</td>
                 <td style="text-align: right; color: #ffffff;" class="font-mono">${totGrandQ.toLocaleString('pt-BR')}</td>
@@ -3910,8 +4023,8 @@
                             <div class="comp-bar-ext" style="width: ${totalPctExt.toFixed(1)}%;"></div>
                         </div>
                         <div class="comp-progress-labels">
-                            <span style="color: #60a5fa;">${totalPctFat.toFixed(0)}%</span>
-                            <span style="color: #34d399;">${totalPctExt.toFixed(0)}%</span>
+                            <span style="color: #34d399;">${totalPctFat.toFixed(0)}%</span>
+                            <span style="color: #60a5fa;">${totalPctExt.toFixed(0)}%</span>
                         </div>
                     </div>
                 </td>
@@ -3922,13 +4035,13 @@
         tbody.innerHTML = html;
     }
 
-    // OrdenaÃ§Ã£o e Agrupamento da Tabela por Data
+    // Ordenação e Agrupamento da Tabela por Data
     window.sortCompDateTable = function(col) {
         if (compDateSortCol === col) {
             compDateSortDir = (compDateSortDir === 'desc') ? 'asc' : 'desc';
         } else {
             compDateSortCol = col;
-            compDateSortDir = (col === 'weekday' || col === 'status') ? 'asc' : 'desc';
+            compDateSortDir = (col === 'weekday' || col === 'status' || col === 'date') ? 'asc' : 'desc';
         }
         renderCompDateTable();
     };
@@ -3938,7 +4051,7 @@
         const btn = document.getElementById('btn-comp-date-group-toggle');
         if (btn) {
             btn.classList.toggle('active', compDateGroupByMonth);
-            btn.innerHTML = `<i class='bx ${compDateGroupByMonth ? 'bx-folder' : 'bx-list-ul'}'></i> ${compDateGroupByMonth ? 'Agrupado por MÃªs' : 'Lista Corrida (Dias)'}`;
+            btn.innerHTML = `<i class='bx ${compDateGroupByMonth ? 'bx-folder' : 'bx-list-ul'}'></i> ${compDateGroupByMonth ? 'Agrupado por M&ecirc;s' : 'Lista Corrida (Dias)'}`;
         }
         const btnExp = document.getElementById('btn-comp-date-expand-all');
         if (btnExp) {
@@ -3982,7 +4095,7 @@
         const tbody = document.getElementById('comp-tbody-date');
         if (!tbody) return;
 
-        // Atualizar classes e Ã­cones dos cabeÃ§alhos da tabela de datas
+        // Atualizar classes e ícones dos cabeçalhos da tabela de datas
         const dateCols = ['date', 'weekday', 'fatV', 'fatQ', 'extV', 'extQ', 'totalV', 'status'];
         dateCols.forEach(col => {
             const th = document.getElementById(`th-date-${col}`);
@@ -3999,15 +4112,15 @@
         });
 
         if (currentCompDateList.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2.5rem; color: var(--text-secondary);"><i class='bx bx-calendar-x' style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Nenhum lanÃ§amento no perÃ­odo selecionado.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2.5rem; color: var(--text-secondary);"><i class='bx bx-calendar-x' style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Nenhum lançamento no período selecionado.</td></tr>`;
             const summaryBadge = document.getElementById('comp-date-summary-badge');
             if (summaryBadge) summaryBadge.innerHTML = '0 meses &bull; 0 datas';
             return;
         }
 
-        // 1. Agrupar os itens por mÃªs
+        // 1. Agrupar os itens por mês
         const monthGroupsMap = new Map();
-        const monthNamesFull = ['Janeiro', 'Fevereiro', 'MarÃ§o', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        const monthNamesFull = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
         currentCompDateList.forEach(d => {
             let mKey = d.monthKey;
@@ -4061,7 +4174,7 @@
             summaryBadge.innerHTML = `<span style="color: var(--accent-color, #3b82f6); font-weight: 600;">${monthGroups.length}</span> ${monthGroups.length === 1 ? "mês" : "meses"} &nbsp;&bull;&nbsp; <span style="color: #fbbf24; font-weight: 600;">${currentCompDateList.length}</span> ${currentCompDateList.length === 1 ? "data" : "datas"}`;
         }
 
-        // FunÃ§Ã£o comparadora para ordenar dias individuais
+        // Função comparadora para ordenar dias individuais
         const sortDaysFn = (a, b) => {
             let res = 0;
             if (compDateSortCol === 'date') {
@@ -4100,12 +4213,12 @@
                 return (compDateSortDir === 'desc') ? res : -res;
             });
 
-            // Para cada mÃªs, ordena seus dias internos
+            // Para cada mês, ordena seus dias internos
             monthGroups.forEach(m => {
                 m.days.sort(sortDaysFn);
                 const isCollapsed = compDateCollapsedMonths.has(m.monthKey);
 
-                // Determinar badge de status do mÃªs
+                // Determinar badge de status do mês
                 let monthStatusBadge = '';
                 if (m.fatV > 0 && m.extV > 0) {
                     monthStatusBadge = `<span class="badge" style="background: rgba(99, 102, 241, 0.2); color: #a5b4fc; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">Faturado & Programado</span>`;
@@ -4115,9 +4228,9 @@
                     monthStatusBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">Somente Programado</span>`;
                 }
 
-                // Linha de CabeÃ§alho do MÃªs
+                // Linha de Cabeçalho do Mês
                 html += `
-                    <tr class="comp-month-group-row" onclick="toggleCompDateMonth('${m.monthKey}')" title="Clique para expandir ou recolher os dias deste mÃªs">
+                    <tr class="comp-month-group-row" onclick="toggleCompDateMonth('${m.monthKey}')" title="Clique para expandir ou recolher os dias deste mês">
                         <td style="font-weight: 700; color: #ffffff; font-size: 0.85rem;">
                             <div style="display: flex; align-items: center; gap: 0.45rem;">
                                 <i class='bx ${isCollapsed ? 'bx-chevron-right' : 'bx-chevron-down'}' style="font-size: 1.15rem; color: var(--accent-color, #3b82f6);"></i>
@@ -4130,16 +4243,16 @@
                                 ${m.days.length} ${m.days.length === 1 ? 'dia' : 'dias'}
                             </span>
                         </td>
-                        <td style="text-align: right; font-weight: 700; color: #60a5fa;" class="font-mono">${formatBRL(m.fatV)}</td>
+                        <td style="text-align: right; font-weight: 700; color: #34d399;" class="font-mono">${formatBRL(m.fatV)}</td>
                         <td style="text-align: right; font-weight: 600; color: #94a3b8;" class="font-mono">${m.fatQ.toLocaleString('pt-BR')}</td>
-                        <td style="text-align: right; font-weight: 700; color: #34d399;" class="font-mono">${formatBRL(m.extV)}</td>
+                        <td style="text-align: right; font-weight: 700; color: #60a5fa;" class="font-mono">${formatBRL(m.extV)}</td>
                         <td style="text-align: right; font-weight: 600; color: #94a3b8;" class="font-mono">${m.extQ.toLocaleString('pt-BR')}</td>
                         <td style="text-align: right; font-weight: 800; color: #fbbf24; font-size: 0.88rem;" class="font-mono">${formatBRL(m.totalV)}</td>
                         <td style="text-align: center;">${monthStatusBadge}</td>
                     </tr>
                 `;
 
-                // Linhas de cada dia do mÃªs (se nÃ£o estiver recolhido)
+                // Linhas de cada dia do mês (se não estiver recolhido)
                 if (!isCollapsed) {
                     m.days.forEach(d => {
                         let statusBadge = '';
@@ -4158,9 +4271,9 @@
                                     <span class="font-mono text-accent" style="font-weight: 600; font-size: 0.8rem;">${escapeHTML(d.dateStr)}</span>
                                 </td>
                                 <td style="font-size: 0.78rem; color: var(--text-secondary);">${escapeHTML(d.weekDay)}</td>
-                                <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(d.fatV)}</td>
+                                <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(d.fatV)}</td>
                                 <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${d.fatQ.toLocaleString('pt-BR')}</td>
-                                <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(d.extV)}</td>
+                                <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(d.extV)}</td>
                                 <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${d.extQ.toLocaleString('pt-BR')}</td>
                                 <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(d.totalV)}</td>
                                 <td style="text-align: center;">${statusBadge}</td>
@@ -4170,7 +4283,7 @@
                 }
             });
         } else {
-            // ExibiÃ§Ã£o em lista corrida contÃ­nua
+            // Exibição em lista corrida contínua
             const sortedDays = [...currentCompDateList].sort(sortDaysFn);
             sortedDays.forEach(d => {
                 let statusBadge = '';
@@ -4186,9 +4299,9 @@
                     <tr>
                         <td class="font-mono text-accent" style="font-weight: 600;">${escapeHTML(d.dateStr)}</td>
                         <td style="font-size: 0.78rem; color: var(--text-secondary);">${escapeHTML(d.weekDay)}</td>
-                        <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(d.fatV)}</td>
+                        <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(d.fatV)}</td>
                         <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${d.fatQ.toLocaleString('pt-BR')}</td>
-                        <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(d.extV)}</td>
+                        <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(d.extV)}</td>
                         <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${d.extQ.toLocaleString('pt-BR')}</td>
                         <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(d.totalV)}</td>
                         <td style="text-align: center;">${statusBadge}</td>
@@ -4196,6 +4309,31 @@
                 `;
             });
         }
+
+        // Linha de Total Consolidado da tabela de datas
+        let sumDateFatV = 0, sumDateFatQ = 0, sumDateExtV = 0, sumDateExtQ = 0, sumDateTotalV = 0;
+        currentCompDateList.forEach(d => {
+            sumDateFatV += d.fatV || 0;
+            sumDateFatQ += d.fatQ || 0;
+            sumDateExtV += d.extV || 0;
+            sumDateExtQ += d.extQ || 0;
+            sumDateTotalV += d.totalV || 0;
+        });
+
+        html += `
+            <tr style="background: rgba(30, 41, 59, 0.95); font-weight: 700; border-top: 2px solid rgba(255,255,255,0.18); position: sticky; bottom: 0; z-index: 2;">
+                <td style="color: var(--accent-color, #3b82f6); text-transform: uppercase;">TOTAL CONSOLIDADO (${currentCompDateList.length} ${currentCompDateList.length === 1 ? 'data' : 'datas'})</td>
+                <td style="color: var(--text-secondary); font-size: 0.78rem;">${monthGroups.length} ${monthGroups.length === 1 ? 'mês' : 'meses'}</td>
+                <td style="text-align: right; color: #34d399;" class="font-mono">${formatBRL(sumDateFatV)}</td>
+                <td style="text-align: right; color: #94a3b8;" class="font-mono">${sumDateFatQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; color: #60a5fa;" class="font-mono">${formatBRL(sumDateExtV)}</td>
+                <td style="text-align: right; color: #94a3b8;" class="font-mono">${sumDateExtQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; font-weight: 800; color: #fbbf24; font-size: 0.88rem;" class="font-mono">${formatBRL(sumDateTotalV)}</td>
+                <td style="text-align: center;">
+                    <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fcd34d; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">Geral Consolidado</span>
+                </td>
+            </tr>
+        `;
 
         tbody.innerHTML = html;
     }

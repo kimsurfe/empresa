@@ -1,4 +1,4 @@
-﻿/* style.css - Design Premium Calendário, Tabs, Kanban e Sidebar */
+/* style.css - Design Premium Calendário, Tabs, Kanban e Sidebar */
 
 :root {
     /* Color Palette */
@@ -3773,11 +3773,17 @@ body:not(.is-admin) .admin-only {
     border-color: rgba(245, 158, 11, 0.25);
 }
 
+.highlight-blue .kpi-sub-badge {
+    background: rgba(59, 130, 246, 0.16);
+    color: #bfdbfe;
+    border-color: rgba(59, 130, 246, 0.25);
+}
+
 /* Grid de Cards de Indicadores (KPIs) */
 .indicators-kpis-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+    gap: 0.85rem;
     margin-bottom: 1.5rem;
     position: relative;
     z-index: 1; /* Permite que os menus suspensos de filtros sobreponham os cards */
@@ -3788,13 +3794,21 @@ body:not(.is-admin) .admin-only {
     backdrop-filter: blur(12px);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    padding: 1.15rem 1.25rem;
+    padding: 0.95rem 1rem;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     position: relative;
     overflow: hidden;
+    min-width: 0;
+    container-type: inline-size;
+}
+
+.kpi-card .font-mono {
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.3px;
 }
 
 .kpi-card:hover {
@@ -3812,6 +3826,10 @@ body:not(.is-admin) .admin-only {
 
 .kpi-card.highlight-amber {
     border-left: 4px solid var(--warning-color);
+}
+
+.kpi-card.highlight-blue {
+    border-left: 4px solid #3b82f6;
 }
 
 .kpi-header {
@@ -3856,13 +3874,60 @@ body:not(.is-admin) .admin-only {
     color: var(--warning-color);
 }
 
+.highlight-blue .kpi-icon-badge {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+}
+
 .kpi-value {
-    font-size: 1.55rem;
+    font-size: 1.32rem;
     font-weight: 800;
     color: var(--text-primary);
     line-height: 1.15;
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.35rem;
+    letter-spacing: -0.4px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.kpi-value.kpi-val-long {
+    font-size: 1.18rem;
     letter-spacing: -0.5px;
+}
+
+.kpi-value.kpi-val-extra-long {
+    font-size: 1.05rem;
+    letter-spacing: -0.6px;
+}
+
+@container (max-width: 230px) {
+    .kpi-value {
+        font-size: 1.20rem;
+    }
+    .kpi-value.kpi-val-long {
+        font-size: 1.08rem;
+    }
+    .kpi-value.kpi-val-extra-long {
+        font-size: 0.98rem;
+    }
+    .kpi-title {
+        font-size: 0.70rem;
+    }
+}
+
+@container (max-width: 185px) {
+    .kpi-value {
+        font-size: 1.10rem;
+    }
+    .kpi-value.kpi-val-long {
+        font-size: 0.98rem;
+    }
+    .kpi-value.kpi-val-extra-long {
+        font-size: 0.88rem;
+    }
 }
 
 .highlight-accent .kpi-value {
@@ -3875,6 +3940,10 @@ body:not(.is-admin) .admin-only {
 
 .highlight-amber .kpi-value {
     color: #fcd34d;
+}
+
+.highlight-blue .kpi-value {
+    color: #60a5fa;
 }
 
 .kpi-footer {
@@ -4450,12 +4519,12 @@ body:not(.is-admin) .admin-only {
     width: 100%;
 }
 .comp-bar-fat {
-    background: #3b82f6;
+    background: #10b981;
     height: 100%;
     transition: width 0.3s ease;
 }
 .comp-bar-ext {
-    background: #10b981;
+    background: #3b82f6;
     height: 100%;
     transition: width 0.3s ease;
 }
