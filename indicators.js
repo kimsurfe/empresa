@@ -1,4 +1,4 @@
-// indicators.js - Dashboard de Indicadores Comerciais (Power BI Style)
+﻿// indicators.js - Dashboard de Indicadores Comerciais (Power BI Style)
 // Sistema KR Gestão de Marcas
 
 (function() {
@@ -29,6 +29,12 @@
     let compExpandedCnpjs = new Set();
     let lastCompFilteredBilling = [];
     let lastCompFilteredExtrato = [];
+    let currentCompProductList = [];
+    let currentCompProductSearch = '';
+    let currentCompProductSort = 'total_desc';
+    let compProductSortCol = 'totalV';
+    let compProductSortDir = 'desc';
+    let compRankingDisplayLimit = 10;
 
     // Estado de Ordenação e Agrupamento das Tabelas de Confronto
     let compDateSortCol = 'date';
@@ -55,7 +61,13 @@
         const savedCustom = localStorage.getItem('empresa_billing_new_era_custom');
         let parsed = null;
         if (savedCustom) {
-            try { parsed = JSON.parse(savedCustom); } catch(e) {}
+            try {
+                parsed = JSON.parse(savedCustom);
+                if (Array.isArray(parsed) && parsed.length > 0 && !parsed[0].mod) {
+                    localStorage.removeItem('empresa_billing_new_era_custom');
+                    parsed = null;
+                }
+            } catch(e) {}
         }
         return (parsed && Array.isArray(parsed) && parsed.length > 0)
             ? parsed
@@ -90,6 +102,7 @@
         const indAuditSec = document.getElementById('indicators-audit-section');
         const compChartsSec = document.getElementById('comparison-charts-section');
         const compTablesSec = document.getElementById('comparison-tables-section');
+        const compProdSec = document.getElementById('comparison-products-section');
 
         if (type === 'comparison') {
             if (indChartsSec) indChartsSec.style.display = 'none';
@@ -97,12 +110,14 @@
             if (indAuditSec) indAuditSec.style.display = 'none';
             if (compChartsSec) compChartsSec.style.display = 'grid';
             if (compTablesSec) compTablesSec.style.display = 'block';
+            if (compProdSec) compProdSec.style.display = 'block';
             billingMasterData = [...getBillingData(), ...getExtratoData()];
         } else {
             if (indChartsSec) indChartsSec.style.display = 'grid';
             if (indRankSec) indRankSec.style.display = 'block';
             if (compChartsSec) compChartsSec.style.display = 'none';
             if (compTablesSec) compTablesSec.style.display = 'none';
+            if (compProdSec) compProdSec.style.display = 'none';
 
             if (type === 'extrato') {
                 billingMasterData = getExtratoData();
@@ -382,6 +397,7 @@
         const indAuditSec = document.getElementById('indicators-audit-section');
         const compChartsSec = document.getElementById('comparison-charts-section');
         const compTablesSec = document.getElementById('comparison-tables-section');
+        const compProdSec = document.getElementById('comparison-products-section');
 
         if (currentDatasetType === 'comparison') {
             if (indChartsSec) indChartsSec.style.display = 'none';
@@ -389,11 +405,13 @@
             if (indAuditSec) indAuditSec.style.display = 'none';
             if (compChartsSec) compChartsSec.style.display = 'grid';
             if (compTablesSec) compTablesSec.style.display = 'block';
+            if (compProdSec) compProdSec.style.display = 'block';
         } else {
             if (indChartsSec) indChartsSec.style.display = 'grid';
             if (indRankSec) indRankSec.style.display = 'block';
             if (compChartsSec) compChartsSec.style.display = 'none';
             if (compTablesSec) compTablesSec.style.display = 'none';
+            if (compProdSec) compProdSec.style.display = 'none';
         }
 
         try {
@@ -1061,12 +1079,14 @@
         const indAuditSec = document.getElementById('indicators-audit-section');
         const compChartsSec = document.getElementById('comparison-charts-section');
         const compTablesSec = document.getElementById('comparison-tables-section');
+        const compProdSec = document.getElementById('comparison-products-section');
 
         if (indChartsSec) indChartsSec.style.display = isComp ? 'none' : 'grid';
         if (indRankSec) indRankSec.style.display = isComp ? 'none' : 'block';
         if (indAuditSec && isComp) indAuditSec.style.display = 'none';
         if (compChartsSec) compChartsSec.style.display = isComp ? 'grid' : 'none';
         if (compTablesSec) compTablesSec.style.display = isComp ? 'block' : 'none';
+        if (compProdSec) compProdSec.style.display = isComp ? 'block' : 'none';
         const selectedBrands = getIndCMSSelectedValues('brand');
         const selectedYears = getIndCMSSelectedValues('year');
         const selectedSemesters = getIndCMSSelectedValues('semester');
@@ -1151,6 +1171,7 @@
             window.applyKpiCardsOrder();
             setupKpiCardsDragAndDrop();
             return;
+    
         }
 
         billingFilteredData = billingMasterData.filter(runItemFilter);
@@ -1483,7 +1504,7 @@
                 chartComparisonInstance.destroy();
                 chartComparisonInstance = null;
             }
-            return;
+    
         }
 
         const isPiecesMode = (currentKpiDisplayMode === 'pieces');
@@ -1696,7 +1717,7 @@
     function renderCharts(data, clientsMap) {
         if (!window.Chart) {
             console.warn('Chart.js ainda não carregado.');
-            return;
+    
         }
 
         const selectedYears = getIndCMSSelectedValues('year');
@@ -2211,7 +2232,159 @@
         renderTopNFs(data, clientsMap, totalRevenue, totalPieces);
     }
 
-    function renderRankingListHTML(items, totalRevenue, nameLabel, totalPieces = 0) {
+    // Mapeamento de produtos com variantes conhecidas caso a planilha original não possua coluna COR
+    const KNOWN_PRODUCT_COLORS = {
+        '71042049': 'c013',
+        '15169337': 'c002',
+        'nev27bon117': 'c052'
+    };
+
+    // Helper para gerar URL da imagem do produto e lista de fallbacks exatos
+    window.getProductImageUrls = function(productCode, colorVariant) {
+        const cleanCode = (productCode || '').toString().trim().toLowerCase();
+        let cleanColor = (colorVariant || '').toString().trim().toLowerCase();
+
+        if (!cleanColor && cleanCode && KNOWN_PRODUCT_COLORS[cleanCode]) {
+            cleanColor = KNOWN_PRODUCT_COLORS[cleanCode];
+        }
+
+        if (!cleanCode) {
+            return { primaryUrl: '', fallbackUrl: '', fallbacks: [], hasColor: false };
+        }
+
+        const baseUrl = 'https://smarterappblob.blob.core.windows.net/public/1/image/padrao/';
+        let primaryUrl = '';
+        const fallbacks = [];
+
+        if (cleanColor) {
+            // Se tiver variante de cor: testa com cor e se não existir faz fallback para sem cor
+            primaryUrl = `${baseUrl}${cleanCode}_${cleanColor}.webp`;
+            fallbacks.push(`${baseUrl}${cleanCode}.webp`);
+        } else {
+            // Sem variante: testa o link exato do produto em minúsculo
+            primaryUrl = `${baseUrl}${cleanCode}.webp`;
+        }
+
+        return {
+            primaryUrl,
+            fallbackUrl: fallbacks[0] || '',
+            fallbacks,
+            hasColor: !!cleanColor
+        };
+    };
+
+    // Callback inteligente de erro com fila sequencial de fallbacks
+    window.onRankingProductImgError = function(img) {
+        let chain = [];
+        const rawChain = img.getAttribute('data-fallbacks');
+        if (rawChain) {
+            chain = rawChain.split('|').map(s => s.trim()).filter(Boolean);
+        } else {
+            const single = img.getAttribute('data-fallback');
+            if (single) chain.push(single);
+        }
+
+        if (chain.length > 0) {
+            const nextUrl = chain.shift();
+            img.setAttribute('data-fallbacks', chain.join('|'));
+            img.src = nextUrl;
+        } else {
+            img.onerror = null;
+            img.style.display = 'none';
+            const placeholder = img.parentElement ? img.parentElement.querySelector('.ranking-product-thumb-placeholder') : null;
+            if (placeholder) {
+                placeholder.style.display = 'flex';
+            }
+        }
+    };
+
+    // Abrir modal de preview de imagem do produto
+    window.openProductImageModal = function(code, color, name) {
+        const modal = document.getElementById('product-image-modal');
+        if (!modal) return;
+
+        const titleEl = document.getElementById('pim-title');
+        const subEl = document.getElementById('pim-subtitle');
+        const imgEl = document.getElementById('pim-img');
+        const placeholderEl = document.getElementById('pim-placeholder');
+        const linkEl = document.getElementById('pim-external-link');
+
+        if (titleEl) titleEl.textContent = name || code || 'Foto do Produto';
+        
+        const subParts = [];
+        if (code) subParts.push(code);
+        if (color) subParts.push(`Cor: ${color}`);
+        if (subEl) subEl.textContent = subParts.join(' • ') || 'Produto New Era';
+
+        const urls = getProductImageUrls(code, color);
+
+        if (imgEl && placeholderEl) {
+            if (urls.primaryUrl) {
+                imgEl.style.display = 'block';
+                placeholderEl.style.display = 'none';
+                let modalFallbacks = [...(urls.fallbacks || [])];
+                imgEl.onerror = function() {
+                    if (modalFallbacks.length > 0) {
+                        const next = modalFallbacks.shift();
+                        imgEl.src = next;
+                        if (linkEl) linkEl.href = next;
+                    } else {
+                        imgEl.onerror = null;
+                        imgEl.style.display = 'none';
+                        placeholderEl.style.display = 'flex';
+                    }
+                };
+                imgEl.src = urls.primaryUrl;
+                if (linkEl) {
+                    linkEl.href = urls.primaryUrl;
+                    linkEl.style.display = 'inline-flex';
+                }
+            } else {
+                imgEl.style.display = 'none';
+                placeholderEl.style.display = 'flex';
+                if (linkEl) linkEl.style.display = 'none';
+            }
+        }
+
+        modal.classList.remove('hidden');
+    };
+
+    // Renderizar thumbnail de produto na linha do ranking
+    window.renderProductThumbHTML = function(item) {
+        const urls = getProductImageUrls(item.code, item.cor);
+        if (urls.primaryUrl) {
+            const fallbacksAttr = urls.fallbacks && urls.fallbacks.length > 0 ? `data-fallbacks="${urls.fallbacks.join('|')}"` : '';
+            return `
+                <div class="ranking-product-thumb-container" onclick="openProductImageModal('${escapeHTML(item.code || '')}', '${escapeHTML(item.cor || '')}', '${escapeHTML(item.name || '')}')" title="Clique para ampliar foto">
+                    <img 
+                        class="ranking-product-thumb-img" 
+                        src="${urls.primaryUrl}" 
+                        alt="${escapeHTML(item.name || '')}" 
+                        loading="lazy"
+                        ${fallbacksAttr} 
+                        onerror="onRankingProductImgError(this)"
+                    />
+                    <div class="ranking-product-thumb-placeholder" style="display: none;">
+                        <i class='bx bx-image-alt'></i>
+                    </div>
+                </div>
+            `;
+        }
+        return `
+            <div class="ranking-product-thumb-container">
+                <div class="ranking-product-thumb-placeholder" style="display: flex;">
+                    <i class='bx bx-purchase-tag-alt'></i>
+                </div>
+            </div>
+        `;
+    };
+
+    window.closeProductImageModal = function() {
+        const modal = document.getElementById('product-image-modal');
+        if (modal) modal.classList.add('hidden');
+    };
+
+    function renderRankingListHTML(items, totalRevenue, nameLabel, totalPieces = 0, isProduct = false) {
         if (!items || items.length === 0) {
             return `
                 <div style="text-align: center; padding: 2rem 1rem; color: var(--text-secondary); font-size: 0.85rem;">
@@ -2225,7 +2398,23 @@
         const limit = (rankingDisplayLimit === 'all') ? items.length : rankingDisplayLimit;
         const displayedItems = items.slice(0, limit);
 
-        let html = '<div class="ranking-items-list" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">';
+        let html = '';
+        if (isProduct) {
+            html += `
+                <div class="ranking-table-col-header" style="display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.5rem; font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 0.45rem;">
+                    <div style="display: flex; align-items: center; gap: 0.45rem;">
+                        <span style="width: 20px; text-align: center;">#</span>
+                        <span style="width: 36px; text-align: center;">Foto</span>
+                        <span>Produto / Referência</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span>${isPiecesOnly ? 'Peças / %' : (isBoth ? `${(currentDatasetType === 'extrato' ? 'A Entregar' : 'Faturamento')} / Qtd / %` : `${(currentDatasetType === 'extrato' ? 'A Entregar' : 'Faturamento')} / %`)}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        html += '<div class="ranking-items-list" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">';
         displayedItems.forEach((item, idx) => {
             const pos = idx + 1;
             const itemQty = (item.q !== undefined ? item.q : item.totalQty) || 0;
@@ -2260,6 +2449,7 @@
                     <div class="ranking-row-top">
                         <div class="ranking-item-left">
                             <span class="ranking-pos-badge ${posBadgeClass}">${pos}º</span>
+                            ${isProduct ? renderProductThumbHTML(item) : ''}
                             <div class="ranking-item-info">
                                 <span class="ranking-item-name" title="${escapeHTML(item.name)}">${escapeHTML(item.name)}</span>
                                 ${item.sub ? `<span class="ranking-item-sub">${escapeHTML(item.sub)}</span>` : ''}
@@ -2271,7 +2461,7 @@
                         </div>
                     </div>
                     <div class="ranking-progress-bar">
-                        <div class="ranking-progress-fill" style="width: ${Math.min(pct * 2.5, 100)}%;"></div>
+                        <div class="ranking-progress-fill ${(currentDatasetType === 'extrato' ? 'progress-extrato' : '')}" style="width: ${Math.min(pct * 2.5, 100)}%;"></div>
                     </div>
                 </div>
             `;
@@ -2431,6 +2621,7 @@
         data.forEach(item => {
             const pCode = (item.p || '').trim();
             const pDesc = (item.desc || '').trim();
+            const pCor = (item.cor || '').toString().trim().toLowerCase();
             const key = pCode || pDesc || 'Sem Referência';
 
             if (!prodTotals[key]) {
@@ -2438,24 +2629,39 @@
                     code: pCode,
                     desc: pDesc,
                     name: pDesc || pCode || 'Produto sem descrição',
+                    colors: {},
                     q: 0,
                     v: 0
                 };
             }
             prodTotals[key].v += (item.v || 0);
             prodTotals[key].q += (item.q || 0);
+            if (pCor) {
+                prodTotals[key].colors[pCor] = (prodTotals[key].colors[pCor] || 0) + (item.q || 1);
+            }
         });
 
         const sorted = Object.values(prodTotals).sort((a, b) => {
             return currentKpiDisplayMode === 'pieces' ? (b.q - a.q) : (b.v - a.v);
         }).map(it => {
             const parts = [];
-            if (it.code && it.desc) parts.push(`Ref: ${it.code}`);
+            let primaryCor = '';
+            const colorEntries = Object.entries(it.colors || {});
+            if (colorEntries.length > 0) {
+                colorEntries.sort((a, b) => b[1] - a[1]);
+                primaryCor = colorEntries[0][0];
+            } else if (it.code && KNOWN_PRODUCT_COLORS[it.code]) {
+                primaryCor = KNOWN_PRODUCT_COLORS[it.code];
+            }
+            it.cor = primaryCor;
+
+            if (it.code) parts.push(it.code);
+            if (it.cor) parts.push(`Cor: ${it.cor}`);
             it.sub = parts.join(' • ');
             return it;
         });
 
-        container.innerHTML = renderRankingListHTML(sorted, totalRevenue, 'Produto', totalPieces);
+        container.innerHTML = renderRankingListHTML(sorted, totalRevenue, 'Produto', totalPieces, true);
     }
 
     // TOP 10 SUB-GRUPOS: modelos e linhas mais vendidos
@@ -2486,7 +2692,7 @@
             return it;
         });
 
-        container.innerHTML = renderRankingListHTML(sorted, totalRevenue, 'Sub-Grupo', totalPieces);
+        container.innerHTML = renderRankingListHTML(sorted, totalRevenue, 'Grupo Produto', totalPieces);
     }
 
     // TOP CLASSE PRODUTO: volume por divisão (Headwear, Apparel, etc.)
@@ -2523,6 +2729,29 @@
         const isExtrato = (currentDatasetType === 'extrato');
         const defaultName = isExtrato ? 'Sem Número de Pedido' : 'Sem Número de NF';
         const prefixName = isExtrato ? 'Pedido ' : 'NF ';
+        const titleTextEl = document.getElementById('ranking-nfs-title-text');
+        const iconEl = document.getElementById('ranking-nfs-icon');
+        const badgeEl = document.getElementById('ranking-nfs-badge');
+        const prodSubEl = document.getElementById('products-ranking-subtitle');
+
+        if (titleTextEl) {
+            titleTextEl.textContent = isExtrato ? 'Pedidos' : 'Notas Fiscais';
+        }
+        if (iconEl) {
+            iconEl.className = isExtrato ? 'bx bx-receipt' : 'bx bx-receipt';
+        }
+        if (badgeEl) {
+            badgeEl.textContent = isExtrato ? 'A Entregar' : 'Faturamento';
+            badgeEl.style.background = isExtrato ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+            badgeEl.style.color = isExtrato ? '#60a5fa' : '#34d399';
+            badgeEl.style.borderColor = isExtrato ? 'rgba(59, 130, 246, 0.3)' : 'rgba(16, 185, 129, 0.3)';
+        }
+        if (prodSubEl) {
+            prodSubEl.textContent = isExtrato
+                ? 'Referências mais vendidas, modelos, divisões e maiores pedidos em carteira'
+                : 'Referências mais vendidas, modelos, divisões e maiores notas fiscais emitidas';
+        }
+
         const nfTotals = {};
 
         data.forEach(item => {
@@ -2604,7 +2833,7 @@
 
         if (unlinkedList.length === 0) {
             sectionEl.style.display = 'none';
-            return;
+    
         }
 
         sectionEl.style.display = 'block';
@@ -2702,7 +2931,7 @@
 
         if (!window.XLSX) {
             window.showNotification('Biblioteca Excel não carregada.', 'error');
-            return;
+    
         }
 
         const reader = new FileReader();
@@ -2717,7 +2946,7 @@
 
                 if (!rawJson || rawJson.length === 0) {
                     window.showNotification('A planilha importada está vazia ou ilegível.', 'error');
-                    return;
+            
                 }
 
                 // Mapeamento dinâmico e inteligente das colunas
@@ -2751,6 +2980,15 @@
                 // Prioriza o nome exato 'Produto' antes de 'Grupo Produto' ou 'Classe Produto'
                 const kProd = keys.find(k => k.trim().toLowerCase() === 'produto') || findKey('referência') || findKey('referencia') || findKey('código produto') || findKey('produto');
                 const kDesc = findKey('descri');
+                const kCor = keys.find(k => k.trim().toLowerCase() === 'cor') 
+                    || keys.find(k => k.trim().toLowerCase() === 'variante')
+                    || findKey('código cor') 
+                    || findKey('codigo cor') 
+                    || findKey('cod cor') 
+                    || findKey('código da cor')
+                    || findKey('codigo da cor')
+                    || findKey('variante cor') 
+                    || findKey('cor produto');
                 
                 // Sub-grupo: aceita 'grupo produto' ou 'sub-grupo'
                 const kSub = findKey('grupo produto') || findKey('grupo de produto') || findKey('sub-grupo') || findKey('subgrupo') || findKey('sub grupo');
@@ -2849,6 +3087,7 @@
                         m: mesVal,
                         p: (kProd && row[kProd]) ? String(row[kProd]).trim() : '',
                         desc: (kDesc && row[kDesc]) ? String(row[kDesc]).trim() : '',
+                        cor: (kCor && row[kCor]) ? String(row[kCor]).trim() : '',
                         sub: (kSub && row[kSub]) ? String(row[kSub]).trim() : '',
                         cl: (kClasse && row[kClasse]) ? String(row[kClasse]).trim() : '',
                         vg: Math.round(grossVal * 100) / 100,
@@ -2861,7 +3100,7 @@
 
                 if (parsed.length === 0) {
                     window.showNotification('Nenhum registro de faturamento ou pedido válido encontrado.', 'error');
-                    return;
+            
                 }
 
                 const isExtrato = !!(findKey('data entrega') || findKey('valor entregar') || findKey('qtde entregar'));
@@ -2937,7 +3176,7 @@
     window.exportIndicatorsSummaryToExcel = function() {
         if (!window.XLSX) {
             window.showNotification('Biblioteca Excel não disponível.', 'error');
-            return;
+    
         }
 
         try {
@@ -2963,6 +3202,8 @@
                         'Data Entrega': item.d || '',
                         'Pedido': item.nf || '',
                         'Referência Produto': item.p || '',
+                    'Cor / Variante': item.cor || '',
+                        'Cor / Variante': item.cor || '',
                         'Descrição': item.desc || '',
                         'Sub-Grupo': item.sub || '',
                         'Classe Produto': item.cl || '',
@@ -2983,6 +3224,7 @@
                     'Data Emissão': item.d || '',
                     'Nota Fiscal': item.nf || '',
                     'Referência Produto': item.p || '',
+                    'Cor / Variante': item.cor || '',
                     'Descrição': item.desc || '',
                     'Sub-Grupo': item.sub || '',
                     'Classe Produto': item.cl || '',
@@ -3685,9 +3927,99 @@
             totalBadge.textContent = `${currentCompCnpjList.length} Lojas / CNPJs`;
         }
 
+        // 4. Agrupar por Produto (SKU)
+        const productGroupMap = new Map();
+
+        const processProductItem = (item, isBilling) => {
+            const pCode = (item.p || '').trim();
+            const pDesc = (item.desc || '').trim();
+            const pCor = (item.cor || '').toString().trim().toLowerCase();
+            const pSub = (item.sub || 'Não Definido').trim();
+            const pClass = (item.cl || 'Não Definido').trim();
+            const key = pCode.toUpperCase() || pDesc.toUpperCase() || 'SEM_REF';
+
+            if (!productGroupMap.has(key)) {
+                productGroupMap.set(key, {
+                    key: key,
+                    code: pCode,
+                    desc: pDesc || pCode || 'Produto sem descrição',
+                    sub: pSub,
+                    cl: pClass,
+                    colors: {},
+                    cor: '',
+                    fatV: 0,
+                    fatQ: 0,
+                    extV: 0,
+                    extQ: 0
+                });
+            }
+
+            const rec = productGroupMap.get(key);
+            const v = item.v || 0;
+            const q = item.q || 0;
+
+            if (pCor) {
+                rec.colors[pCor] = (rec.colors[pCor] || 0) + (q || 1);
+            }
+            if ((!rec.sub || rec.sub === 'Não Definido') && pSub && pSub !== 'Não Definido') rec.sub = pSub;
+            if ((!rec.cl || rec.cl === 'Não Definido') && pClass && pClass !== 'Não Definido') rec.cl = pClass;
+            if ((!rec.desc || rec.desc === pCode) && pDesc) rec.desc = pDesc;
+
+            if (isBilling) {
+                rec.fatV += v;
+                rec.fatQ += q;
+            } else {
+                rec.extV += v;
+                rec.extQ += q;
+            }
+        };
+
+        bData.forEach(it => processProductItem(it, true));
+        eData.forEach(it => processProductItem(it, false));
+
+        currentCompProductList = Array.from(productGroupMap.values()).map(rec => {
+            const totalV = rec.fatV + rec.extV;
+            const totalQ = rec.fatQ + rec.extQ;
+            const pctFat = totalV > 0 ? (rec.fatV / totalV * 100) : 0;
+            const pctExt = totalV > 0 ? (rec.extV / totalV * 100) : 0;
+
+            let primaryCor = '';
+            const colorEntries = Object.entries(rec.colors || {});
+            if (colorEntries.length > 0) {
+                colorEntries.sort((a, b) => b[1] - a[1]);
+                primaryCor = colorEntries[0][0];
+            } else if (rec.code && KNOWN_PRODUCT_COLORS[rec.code.toLowerCase()]) {
+                primaryCor = KNOWN_PRODUCT_COLORS[rec.code.toLowerCase()];
+            }
+            rec.cor = primaryCor;
+
+            let status = 'Parcial';
+            let statusClass = 'status-partial';
+            if (rec.fatV > 0 && rec.extV === 0) {
+                status = '100% Faturado';
+                statusClass = 'status-billed';
+            } else if (rec.fatV === 0 && rec.extV > 0) {
+                status = '100% Carteira';
+                statusClass = 'status-pending';
+            }
+
+            return {
+                ...rec,
+                totalV,
+                totalQ,
+                pctFat,
+                pctExt,
+                status,
+                statusClass
+            };
+        });
+
         renderCompCnpjTable();
         renderCompMonthTable();
         renderCompDateTable();
+        renderCompProductTable();
+        updateCompProductKpis(currentCompProductList);
+        renderCompProductRankings(currentCompProductList, bData, eData, clientsMap);
     }
 
     window.sortCompCnpjTable = function(col) {
@@ -3762,7 +4094,7 @@
                     </td>
                 </tr>
             `;
-            return;
+    
         }
 
         let html = '';
@@ -3951,7 +4283,7 @@
 
         if (currentCompMonthList.length === 0) {
             tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Nenhum dado mensal no período selecionado.</td></tr>`;
-            return;
+    
         }
 
         const sortedMonths = [...currentCompMonthList].sort((a, b) => {
@@ -4115,7 +4447,7 @@
             tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2.5rem; color: var(--text-secondary);"><i class='bx bx-calendar-x' style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Nenhum lançamento no período selecionado.</td></tr>`;
             const summaryBadge = document.getElementById('comp-date-summary-badge');
             if (summaryBadge) summaryBadge.innerHTML = '0 meses &bull; 0 datas';
-            return;
+    
         }
 
         // 1. Agrupar os itens por mês
@@ -4347,15 +4679,19 @@
         if (btnCnpj) btnCnpj.classList.toggle('active', tabName === 'cnpj');
         if (btnMonth) btnMonth.classList.toggle('active', tabName === 'month');
         if (btnDate) btnDate.classList.toggle('active', tabName === 'date');
+        const btnProduct = document.getElementById('btn-subtab-product');
+        if (btnProduct) btnProduct.classList.toggle('active', tabName === 'product');
 
         const tabCnpj = document.getElementById('comp-tab-content-cnpj');
         const tabMonth = document.getElementById('comp-tab-content-month');
         const tabDate = document.getElementById('comp-tab-content-date');
+        const tabProduct = document.getElementById('comp-tab-content-product');
         const controlsBar = document.getElementById('comp-controls-bar');
 
         if (tabCnpj) tabCnpj.style.display = (tabName === 'cnpj') ? 'block' : 'none';
         if (tabMonth) tabMonth.style.display = (tabName === 'month') ? 'block' : 'none';
         if (tabDate) tabDate.style.display = (tabName === 'date') ? 'block' : 'none';
+        if (tabProduct) tabProduct.style.display = (tabName === 'product') ? 'block' : 'none';
         if (controlsBar) controlsBar.style.display = (tabName === 'cnpj') ? 'flex' : 'none';
     };
 
@@ -4381,7 +4717,7 @@
     window.exportComparisonToExcel = function() {
         if (!window.XLSX) {
             window.showNotification('Biblioteca Excel não disponível.', 'error');
-            return;
+    
         }
 
         try {
@@ -4438,6 +4774,26 @@
             const wsDate = XLSX.utils.json_to_sheet(dateExportRows);
             XLSX.utils.book_append_sheet(wb, wsDate, 'Confronto Diário');
 
+            // 4. Aba Por Produto (SKU)
+            const prodExportRows = currentCompProductList.map(p => ({
+                'Código / Referência': p.code,
+                'Descrição': p.desc,
+                'Cor': p.cor || '',
+                'Sub-Grupo': p.sub,
+                'Divisão / Classe': p.cl,
+                'Faturamento Realizado (R$)': p.fatV,
+                'Peças Faturadas': p.fatQ,
+                'A Entregar (R$)': p.extV,
+                'Peças A Entregar': p.extQ,
+                'Total Previsto (R$)': p.totalV,
+                'Total Peças': p.totalQ,
+                '% Faturado': +(p.pctFat.toFixed(2)),
+                '% A Entregar': +(p.pctExt.toFixed(2)),
+                'Status': p.status
+            }));
+            const wsProd = XLSX.utils.json_to_sheet(prodExportRows);
+            XLSX.utils.book_append_sheet(wb, wsProd, 'Confronto por Produto');
+
             const now = new Date();
             const dateSuffix = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}`;
             XLSX.writeFile(wb, `NEW_ERA_CONFRONTO_A_ENTREGAR_X_FATURAMENTO_${dateSuffix}.xlsx`);
@@ -4448,4 +4804,572 @@
         }
     };
 
+    // ==========================================================================
+    // 5. CONFRONTO: DESEMPENHO DE PRODUTOS & SUB-ABA DE PRODUTOS
+    // ==========================================================================
+
+    window.sortCompProductTable = function(col) {
+        if (compProductSortCol === col) {
+            compProductSortDir = (compProductSortDir === 'desc') ? 'asc' : 'desc';
+        } else {
+            compProductSortCol = col;
+            compProductSortDir = ['code', 'desc', 'sub', 'cl', 'status'].includes(col) ? 'asc' : 'desc';
+        }
+        renderCompProductTable();
+    };
+
+    window.onComparisonProductSearchInput = function(val) {
+        currentCompProductSearch = val || '';
+        renderCompProductTable();
+    };
+
+    window.onComparisonProductSortChange = function(val) {
+        currentCompProductSort = val || 'total_desc';
+        if (val === 'total_desc') { compProductSortCol = 'totalV'; compProductSortDir = 'desc'; }
+        else if (val === 'fat_desc') { compProductSortCol = 'fatV'; compProductSortDir = 'desc'; }
+        else if (val === 'ext_desc') { compProductSortCol = 'extV'; compProductSortDir = 'desc'; }
+        else if (val === 'qty_desc') { compProductSortCol = 'totalQ'; compProductSortDir = 'desc'; }
+        else if (val === 'pct_fat_desc') { compProductSortCol = 'pctFat'; compProductSortDir = 'desc'; }
+        else if (val === 'pct_ext_desc') { compProductSortCol = 'pctExt'; compProductSortDir = 'desc'; }
+        else if (val === 'name_asc') { compProductSortCol = 'code'; compProductSortDir = 'asc'; }
+        renderCompProductTable();
+    };
+
+    window.setCompRankingLimit = function(val) {
+        compRankingDisplayLimit = (val === 'all') ? 'all' : parseInt(val, 10);
+        renderCompProductRankings(currentCompProductList, lastCompFilteredBilling, lastCompFilteredExtrato, buildClientsMap());
+    };
+
+    function renderCompProductTable() {
+        const tbody = document.getElementById('comp-tbody-product');
+        const tfoot = document.getElementById('comp-tfoot-product');
+        const badge = document.getElementById('comp-product-summary-badge');
+        if (!tbody) return;
+
+        // Atualizar headers visuais de ordenação
+        document.querySelectorAll('#comp-table-product th.sortable').forEach(th => {
+            th.classList.remove('active-sort');
+            const icon = th.querySelector('.th-sort-icon i');
+            if (icon) icon.className = 'bx bx-sort';
+        });
+        const activeTh = document.getElementById(`th-prod-${compProductSortCol}`);
+        if (activeTh) {
+            activeTh.classList.add('active-sort');
+            const icon = activeTh.querySelector('.th-sort-icon i');
+            if (icon) icon.className = (compProductSortDir === 'desc') ? 'bx bx-sort-down' : 'bx bx-sort-up';
+        }
+
+        let filtered = [...currentCompProductList];
+        if (currentCompProductSearch) {
+            const qText = currentCompProductSearch.trim().toLowerCase();
+            filtered = filtered.filter(p => {
+                return (p.code && p.code.toLowerCase().includes(qText)) ||
+                       (p.desc && p.desc.toLowerCase().includes(qText)) ||
+                       (p.sub && p.sub.toLowerCase().includes(qText)) ||
+                       (p.cl && p.cl.toLowerCase().includes(qText)) ||
+                       (p.cor && p.cor.toLowerCase().includes(qText));
+            });
+        }
+
+        filtered.sort((a, b) => {
+            let res = 0;
+            if (['code', 'desc', 'sub', 'cl', 'status'].includes(compProductSortCol)) {
+                res = (a[compProductSortCol] || '').localeCompare(b[compProductSortCol] || '');
+            } else {
+                res = (a[compProductSortCol] || 0) - (b[compProductSortCol] || 0);
+            }
+            return (compProductSortDir === 'desc') ? -res : res;
+        });
+
+        if (badge) {
+            const fatCount = currentCompProductList.filter(p => p.fatV > 0).length;
+            const extCount = currentCompProductList.filter(p => p.extV > 0).length;
+            badge.textContent = `${filtered.length} Produtos (${fatCount} Fat • ${extCount} Carteira)`;
+        }
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="12" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-secondary);">
+                        <i class='bx bx-search-alt' style="font-size: 2.2rem; display: block; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                        Nenhum produto ou referência encontrado para a busca selecionada.
+                    </td>
+                </tr>
+            `;
+            if (tfoot) tfoot.innerHTML = '';
+            return;
+        }
+
+        let sumFatV = 0, sumFatQ = 0, sumExtV = 0, sumExtQ = 0, sumTotalV = 0, sumTotalQ = 0;
+
+        let rowsHtml = '';
+        filtered.forEach(p => {
+            sumFatV += p.fatV;
+            sumFatQ += p.fatQ;
+            sumExtV += p.extV;
+            sumExtQ += p.extQ;
+            sumTotalV += p.totalV;
+            sumTotalQ += p.totalQ;
+
+            const urls = getProductImageUrls(p.code, p.cor);
+            const thumbHtml = urls.primaryUrl ? `
+                <div class="ranking-product-thumb-container" onclick="openProductImageModal('${escapeHTML(p.code)}', '${escapeHTML(p.cor || '')}', '${escapeHTML(p.desc)}')" title="Clique para ampliar foto" style="width: 38px; height: 38px; margin: 0 auto;">
+                    <img class="ranking-product-thumb-img" src="${urls.primaryUrl}" alt="${escapeHTML(p.desc)}" loading="lazy" ${urls.fallbacks && urls.fallbacks.length > 0 ? `data-fallbacks="${urls.fallbacks.join('|')}"` : ''} onerror="onRankingProductImgError(this)" />
+                    <div class="ranking-product-thumb-placeholder" style="display: none;"><i class='bx bx-image-alt'></i></div>
+                </div>
+            ` : `
+                <div class="ranking-product-thumb-container" style="width: 38px; height: 38px; margin: 0 auto;">
+                    <div class="ranking-product-thumb-placeholder" style="display: flex;"><i class='bx bx-purchase-tag-alt'></i></div>
+                </div>
+            `;
+
+            const refDisplay = p.code ? `<span style="font-weight: 700; color: #f8fafc; font-family: monospace;">${escapeHTML(p.code)}</span>` : '';
+            const corDisplay = p.cor ? `<span style="font-size: 0.72rem; color: var(--accent-color, #3b82f6); margin-left: 6px;">Cor: ${escapeHTML(p.cor)}</span>` : '';
+
+            rowsHtml += `
+                <tr class="comp-row">
+                    <td style="text-align: center; vertical-align: middle; padding: 0.4rem;">${thumbHtml}</td>
+                    <td>
+                        <div style="display: flex; align-items: center; flex-wrap: wrap;">${refDisplay}${corDisplay}</div>
+                        <div style="font-size: 0.74rem; color: var(--text-secondary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHTML(p.desc)}">${escapeHTML(p.desc)}</div>
+                    </td>
+                    <td style="font-size: 0.78rem; color: #cbd5e1;">${escapeHTML(p.sub || '-')}</td>
+                    <td style="font-size: 0.78rem; color: #94a3b8;"><span style="background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px;">${escapeHTML(p.cl || '-')}</span></td>
+                    <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(p.fatV)}</td>
+                    <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${p.fatQ.toLocaleString('pt-BR')}</td>
+                    <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(p.extV)}</td>
+                    <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${p.extQ.toLocaleString('pt-BR')}</td>
+                    <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(p.totalV)}</td>
+                    <td style="text-align: right; font-weight: 600; color: #f8fafc;" class="font-mono">${p.totalQ.toLocaleString('pt-BR')}</td>
+                    <td>
+                        <div class="comp-progress-wrap">
+                            <div class="comp-progress-bar">
+                                <div class="comp-bar-fat" style="width: ${p.pctFat.toFixed(1)}%;" title="Faturado: ${p.pctFat.toFixed(1)}%"></div>
+                                <div class="comp-bar-ext" style="width: ${p.pctExt.toFixed(1)}%;" title="A Entregar: ${p.pctExt.toFixed(1)}%"></div>
+                            </div>
+                            <div class="comp-progress-labels">
+                                <span style="color: #34d399;">${p.pctFat.toFixed(0)}% Fat</span>
+                                <span style="color: #60a5fa;">${p.pctExt.toFixed(0)}% Entr</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="comp-badge-status ${p.statusClass}">${escapeHTML(p.status)}</span>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = rowsHtml;
+
+        if (tfoot) {
+            const overallPctFat = sumTotalV > 0 ? (sumFatV / sumTotalV * 100) : 0;
+            const overallPctExt = sumTotalV > 0 ? (sumExtV / sumTotalV * 100) : 0;
+            tfoot.innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align: left; font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                        <i class='bx bx-calculator' style="color: #fbbf24; margin-right: 4px;"></i> TOTAL CONSOLIDADO (${filtered.length} PRODUTOS)
+                    </td>
+                    <td style="text-align: right; color: #34d399; font-size: 0.85rem;" class="font-mono">${formatBRL(sumFatV)}</td>
+                    <td style="text-align: right; color: #94a3b8;" class="font-mono">${sumFatQ.toLocaleString('pt-BR')}</td>
+                    <td style="text-align: right; color: #60a5fa; font-size: 0.85rem;" class="font-mono">${formatBRL(sumExtV)}</td>
+                    <td style="text-align: right; color: #94a3b8;" class="font-mono">${sumExtQ.toLocaleString('pt-BR')}</td>
+                    <td style="text-align: right; font-weight: 800; color: #fbbf24; font-size: 0.9rem;" class="font-mono">${formatBRL(sumTotalV)}</td>
+                    <td style="text-align: right; font-weight: 700; color: #f8fafc;" class="font-mono">${sumTotalQ.toLocaleString('pt-BR')}</td>
+                    <td>
+                        <div class="comp-progress-wrap">
+                            <div class="comp-progress-bar">
+                                <div class="comp-bar-fat" style="width: ${overallPctFat.toFixed(1)}%;"></div>
+                                <div class="comp-bar-ext" style="width: ${overallPctExt.toFixed(1)}%;"></div>
+                            </div>
+                            <div class="comp-progress-labels">
+                                <span style="color: #34d399;">${overallPctFat.toFixed(0)}% Fat</span>
+                                <span style="color: #60a5fa;">${overallPctExt.toFixed(0)}% Entr</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fcd34d; font-size: 0.72rem; padding: 3px 8px; border-radius: 4px;">Consolidado</span>
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    function updateCompProductKpis(productList) {
+        const container = document.getElementById('comp-product-kpis-grid');
+        if (!container) return;
+
+        const totalSkus = productList.length;
+        const skusFat = productList.filter(p => p.fatV > 0 || p.fatQ > 0).length;
+        const skusExt = productList.filter(p => p.extV > 0 || p.extQ > 0).length;
+        const skusCompleted = productList.filter(p => p.fatV > 0 && p.extV === 0).length;
+
+        let totalFatQ = 0, totalExtQ = 0, totalFatV = 0, totalExtV = 0;
+        productList.forEach(p => {
+            totalFatQ += p.fatQ;
+            totalExtQ += p.extQ;
+            totalFatV += p.fatV;
+            totalExtV += p.extV;
+        });
+        const totalPieces = totalFatQ + totalExtQ;
+        const pctPiecesFat = totalPieces > 0 ? (totalFatQ / totalPieces * 100) : 0;
+        const pctPiecesExt = totalPieces > 0 ? (totalExtQ / totalPieces * 100) : 0;
+        const pctSkusFat = totalSkus > 0 ? (skusFat / totalSkus * 100) : 0;
+
+        // Top Produto Faturado
+        const sortedByFat = [...productList].sort((a, b) => b.fatV - a.fatV);
+        const topFatProd = sortedByFat.length > 0 && sortedByFat[0].fatV > 0 ? sortedByFat[0] : null;
+
+        // Top Produto a Entregar
+        const sortedByExt = [...productList].sort((a, b) => b.extV - a.extV);
+        const topExtProd = sortedByExt.length > 0 && sortedByExt[0].extV > 0 ? sortedByExt[0] : null;
+
+        const renderHeroThumb = (p) => {
+            if (!p) return '';
+            const urls = getProductImageUrls(p.code, p.cor);
+            if (urls.primaryUrl) {
+                return `
+                    <img class="comp-product-hero-thumb" src="${urls.primaryUrl}" alt="${escapeHTML(p.desc)}" onclick="openProductImageModal('${escapeHTML(p.code)}', '${escapeHTML(p.cor || '')}', '${escapeHTML(p.desc)}')" title="Clique para ampliar foto" ${urls.fallbacks && urls.fallbacks.length > 0 ? `data-fallbacks="${urls.fallbacks.join('|')}"` : ''} onerror="onRankingProductImgError(this)" />
+                `;
+            }
+            return `<div class="comp-product-hero-placeholder"><i class='bx bx-purchase-tag-alt'></i></div>`;
+        };
+
+        const heroFatHtml = topFatProd ? `
+            <div class="comp-product-hero-card">
+                ${renderHeroThumb(topFatProd)}
+                <div class="comp-product-hero-info">
+                    <div class="comp-product-hero-code">${escapeHTML(topFatProd.code)} ${topFatProd.cor ? `<span style="font-size: 0.72rem; color: #34d399; font-weight: normal;">(${escapeHTML(topFatProd.cor)})</span>` : ''}</div>
+                    <div class="comp-product-hero-desc" title="${escapeHTML(topFatProd.desc)}">${escapeHTML(topFatProd.desc)}</div>
+                    <div class="comp-product-hero-val" style="color: #34d399;">
+                        <span>${formatBRL(topFatProd.fatV)}</span>
+                        <span style="font-size: 0.74rem; color: var(--text-secondary); font-weight: normal;">• ${topFatProd.fatQ.toLocaleString('pt-BR')} pçs</span>
+                    </div>
+                </div>
+            </div>
+        ` : `<div style="color: var(--text-secondary); font-size: 0.82rem; padding: 0.75rem 0;">Nenhum produto faturado no período.</div>`;
+
+        const heroExtHtml = topExtProd ? `
+            <div class="comp-product-hero-card">
+                ${renderHeroThumb(topExtProd)}
+                <div class="comp-product-hero-info">
+                    <div class="comp-product-hero-code">${escapeHTML(topExtProd.code)} ${topExtProd.cor ? `<span style="font-size: 0.72rem; color: #60a5fa; font-weight: normal;">(${escapeHTML(topExtProd.cor)})</span>` : ''}</div>
+                    <div class="comp-product-hero-desc" title="${escapeHTML(topExtProd.desc)}">${escapeHTML(topExtProd.desc)}</div>
+                    <div class="comp-product-hero-val" style="color: #60a5fa;">
+                        <span>${formatBRL(topExtProd.extV)}</span>
+                        <span style="font-size: 0.74rem; color: var(--text-secondary); font-weight: normal;">• ${topExtProd.extQ.toLocaleString('pt-BR')} pçs</span>
+                    </div>
+                </div>
+            </div>
+        ` : `<div style="color: var(--text-secondary); font-size: 0.82rem; padding: 0.75rem 0;">Nenhum pedido em carteira no período.</div>`;
+
+        container.innerHTML = `
+            <!-- KPI 1: Mix de SKUs -->
+            <div class="kpi-card highlight-purple">
+                <div class="kpi-header">
+                    <span class="kpi-title">Mix de SKUs (Referências)</span>
+                    <div class="kpi-icon-badge"><i class='bx bx-barcode'></i></div>
+                </div>
+                <div class="kpi-value-container">
+                    <div class="kpi-value font-mono">${totalSkus.toLocaleString('pt-BR')} SKUs</div>
+                </div>
+                <div class="kpi-footer" style="flex-direction: column; align-items: flex-start; gap: 0.35rem;">
+                    <div style="font-size: 0.78rem; color: var(--text-secondary);">
+                        <span style="color: #34d399; font-weight: 600;">${skusFat} faturados (${pctSkusFat.toFixed(0)}%)</span> &bull; 
+                        <span style="color: #60a5fa; font-weight: 600;">${skusExt} em carteira</span>
+                    </div>
+                    <div style="font-size: 0.73rem; color: var(--text-secondary);">
+                        ${skusCompleted} SKUs já 100% concluídos
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI 2: Volume Físico de Peças -->
+            <div class="kpi-card highlight-amber">
+                <div class="kpi-header">
+                    <span class="kpi-title">Peças Programadas vs Faturadas</span>
+                    <div class="kpi-icon-badge"><i class='bx bx-package'></i></div>
+                </div>
+                <div class="kpi-value-container">
+                    <div class="kpi-value font-mono" style="font-size: 1.35rem;">${totalFatQ.toLocaleString('pt-BR')} <span style="font-size: 0.88rem; color: var(--text-secondary); font-weight: normal;">/ ${totalPieces.toLocaleString('pt-BR')} pçs</span></div>
+                </div>
+                <div class="kpi-footer" style="flex-direction: column; align-items: stretch; gap: 0.4rem;">
+                    <div class="comp-progress-wrap" style="width: 100%;">
+                        <div class="comp-progress-bar">
+                            <div class="comp-bar-fat" style="width: ${pctPiecesFat.toFixed(1)}%;"></div>
+                            <div class="comp-bar-ext" style="width: ${pctPiecesExt.toFixed(1)}%;"></div>
+                        </div>
+                        <div class="comp-progress-labels">
+                            <span style="color: #34d399; font-weight: 600;">${pctPiecesFat.toFixed(1)}% Realizado</span>
+                            <span style="color: #60a5fa; font-weight: 600;">${pctPiecesExt.toFixed(1)}% A Entregar</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI 3: Top Produto Faturado -->
+            <div class="kpi-card highlight-emerald">
+                <div class="kpi-header">
+                    <span class="kpi-title">Top Produto Faturado</span>
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.68rem; padding: 2px 7px;">Líder Faturamento</span>
+                </div>
+                ${heroFatHtml}
+            </div>
+
+            <!-- KPI 4: Top Produto a Entregar -->
+            <div class="kpi-card highlight-blue">
+                <div class="kpi-header">
+                    <span class="kpi-title">Top Produto a Entregar (Carteira)</span>
+                    <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; font-size: 0.68rem; padding: 2px 7px;">Maior Demanda</span>
+                </div>
+                ${heroExtHtml}
+            </div>
+        `;
+    }
+
+    function renderCompProductRankings(productList, bData, eData, clientsMap) {
+        const prodContainer = document.getElementById('comp-ranking-products-container');
+        const subContainer = document.getElementById('comp-ranking-subgroups-container');
+        const classContainer = document.getElementById('comp-ranking-classes-container');
+        const ordersContainer = document.getElementById('comp-ranking-orders-container');
+
+        const limit = (compRankingDisplayLimit === 'all') ? productList.length : compRankingDisplayLimit;
+
+        // 1. Top Produtos no Confronto
+        if (prodContainer) {
+            const sorted = [...productList].sort((a, b) => b.totalV - a.totalV).slice(0, limit);
+            if (sorted.length === 0) {
+                prodContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary); font-size: 0.85rem;">Nenhum produto encontrado.</div>';
+            } else {
+                let html = '<div class="ranking-items-list" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">';
+                sorted.forEach((item, idx) => {
+                    const pos = idx + 1;
+                    const posBadgeClass = pos === 1 ? 'pos-1' : (pos === 2 ? 'pos-2' : (pos === 3 ? 'pos-3' : 'pos-other'));
+                    const urls = getProductImageUrls(item.code, item.cor);
+                    const thumbHtml = urls.primaryUrl ? `
+                        <div class="ranking-product-thumb-container" onclick="openProductImageModal('${escapeHTML(item.code)}', '${escapeHTML(item.cor || '')}', '${escapeHTML(item.desc)}')" title="Clique para ampliar foto">
+                            <img class="ranking-product-thumb-img" src="${urls.primaryUrl}" alt="${escapeHTML(item.desc)}" loading="lazy" ${urls.fallbacks && urls.fallbacks.length > 0 ? `data-fallbacks="${urls.fallbacks.join('|')}"` : ''} onerror="onRankingProductImgError(this)" />
+                            <div class="ranking-product-thumb-placeholder" style="display: none;"><i class='bx bx-image-alt'></i></div>
+                        </div>
+                    ` : `
+                        <div class="ranking-product-thumb-container"><div class="ranking-product-thumb-placeholder" style="display: flex;"><i class='bx bx-purchase-tag-alt'></i></div></div>
+                    `;
+
+                    html += `
+                        <div class="ranking-row-item">
+                            <div class="ranking-row-top">
+                                <div class="ranking-item-left">
+                                    <span class="ranking-pos-badge ${posBadgeClass}">${pos}º</span>
+                                    ${thumbHtml}
+                                    <div class="ranking-item-info">
+                                        <span class="ranking-item-name" title="${escapeHTML(item.desc)}">${escapeHTML(item.desc)}</span>
+                                        <span class="ranking-item-sub font-mono">${escapeHTML(item.code)}${item.cor ? ` &bull; Cor: ${escapeHTML(item.cor)}` : ''} &bull; ${escapeHTML(item.sub || '')}</span>
+                                    </div>
+                                </div>
+                                <div class="ranking-item-right comp-rank-split-val">
+                                    <span class="val-tot">${formatBRL(item.totalV)}</span>
+                                    <div style="font-size: 0.72rem; display: flex; gap: 0.5rem;">
+                                        <span class="val-fat">Fat: ${formatBRL(item.fatV)}</span>
+                                        <span class="val-ext">Entr: ${formatBRL(item.extV)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="comp-progress-wrap" style="margin-top: 5px;">
+                                <div class="comp-progress-bar">
+                                    <div class="comp-bar-fat" style="width: ${item.pctFat.toFixed(1)}%;"></div>
+                                    <div class="comp-bar-ext" style="width: ${item.pctExt.toFixed(1)}%;"></div>
+                                </div>
+                                <div class="comp-progress-labels">
+                                    <span style="color: #34d399; font-size: 0.68rem;">${item.pctFat.toFixed(0)}% Fat (${item.fatQ} pçs)</span>
+                                    <span style="color: #60a5fa; font-size: 0.68rem;">${item.pctExt.toFixed(0)}% Entr (${item.extQ} pçs)</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                prodContainer.innerHTML = html;
+            }
+        }
+
+                // 2. Top Grupos de Produto (Consolidado direto de Faturamento e Extrato)
+        if (subContainer) {
+            const subMap = {};
+            (bData || []).forEach(item => {
+                const s = (item.sub || 'NÃ£o Definido').trim();
+                if (!subMap[s]) subMap[s] = { name: s, fatV: 0, fatQ: 0, extV: 0, extQ: 0 };
+                subMap[s].fatV += (item.v || 0);
+                subMap[s].fatQ += (item.q || 0);
+            });
+            (eData || []).forEach(item => {
+                const s = (item.sub || 'NÃ£o Definido').trim();
+                if (!subMap[s]) subMap[s] = { name: s, fatV: 0, fatQ: 0, extV: 0, extQ: 0 };
+                subMap[s].extV += (item.v || 0);
+                subMap[s].extQ += (item.q || 0);
+            });
+            const subSorted = Object.values(subMap).map(s => {
+                const totalV = s.fatV + s.extV;
+                const totalQ = s.fatQ + s.extQ;
+                const pctFat = totalV > 0 ? (s.fatV / totalV * 100) : 0;
+                const pctExt = totalV > 0 ? (s.extV / totalV * 100) : 0;
+                return { ...s, totalV, totalQ, pctFat, pctExt };
+            }).sort((a, b) => b.totalV - a.totalV).slice(0, limit);
+
+            let html = '<div class="ranking-items-list" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">';
+            subSorted.forEach((item, idx) => {
+                const pos = idx + 1;
+                const posBadgeClass = pos === 1 ? 'pos-1' : (pos === 2 ? 'pos-2' : (pos === 3 ? 'pos-3' : 'pos-other'));
+                html += `
+                    <div class="ranking-row-item">
+                        <div class="ranking-row-top">
+                            <div class="ranking-item-left">
+                                <span class="ranking-pos-badge ${posBadgeClass}">${pos}º</span>
+                                <div class="ranking-item-info">
+                                    <span class="ranking-item-name">${escapeHTML(item.name)}</span>
+                                    <span class="ranking-item-sub">${item.totalQ.toLocaleString('pt-BR')} peças previstas</span>
+                                </div>
+                            </div>
+                            <div class="ranking-item-right comp-rank-split-val">
+                                <span class="val-tot">${formatBRL(item.totalV)}</span>
+                                <div style="font-size: 0.72rem; display: flex; gap: 0.5rem;">
+                                    <span class="val-fat">Fat: ${formatBRL(item.fatV)}</span>
+                                    <span class="val-ext">Entr: ${formatBRL(item.extV)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="comp-progress-wrap" style="margin-top: 5px;">
+                            <div class="comp-progress-bar">
+                                <div class="comp-bar-fat" style="width: ${item.pctFat.toFixed(1)}%;"></div>
+                                <div class="comp-bar-ext" style="width: ${item.pctExt.toFixed(1)}%;"></div>
+                            </div>
+                            <div class="comp-progress-labels">
+                                <span style="color: #34d399; font-size: 0.68rem;">${item.pctFat.toFixed(0)}% Fat (${item.fatQ} pçs)</span>
+                                <span style="color: #60a5fa; font-size: 0.68rem;">${item.pctExt.toFixed(0)}% Entr (${item.extQ} pçs)</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            subContainer.innerHTML = html;
+        }
+
+                // 3. Top DivisÃ£o / Classe (Consolidado direto de Faturamento e Extrato)
+        if (classContainer) {
+            const classMap = {};
+            (bData || []).forEach(item => {
+                const c = (item.cl || 'Outros').trim();
+                if (!classMap[c]) classMap[c] = { name: c, fatV: 0, fatQ: 0, extV: 0, extQ: 0 };
+                classMap[c].fatV += (item.v || 0);
+                classMap[c].fatQ += (item.q || 0);
+            });
+            (eData || []).forEach(item => {
+                const c = (item.cl || 'Outros').trim();
+                if (!classMap[c]) classMap[c] = { name: c, fatV: 0, fatQ: 0, extV: 0, extQ: 0 };
+                classMap[c].extV += (item.v || 0);
+                classMap[c].extQ += (item.q || 0);
+            });
+            const classSorted = Object.values(classMap).map(c => {
+                const totalV = c.fatV + c.extV;
+                const totalQ = c.fatQ + c.extQ;
+                const pctFat = totalV > 0 ? (c.fatV / totalV * 100) : 0;
+                const pctExt = totalV > 0 ? (c.extV / totalV * 100) : 0;
+                return { ...c, totalV, totalQ, pctFat, pctExt };
+            }).sort((a, b) => b.totalV - a.totalV).slice(0, limit);
+
+            let html = '<div class="ranking-items-list" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">';
+            classSorted.forEach((item, idx) => {
+                const pos = idx + 1;
+                const posBadgeClass = pos === 1 ? 'pos-1' : (pos === 2 ? 'pos-2' : (pos === 3 ? 'pos-3' : 'pos-other'));
+                html += `
+                    <div class="ranking-row-item">
+                        <div class="ranking-row-top">
+                            <div class="ranking-item-left">
+                                <span class="ranking-pos-badge ${posBadgeClass}">${pos}º</span>
+                                <div class="ranking-item-info">
+                                    <span class="ranking-item-name">${escapeHTML(item.name)}</span>
+                                    <span class="ranking-item-sub">${item.totalQ.toLocaleString('pt-BR')} peças previstas</span>
+                                </div>
+                            </div>
+                            <div class="ranking-item-right comp-rank-split-val">
+                                <span class="val-tot">${formatBRL(item.totalV)}</span>
+                                <div style="font-size: 0.72rem; display: flex; gap: 0.5rem;">
+                                    <span class="val-fat">Fat: ${formatBRL(item.fatV)}</span>
+                                    <span class="val-ext">Entr: ${formatBRL(item.extV)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="comp-progress-wrap" style="margin-top: 5px;">
+                            <div class="comp-progress-bar">
+                                <div class="comp-bar-fat" style="width: ${item.pctFat.toFixed(1)}%;"></div>
+                                <div class="comp-bar-ext" style="width: ${item.pctExt.toFixed(1)}%;"></div>
+                            </div>
+                            <div class="comp-progress-labels">
+                                <span style="color: #34d399; font-size: 0.68rem;">${item.pctFat.toFixed(0)}% Fat (${item.fatQ} pçs)</span>
+                                <span style="color: #60a5fa; font-size: 0.68rem;">${item.pctExt.toFixed(0)}% Entr (${item.extQ} pçs)</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            classContainer.innerHTML = html;
+        }
+
+        // 4. Maiores Notas Fiscais (somente faturamento realizado)
+        if (ordersContainer) {
+            const nfsFatMap = {};
+            bData.forEach(item => {
+                const num = (item.nf || '').trim();
+                const key = num ? `NF_${num}` : `NF_NO_${item.d}_${item.c || Math.random()}`;
+                if (!nfsFatMap[key]) {
+                    const cMatch = resolveClientForItem(item, clientsMap);
+                    nfsFatMap[key] = {
+                        name: num ? `NF ${num}` : 'NF s/ número',
+                        date: item.d || '-',
+                        client: (cMatch && (cMatch['FANTASIA'] || cMatch['NOME FANTASIA'])) || item.f || item.z || 'Cliente',
+                        v: 0,
+                        q: 0
+                    };
+                }
+                nfsFatMap[key].v += (item.v || 0);
+                nfsFatMap[key].q += (item.q || 0);
+            });
+
+            const allOrders = Object.values(nfsFatMap)
+                .sort((a, b) => (currentKpiDisplayMode === 'pieces') ? (b.q - a.q) : (b.v - a.v))
+                .slice(0, limit);
+
+            if (allOrders.length === 0) {
+                ordersContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary); font-size: 0.85rem;">Nenhuma nota fiscal encontrada no período.</div>';
+            } else {
+                let html = '<div class="ranking-items-list" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">';
+                allOrders.forEach((item, idx) => {
+                    const pos = idx + 1;
+                    const posBadgeClass = pos === 1 ? 'pos-1' : (pos === 2 ? 'pos-2' : (pos === 3 ? 'pos-3' : 'pos-other'));
+                    html += `
+                        <div class="ranking-row-item">
+                            <div class="ranking-row-top">
+                                <div class="ranking-item-left">
+                                    <span class="ranking-pos-badge ${posBadgeClass}">${pos}º</span>
+                                    <div class="ranking-item-info">
+                                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                            <span class="ranking-item-name">${escapeHTML(item.name)}</span>
+                                        </div>
+                                        <span class="ranking-item-sub">${escapeHTML(item.date)} &bull; ${escapeHTML(item.client)}</span>
+                                    </div>
+                                </div>
+                                <div class="ranking-item-right" style="text-align: right;">
+                                    <span class="ranking-item-value" style="color: #34d399;">${formatBRL(item.v)}</span>
+                                    <span class="ranking-item-sub font-mono">${item.q.toLocaleString('pt-BR')} pçs</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                ordersContainer.innerHTML = html;
+            }
+        }
+    }
 })();
