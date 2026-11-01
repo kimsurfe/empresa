@@ -678,16 +678,22 @@ function setupGlobalListeners() {
                         const cleanC = cleanDigits(initC['CNPJ']);
                         if (cleanC && mapByCnpj.has(cleanC)) {
                             const existing = mapByCnpj.get(cleanC);
-                            if (!existing['CODIGO NEW ERA'] && initC['CODIGO NEW ERA']) {
-                                existing['CODIGO NEW ERA'] = initC['CODIGO NEW ERA'];
-                                existing['NEW ERA'] = initC['NEW ERA'] || initC['CODIGO NEW ERA'];
+                            if (initC['VANS'] && (!existing['VANS'] || existing['VANS'] === 'SIM')) {
+                                existing['VANS'] = initC['VANS'];
                                 needsSyncBack = true;
-                            } else if (initC['NEW ERA'] && existing['NEW ERA'] !== initC['NEW ERA']) {
+                            }
+                            if (initC['NEW ERA'] && (!existing['NEW ERA'] || existing['NEW ERA'] === 'SIM')) {
                                 existing['NEW ERA'] = initC['NEW ERA'];
                                 needsSyncBack = true;
                             }
-                            if (!existing['CODIGO AREZZO'] && initC['CODIGO AREZZO']) {
-                                existing['CODIGO AREZZO'] = initC['CODIGO AREZZO'];
+                            if ('CODIGO AREZZO' in existing) {
+                                if (!existing['VANS'] && existing['CODIGO AREZZO']) existing['VANS'] = String(existing['CODIGO AREZZO']);
+                                delete existing['CODIGO AREZZO'];
+                                needsSyncBack = true;
+                            }
+                            if ('CODIGO NEW ERA' in existing) {
+                                if (!existing['NEW ERA'] && existing['CODIGO NEW ERA']) existing['NEW ERA'] = String(existing['CODIGO NEW ERA']);
+                                delete existing['CODIGO NEW ERA'];
                                 needsSyncBack = true;
                             }
                         } else if (cleanC) {
@@ -3769,15 +3775,14 @@ window.initClientsModule = function() {
                     const cleanC = cleanDigits(initC['CNPJ']);
                     if (cleanC && mapByCnpj.has(cleanC)) {
                         const existing = mapByCnpj.get(cleanC);
-                        if (!existing['CODIGO NEW ERA'] && initC['CODIGO NEW ERA']) {
-                            existing['CODIGO NEW ERA'] = initC['CODIGO NEW ERA'];
-                            existing['NEW ERA'] = initC['NEW ERA'] || initC['CODIGO NEW ERA'];
-                        } else if (initC['NEW ERA'] && existing['NEW ERA'] !== initC['NEW ERA']) {
+                        if (initC['VANS'] && (!existing['VANS'] || existing['VANS'] === 'SIM')) {
+                            existing['VANS'] = initC['VANS'];
+                        }
+                        if (initC['NEW ERA'] && (!existing['NEW ERA'] || existing['NEW ERA'] === 'SIM')) {
                             existing['NEW ERA'] = initC['NEW ERA'];
                         }
-                        if (!existing['CODIGO AREZZO'] && initC['CODIGO AREZZO']) {
-                            existing['CODIGO AREZZO'] = initC['CODIGO AREZZO'];
-                        }
+                        delete existing['CODIGO AREZZO'];
+                        delete existing['CODIGO NEW ERA'];
                     } else if (cleanC) {
                         clientsMasterData.push(initC);
                         mapByCnpj.set(cleanC, initC);
@@ -3929,16 +3934,21 @@ window.applyClientsFilter = function() {
             }
         }
 
-        // Filtro de Status Ativo/Inativo
+        // Filtro de Status Geral (Ativo, NÃ£o Fidelizado, Inativo, Loja Fechada)
         if (clientsActiveStatus !== 'all') {
-            const isActive = (client['CLIENTE ATIVO?'] || '').toString().trim().toUpperCase() === 'SIM';
-            if (clientsActiveStatus === 'SIM' && !isActive) return false;
-            if (clientsActiveStatus === 'NAO' && isActive) return false;
+            const clientStatus = window.getClientGeneralStatus(client);
+            if (clientStatus !== clientsActiveStatus) {
+                // Compatibilidade com legado SIM/NAO
+                if (clientsActiveStatus === 'SIM' && clientStatus !== 'ATIVO') return false;
+                if (clientsActiveStatus === 'NAO' && clientStatus === 'ATIVO') return false;
+                if (clientsActiveStatus !== 'SIM' && clientsActiveStatus !== 'NAO') return false;
+            }
         }
 
         // Filtro de Marca
         if (clientsActiveBrand !== 'all') {
-            if (!isClientBrandActive(client, clientsActiveBrand)) {
+            const bStatus = window.getClientBrandStatus(client, clientsActiveBrand);
+            if (bStatus === 'INATIVO') {
                 return false;
             }
         }
@@ -4042,14 +4052,14 @@ function renderClientsTable() {
         <table class="clients-table">
             <thead>
                 <tr>
-                    <th style="width: 150px;">CNPJ</th>
-                    <th>Razão Social / Nome Fantasia</th>
-                    <th>Grupo</th>
-                    <th>Grupo Real</th>
-                    <th>Cidade / UF</th>
-                    <th style="text-align: center; width: 90px;">Status</th>
-                    <th>Marcas</th>
-                    <th style="text-align: right; width: 150px;">Ações</th>
+                    <th style="width: 175px; min-width: 175px; white-space: nowrap;">CNPJ</th>
+                    <th style="min-width: 240px;">Razão Social / Nome Fantasia</th>
+                    <th style="width: 115px; white-space: nowrap;">Grupo</th>
+                    <th style="width: 115px; white-space: nowrap;">Grupo Real</th>
+                    <th style="width: 135px; white-space: nowrap;">Cidade / UF</th>
+                    <th style="text-align: center; width: 120px; white-space: nowrap;">Status</th>
+                    <th style="min-width: 210px; width: 240px;">Marcas</th>
+                    <th style="text-align: right; width: 130px; white-space: nowrap;">Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -4057,21 +4067,33 @@ function renderClientsTable() {
 
     pageItems.forEach((client, idx) => {
         const globalIdx = startIndex + idx;
-        const isActive = (client['CLIENTE ATIVO?'] || '').toString().trim().toUpperCase() === 'SIM';
-        const statusBadge = isActive
-            ? `<span class="client-status-badge active"><i class='bx bx-check'></i> Ativo</span>`
-            : `<span class="client-status-badge inactive"><i class='bx bx-x'></i> Inativo</span>`;
+        const clientStatus = window.getClientGeneralStatus(client);
+        const statusBadge = window.renderClientStatusBadge(clientStatus);
 
-        // Marcas que o cliente possui
-        const clientBrands = [];
+        // Marcas que o cliente possui com status e cores
+        const brandTags = [];
         CLIENT_BRAND_COLS.forEach(brand => {
-            if (isClientBrandActive(client, brand)) {
-                clientBrands.push(brand);
+            const bStatus = window.getClientBrandStatus(client, brand);
+            if (bStatus === 'INATIVO') return;
+
+            const val = client[brand];
+            const isCode = val && val !== 'SIM' && val !== 'ATIVO' && val !== '1' && !String(val).includes('FIDELIZAD') && !String(val).includes('FECHAD');
+            const codeSubpill = isCode ? `<span class="brand-tag-code">${escapeHTML(val)}</span>` : '';
+
+            if (bStatus === 'ATIVO') {
+                const titleStr = isCode ? `${brand} (Cód: ${escapeHTML(val)}): Cliente comprando da marca` : `${brand}: Cliente comprando da marca`;
+                brandTags.push(`<span class="client-brand-mini-tag brand-status-ativo" title="${titleStr}">${escapeHTML(brand)}${codeSubpill}</span>`);
+            } else if (bStatus === 'NAO_FIDELIZADO') {
+                const titleStr = isCode ? `${brand} (Cód: ${escapeHTML(val)}): Não fidelizado` : `${brand}: Já comprou, não compra mais atualmente`;
+                brandTags.push(`<span class="client-brand-mini-tag brand-status-nao-fidelizado" title="${titleStr}">${escapeHTML(brand)}${codeSubpill}</span>`);
+            } else if (bStatus === 'LOJA_FECHADA') {
+                const titleStr = isCode ? `${brand} (Cód: ${escapeHTML(val)}): Loja fechada` : `${brand}: Loja fechada`;
+                brandTags.push(`<span class="client-brand-mini-tag brand-status-loja-fechada" title="${titleStr}">${escapeHTML(brand)}${codeSubpill}</span>`);
             }
         });
 
-        const brandsHtml = clientBrands.length > 0
-            ? clientBrands.map(b => `<span class="client-brand-mini-tag">${escapeHTML(b)}</span>`).join('')
+        const brandsHtml = brandTags.length > 0
+            ? brandTags.join('')
             : `<span style="color: rgba(255,255,255,0.3); font-size: 0.75rem;">Nenhuma</span>`;
 
         const cidadeUf = [client['CIDADE'], client['ESTADO']].filter(Boolean).join(' / ') || '-';
@@ -4083,22 +4105,22 @@ function renderClientsTable() {
 
         tableHtml += `
             <tr onclick="openClientDetailModal(${globalIdx})">
-                <td class="font-mono" style="font-weight: 500; color: var(--accent-color);">
+                <td class="font-mono client-cnpj-cell" style="white-space: nowrap; font-weight: 600; color: var(--accent-color); font-size: 0.82rem;">
                     ${escapeHTML(cnpjFormatted)}
                 </td>
                 <td>
-                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">
+                    <div style="font-weight: 700; color: var(--text-primary); font-size: 0.88rem; margin-bottom: 2px;">
                         ${escapeHTML(fantasia)}
                     </div>
-                    <div style="font-size: 0.78rem; color: var(--text-secondary); max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(razao)}">
+                    <div style="font-size: 0.77rem; color: var(--text-secondary); max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(razao)}">
                         ${escapeHTML(razao)}
                     </div>
                 </td>
-                <td style="color: var(--text-secondary); font-size: 0.82rem;">${escapeHTML(grupo)}</td>
-                <td style="color: var(--text-secondary); font-size: 0.82rem;">${escapeHTML(grupoReal)}</td>
-                <td style="white-space: nowrap; font-size: 0.82rem;">${escapeHTML(cidadeUf)}</td>
-                <td style="text-align: center;">${statusBadge}</td>
-                <td><div style="display: flex; flex-wrap: wrap; max-width: 200px;">${brandsHtml}</div></td>
+                <td style="color: var(--text-secondary); font-size: 0.82rem; white-space: nowrap;">${escapeHTML(grupo)}</td>
+                <td style="color: var(--text-secondary); font-size: 0.82rem; white-space: nowrap;">${escapeHTML(grupoReal)}</td>
+                <td style="white-space: nowrap; font-size: 0.82rem; font-weight: 500;">${escapeHTML(cidadeUf)}</td>
+                <td style="text-align: center; white-space: nowrap;">${statusBadge}</td>
+                <td><div class="client-brands-container">${brandsHtml}</div></td>
                 <td style="text-align: right;" onclick="event.stopPropagation()">
                     <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
                         <button type="button" class="btn-table-action" onclick="openClientDetailModal(${globalIdx})" title="Ver ficha completa">
@@ -4184,18 +4206,36 @@ window.openClientDetailModal = function(clientIndex) {
     if (fantasiaEl) fantasiaEl.textContent = client['FANTASIA'] || client['RAZAO SOCIAL'] || 'Cliente';
     if (razaoEl) razaoEl.textContent = client['RAZAO SOCIAL'] || '-';
 
-    const isActive = (client['CLIENTE ATIVO?'] || '').toString().trim().toUpperCase() === 'SIM';
+    const clientStatus = window.getClientGeneralStatus(client);
     if (statusBadgeEl) {
-        statusBadgeEl.className = `client-status-badge ${isActive ? 'active' : 'inactive'}`;
-        statusBadgeEl.innerHTML = isActive ? "<i class='bx bx-check'></i> Cliente Ativo" : "<i class='bx bx-x'></i> Cliente Inativo";
+        let badgeClass = 'status-inativo';
+        let badgeIcon = 'bx-minus-circle';
+        let badgeLabel = 'Inativo';
+        if (clientStatus === 'ATIVO') {
+            badgeClass = 'status-ativo';
+            badgeIcon = 'bx-check-circle';
+            badgeLabel = 'Cliente Ativo';
+        } else if (clientStatus === 'NAO_FIDELIZADO') {
+            badgeClass = 'status-nao-fidelizado';
+            badgeIcon = 'bx-time-five';
+            badgeLabel = 'Não Fidelizado';
+        } else if (clientStatus === 'LOJA_FECHADA') {
+            badgeClass = 'status-loja-fechada';
+            badgeIcon = 'bx-store-alt';
+            badgeLabel = 'Loja Fechada';
+        }
+        statusBadgeEl.className = `client-status-badge ${badgeClass}`;
+        statusBadgeEl.innerHTML = `<i class='bx ${badgeIcon}'></i> ${badgeLabel}`;
     }
 
     // Card 1: Identificação
     document.getElementById('cdm-cnpj').textContent = client['CNPJ'] || '-';
     document.getElementById('cdm-grupo').textContent = client['GRUPO'] || '-';
     document.getElementById('cdm-grupo-real').textContent = client['GRUPO REAL'] || '-';
-    document.getElementById('cdm-cod-arezzo').textContent = client['CODIGO AREZZO'] || '-';
-    document.getElementById('cdm-cod-new-era').textContent = client['CODIGO NEW ERA'] || '-';
+    const cdmArEl = document.getElementById('cdm-cod-arezzo');
+    if (cdmArEl) cdmArEl.textContent = client['VANS'] || '-';
+    const cdmNeEl = document.getElementById('cdm-cod-new-era');
+    if (cdmNeEl) cdmNeEl.textContent = client['NEW ERA'] || '-';
 
     // Card 2: Endereço
     const ruaStr = client['RUA'] || '';
@@ -4277,22 +4317,43 @@ window.openClientDetailModal = function(clientIndex) {
     // Card 4: Marcas
     const brandsListContainer = document.getElementById('cdm-brands-list');
     if (brandsListContainer) {
-        const activeBrands = [];
+        const brandBadges = [];
         CLIENT_BRAND_COLS.forEach(b => {
-            if (isClientBrandActive(client, b)) {
-                activeBrands.push(b);
+            const bStatus = window.getClientBrandStatus(client, b);
+            if (bStatus === 'INATIVO') return;
+
+            const val = client[b];
+            const isCode = val && val !== 'SIM' && val !== 'ATIVO' && val !== '1' && !String(val).includes('FIDELIZAD') && !String(val).includes('FECHAD');
+            const codeText = isCode ? `<span style="font-family: monospace; font-size: 0.75rem; background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 4px; margin-left: 4px;">#${escapeHTML(val)}</span>` : '';
+
+            if (bStatus === 'ATIVO') {
+                brandBadges.push(`
+                    <div class="cdm-brand-badge status-ativo" title="Comprando da marca">
+                        <i class='bx bx-check-circle'></i>
+                        <span><strong>${escapeHTML(b)}</strong> ${codeText}</span>
+                    </div>
+                `);
+            } else if (bStatus === 'NAO_FIDELIZADO') {
+                brandBadges.push(`
+                    <div class="cdm-brand-badge status-nao-fidelizado" title="JÃ¡ comprou, nÃ£o compra mais atualmente">
+                        <i class='bx bx-time-five'></i>
+                        <span><strong>${escapeHTML(b)}</strong> (NÃ£o Fidelizado) ${codeText}</span>
+                    </div>
+                `);
+            } else if (bStatus === 'LOJA_FECHADA') {
+                brandBadges.push(`
+                    <div class="cdm-brand-badge status-loja-fechada" title="Loja Fechada">
+                        <i class='bx bx-store-alt'></i>
+                        <span><strong>${escapeHTML(b)}</strong> (Fechado) ${codeText}</span>
+                    </div>
+                `);
             }
         });
 
-        if (activeBrands.length === 0) {
+        if (brandBadges.length === 0) {
             brandsListContainer.innerHTML = `<span style="color: var(--text-secondary); font-size: 0.85rem;">Nenhuma marca associada</span>`;
         } else {
-            brandsListContainer.innerHTML = activeBrands.map(b => `
-                <div class="cdm-brand-badge">
-                    <i class='bx bx-check-circle' style="color: #10b981;"></i>
-                    <span>${escapeHTML(b)}</span>
-                </div>
-            `).join('');
+            brandsListContainer.innerHTML = brandBadges.join('');
         }
     }
 
@@ -4364,7 +4425,7 @@ window.copyClientSummary = function() {
         `Proprietário: ${c['PROPRIETARIO'] || '-'} | Tel: ${c['TELEFONE'] || '-'}`,
         `Aniversário: ${c['ANIVERSARIO'] || '-'}`,
         `Marcas: ${activeBrands}`,
-        `Cód Arezzo: ${c['CODIGO AREZZO'] || '-'} | Cód New Era: ${c['CODIGO NEW ERA'] || '-'}`
+        `Vans: ${c['VANS'] || '-'} | New Era: ${c['NEW ERA'] || '-'}`
     ].join('\n');
 
     copyToClipboard(text, 'Ficha resumida copiada com sucesso!');
@@ -4431,19 +4492,11 @@ window.exportClientsToExcel = function() {
                 'ENDERECO COMPLETO': c['ENDERECO COMPLETO'] || '',
                 'TELEFONE': c['TELEFONE'] || '',
                 'PROPRIETARIO': c['PROPRIETARIO'] || '',
-                'ANIVERSARIO': c['ANIVERSARIO'] || '',
-                'CODIGO AREZZO': c['CODIGO AREZZO'] || '',
-                'CODIGO NEW ERA': c['CODIGO NEW ERA'] || ''
+                'ANIVERSARIO': c['ANIVERSARIO'] || ''
             };
 
             CLIENT_BRAND_COLS.forEach(brand => {
-                if (brand === 'NEW ERA') {
-                    row[brand] = c['NEW ERA'] || c['CODIGO NEW ERA'] || (isClientBrandActive(c, brand) ? 'SIM' : '');
-                } else if (brand === 'VANS') {
-                    row[brand] = c['VANS'] || c['CODIGO AREZZO'] || (isClientBrandActive(c, brand) ? 'SIM' : '');
-                } else {
-                    row[brand] = c[brand] || (isClientBrandActive(c, brand) ? 'SIM' : '');
-                }
+                row[brand] = c[brand] || '';
             });
 
             return row;
@@ -4593,7 +4646,7 @@ window.openNewClientModal = function() {
     const badge = document.getElementById('cfm-cnpj-badge');
     if (badge) badge.style.display = 'none';
 
-    document.getElementById('cfm-status').value = 'SIM';
+    document.getElementById('cfm-status').value = 'ATIVO';
     document.getElementById('cfm-cnpj').value = '';
     document.getElementById('cfm-fantasia').value = '';
     document.getElementById('cfm-razao').value = '';
@@ -4647,7 +4700,7 @@ window.openClientFormForEdit = function(client, masterIndex) {
         if (indexInput) indexInput.value = (masterIndex !== -1 && masterIndex !== undefined && masterIndex !== null) ? masterIndex : '';
 
         const statusEl = document.getElementById('cfm-status');
-        if (statusEl) statusEl.value = safeUpper(client['CLIENTE ATIVO?']) === 'NAO' ? 'NAO' : 'SIM';
+        if (statusEl) statusEl.value = window.getClientGeneralStatus(client);
 
         const cnpjEl = document.getElementById('cfm-cnpj');
         if (cnpjEl) cnpjEl.value = (typeof window.formatCNPJ === 'function') ? window.formatCNPJ(safeStr(client['CNPJ'])) : safeStr(client['CNPJ']);
@@ -4787,45 +4840,68 @@ function renderFormBrandToggles(clientData = {}) {
 
     let html = '';
     CLIENT_BRAND_COLS.forEach(brand => {
-        const isActive = isClientBrandActive(clientData, brand);
+        const bStatus = window.getClientBrandStatus(clientData, brand);
 
         let codeVal = '';
         let inputId = '';
-        let inputPlaceholder = 'Ex: Código do cliente na Marca';
-        let helperLabel = 'Código:';
+        let inputPlaceholder = 'Ex: Código na Marca';
+        let helperLabel = `Código ${brand}:`;
+
+        const rawVal = clientData[brand];
+        const isNotCode = (rawVal === 'SIM' || rawVal === 'sim' || rawVal === 1 || rawVal === '1' || rawVal === 'null' || rawVal === 'ATIVO' || String(rawVal).includes('FIDELIZAD') || String(rawVal).includes('FECHAD'));
+        codeVal = (!isNotCode && rawVal) ? String(rawVal) : '';
 
         if (brand === 'NEW ERA') {
             inputId = 'cfm-cod-new-era';
-            const rawNe = clientData['CODIGO NEW ERA'] || (clientData['NEW ERA'] && clientData['NEW ERA'] !== 'SIM' && clientData['NEW ERA'] !== 1 && clientData['NEW ERA'] !== '1' ? clientData['NEW ERA'] : '');
-            codeVal = (rawNe && rawNe !== 'null') ? String(rawNe) : '';
             inputPlaceholder = 'Ex: 10311 (Código New Era)';
-            helperLabel = 'Código New Era:';
         } else if (brand === 'VANS') {
             inputId = 'cfm-cod-arezzo';
-            const rawAr = clientData['CODIGO AREZZO'] || (clientData['VANS'] && clientData['VANS'] !== 'SIM' && clientData['VANS'] !== 1 && clientData['VANS'] !== '1' ? clientData['VANS'] : '');
-            codeVal = (rawAr && rawAr !== 'null') ? String(rawAr) : '';
             inputPlaceholder = 'Ex: 304476 (Código Arezzo / Vans)';
-            helperLabel = 'Código Arezzo / Vans:';
         } else {
-            const rawVal = clientData[brand];
-            codeVal = (rawVal && rawVal !== 'SIM' && rawVal !== 'sim' && rawVal !== 1 && rawVal !== '1' && rawVal !== 'null') ? String(rawVal) : '';
             inputId = `cfm-brand-code-${brand.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-            inputPlaceholder = 'Ex: Código do cliente na Marca';
-            helperLabel = `Código ${brand}:`;
         }
 
         const safeCode = codeVal ? codeVal.trim() : '';
 
+        let statusTagClass = 'status-inativo';
+        let statusTagLabel = 'Inativo';
+        if (bStatus === 'ATIVO') {
+            statusTagClass = 'status-ativo';
+            statusTagLabel = 'Ativo (Comprando)';
+        } else if (bStatus === 'NAO_FIDELIZADO') {
+            statusTagClass = 'status-nao-fidelizado';
+            statusTagLabel = 'Não Fidelizado';
+        } else if (bStatus === 'LOJA_FECHADA') {
+            statusTagClass = 'status-loja-fechada';
+            statusTagLabel = 'Loja Fechada';
+        }
+
+        const isActive = (bStatus !== 'INATIVO');
+
         html += `
-            <div class="cfm-brand-card ${isActive ? 'active' : ''}" data-brand="${escapeHTML(brand)}">
-                <div class="cfm-brand-card-top" onclick="toggleFormBrandCard('${escapeHTML(brand)}')">
+            <div class="cfm-brand-card ${isActive ? 'active' : ''} ${statusTagClass}" data-brand="${escapeHTML(brand)}" data-status="${bStatus}">
+                <div class="cfm-brand-card-top" onclick="cycleFormBrandStatus('${escapeHTML(brand)}')">
                     <div class="cfm-brand-check-wrapper">
                         <i class='bx ${isActive ? 'bx-check-square' : 'bx-square'} cfm-brand-check-icon'></i>
                         <span class="cfm-brand-title">${escapeHTML(brand)}</span>
                     </div>
-                    <span class="cfm-brand-status-tag ${isActive ? 'active' : ''}">
-                        ${isActive ? 'Habilitado' : 'Desativado'}
+                    <span class="cfm-brand-status-tag ${statusTagClass}">
+                        ${statusTagLabel}
                     </span>
+                </div>
+                <div class="cfm-brand-status-options">
+                    <button type="button" class="cfm-brand-status-btn btn-opt-ativo ${bStatus === 'ATIVO' ? 'active' : ''}" onclick="setFormBrandStatus('${escapeHTML(brand)}', 'ATIVO')" title="Cliente comprando da marca">
+                        <span class="status-dot dot-green"></span> Ativo
+                    </button>
+                    <button type="button" class="cfm-brand-status-btn btn-opt-nao-fidelizado ${bStatus === 'NAO_FIDELIZADO' ? 'active' : ''}" onclick="setFormBrandStatus('${escapeHTML(brand)}', 'NAO_FIDELIZADO')" title="Já comprou e não compra mais atualmente">
+                        <span class="status-dot dot-orange"></span> Não Fideliz.
+                    </button>
+                    <button type="button" class="cfm-brand-status-btn btn-opt-inativo ${bStatus === 'INATIVO' ? 'active' : ''}" onclick="setFormBrandStatus('${escapeHTML(brand)}', 'INATIVO')" title="Cliente não tem cadastro na marca">
+                        <span class="status-dot dot-gray"></span> Inativo
+                    </button>
+                    <button type="button" class="cfm-brand-status-btn btn-opt-loja-fechada ${bStatus === 'LOJA_FECHADA' ? 'active' : ''}" onclick="setFormBrandStatus('${escapeHTML(brand)}', 'LOJA_FECHADA')" title="Cliente com loja fechada">
+                        <span class="status-dot dot-red"></span> Fechado
+                    </button>
                 </div>
                 <div class="cfm-brand-card-input-wrap">
                     <label for="${inputId}">${helperLabel}</label>
@@ -4847,53 +4923,99 @@ function renderFormBrandToggles(clientData = {}) {
     container.innerHTML = html;
 }
 
-window.toggleFormBrandCard = function(brand) {
+window.setFormBrandStatus = function(brand, newStatus) {
     const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
     if (!card) return;
 
-    const isCurrentlyActive = card.classList.contains('active');
+    card.setAttribute('data-status', newStatus);
+
+    // Atualizar classes do card
+    card.classList.remove('status-ativo', 'status-nao-fidelizado', 'status-inativo', 'status-loja-fechada');
     const input = card.querySelector('.cfm-brand-code-input');
     const icon = card.querySelector('.cfm-brand-check-icon');
     const statusTag = card.querySelector('.cfm-brand-status-tag');
 
-    if (isCurrentlyActive) {
-        card.classList.remove('active');
-        if (icon) icon.className = 'bx bx-square cfm-brand-check-icon';
-        if (statusTag) {
-            statusTag.className = 'cfm-brand-status-tag';
-            statusTag.textContent = 'Desativado';
-        }
-        if (input) input.value = '';
-    } else {
-        card.classList.add('active');
+    // Atualizar botões
+    card.querySelectorAll('.cfm-brand-status-btn').forEach(btn => btn.classList.remove('active'));
+    let activeBtnClass = 'btn-opt-inativo';
+    let tagClass = 'status-inativo';
+    let tagLabel = 'Inativo';
+
+    if (newStatus === 'ATIVO') {
+        card.classList.add('active', 'status-ativo');
+        activeBtnClass = 'btn-opt-ativo';
+        tagClass = 'status-ativo';
+        tagLabel = 'Ativo (Comprando)';
         if (icon) icon.className = 'bx bx-check-square cfm-brand-check-icon';
-        if (statusTag) {
-            statusTag.className = 'cfm-brand-status-tag active';
-            statusTag.textContent = 'Habilitado';
-        }
-        if (input) {
-            input.focus();
-        }
+        if (input && !input.value.trim()) input.focus();
+    } else if (newStatus === 'NAO_FIDELIZADO') {
+        card.classList.add('active', 'status-nao-fidelizado');
+        activeBtnClass = 'btn-opt-nao-fidelizado';
+        tagClass = 'status-nao-fidelizado';
+        tagLabel = 'Não Fidelizado';
+        if (icon) icon.className = 'bx bx-check-square cfm-brand-check-icon';
+    } else if (newStatus === 'LOJA_FECHADA') {
+        card.classList.add('active', 'status-loja-fechada');
+        activeBtnClass = 'btn-opt-loja-fechada';
+        tagClass = 'status-loja-fechada';
+        tagLabel = 'Loja Fechada';
+        if (icon) icon.className = 'bx bx-check-square cfm-brand-check-icon';
+    } else {
+        card.classList.remove('active');
+        card.classList.add('status-inativo');
+        activeBtnClass = 'btn-opt-inativo';
+        tagClass = 'status-inativo';
+        tagLabel = 'Inativo';
+        if (icon) icon.className = 'bx bx-square cfm-brand-check-icon';
+        if (input) input.value = '';
+    }
+
+    const activeBtn = card.querySelector(`.cfm-brand-status-btn.${activeBtnClass}`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    if (statusTag) {
+        statusTag.className = `cfm-brand-status-tag ${tagClass}`;
+        statusTag.textContent = tagLabel;
     }
 };
+
+window.cycleFormBrandStatus = function(brand) {
+    const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
+    if (!card) return;
+    const current = card.getAttribute('data-status') || 'INATIVO';
+    // Alterna de Inativo para Ativo e vice-versa no clique do topo
+    if (current === 'INATIVO') {
+        window.setFormBrandStatus(brand, 'ATIVO');
+    } else {
+        window.setFormBrandStatus(brand, 'INATIVO');
+    }
+};
+
+window.toggleFormBrandCard = window.cycleFormBrandStatus;
 
 window.onBrandCodeChanged = function(brand, value) {
     const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
     if (!card) return;
 
-    const icon = card.querySelector('.cfm-brand-check-icon');
-    const statusTag = card.querySelector('.cfm-brand-status-tag');
     const trimmed = (value || '').trim();
-
     if (trimmed) {
-        if (!card.classList.contains('active')) {
-            card.classList.add('active');
-            if (icon) icon.className = 'bx bx-check-square cfm-brand-check-icon';
-            if (statusTag) {
-                statusTag.className = 'cfm-brand-status-tag active';
-                statusTag.textContent = 'Habilitado';
-            }
+        const current = card.getAttribute('data-status');
+        if (current !== 'ATIVO') {
+            window.setFormBrandStatus(brand, 'ATIVO');
         }
+    }
+};
+
+window.onClientFormStatusChange = function(statusVal) {
+    // Se o cliente for marcado como LOJA FECHADA, atualizar cards que estejam ativos
+    if (statusVal === 'LOJA_FECHADA') {
+        document.querySelectorAll('.cfm-brand-card').forEach(card => {
+            const b = card.getAttribute('data-brand');
+            const st = card.getAttribute('data-status');
+            if (st !== 'INATIVO') {
+                window.setFormBrandStatus(b, 'LOJA_FECHADA');
+            }
+        });
     }
 };
 
@@ -4976,8 +5098,6 @@ window.saveClientFormData = async function() {
     const razaoVal = document.getElementById('cfm-razao')?.value?.trim()?.toUpperCase() || null;
     const grupoVal = document.getElementById('cfm-grupo')?.value?.trim()?.toUpperCase() || null;
     const grupoRealVal = document.getElementById('cfm-grupo-real')?.value?.trim()?.toUpperCase() || null;
-    let arezzoVal = null;
-    let newEraVal = null;
 
     const cepVal = document.getElementById('cfm-cep')?.value?.trim()?.toUpperCase() || null;
     const ruaVal = document.getElementById('cfm-rua')?.value?.trim()?.toUpperCase() || null;
@@ -5018,27 +5138,21 @@ window.saveClientFormData = async function() {
     const rawNiver = document.getElementById('cfm-aniversario')?.value?.trim() || '';
     const niverVal = (window.formatAniversario ? window.formatAniversario(rawNiver) : rawNiver) || null;
 
-    // Obter marcas selecionadas e respectivos códigos
+    // Obter marcas selecionadas, status e códigos
     const clientBrandsObj = {};
     CLIENT_BRAND_COLS.forEach(brand => {
         const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
-        const isActive = card && card.classList.contains('active');
+        const status = card ? (card.getAttribute('data-status') || (card.classList.contains('active') ? 'ATIVO' : 'INATIVO')) : 'INATIVO';
         const input = card ? card.querySelector('.cfm-brand-code-input') : null;
         const code = input ? input.value.trim().toUpperCase() : '';
 
-        if (isActive) {
-            if (brand === 'NEW ERA') {
-                newEraVal = code || null;
-                clientBrandsObj['NEW ERA'] = code || 'SIM';
-            } else if (brand === 'VANS') {
-                arezzoVal = code || null;
-                clientBrandsObj['VANS'] = code || 'SIM';
-            } else {
-                clientBrandsObj[brand] = code || 'SIM';
-            }
+        if (status === 'ATIVO') {
+            clientBrandsObj[brand] = code || 'SIM';
+        } else if (status === 'NAO_FIDELIZADO') {
+            clientBrandsObj[brand] = 'NÃO FIDELIZADO';
+        } else if (status === 'LOJA_FECHADA') {
+            clientBrandsObj[brand] = 'LOJA FECHADA';
         } else {
-            if (brand === 'NEW ERA') newEraVal = null;
-            if (brand === 'VANS') arezzoVal = null;
             clientBrandsObj[brand] = null;
         }
     });
@@ -5050,8 +5164,6 @@ window.saveClientFormData = async function() {
         'RAZAO SOCIAL': razaoVal,
         'GRUPO': grupoVal,
         'GRUPO REAL': grupoRealVal,
-        'CODIGO AREZZO': arezzoVal,
-        'CODIGO NEW ERA': newEraVal,
         'CEP': cepVal,
         'RUA': ruaVal,
         'NUMERO': numVal,
@@ -5383,11 +5495,11 @@ window.lookupCnpjData = async function() {
         if (existingClient['GRUPO REAL'] && !document.getElementById('cfm-grupo-real').value) {
             document.getElementById('cfm-grupo-real').value = existingClient['GRUPO REAL'];
         }
-        if (existingClient['CODIGO AREZZO'] && !document.getElementById('cfm-cod-arezzo').value) {
-            document.getElementById('cfm-cod-arezzo').value = existingClient['CODIGO AREZZO'];
+        if (existingClient['VANS'] && document.getElementById('cfm-cod-arezzo') && !document.getElementById('cfm-cod-arezzo').value) {
+            document.getElementById('cfm-cod-arezzo').value = existingClient['VANS'];
         }
-        if (existingClient['CODIGO NEW ERA'] && !document.getElementById('cfm-cod-new-era').value) {
-            document.getElementById('cfm-cod-new-era').value = existingClient['CODIGO NEW ERA'];
+        if (existingClient['NEW ERA'] && document.getElementById('cfm-cod-new-era') && !document.getElementById('cfm-cod-new-era').value) {
+            document.getElementById('cfm-cod-new-era').value = existingClient['NEW ERA'];
         }
         if (existingClient['PROPRIETARIO'] && !document.getElementById('cfm-proprietario').value) {
             document.getElementById('cfm-proprietario').value = existingClient['PROPRIETARIO'];
@@ -5599,7 +5711,7 @@ window.lookupCnpjData = async function() {
                                 <tr>
                                     <td><strong>Marcas & Códigos</strong></td>
                                     <td colspan="2" style="color: #a7f3d0; font-weight: 500;">
-                                        <i class='bx bx-lock-alt'></i> Preservados: New Era (${existingClient['CODIGO NEW ERA'] || '-'}), Arezzo (${existingClient['CODIGO AREZZO'] || '-'}), Grupo (${existingClient['GRUPO'] || '-'})
+                                        <i class='bx bx-lock-alt'></i> Preservados: New Era (${existingClient['NEW ERA'] || '-'}), Vans (${existingClient['VANS'] || '-'}), Grupo (${existingClient['GRUPO'] || '-'})
                                     </td>
                                 </tr>
                             </tbody>

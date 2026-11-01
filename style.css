@@ -2600,28 +2600,127 @@ body:not(.is-admin) .admin-only {
     white-space: nowrap;
 }
 
-.client-status-badge.active {
-    background: rgba(16, 185, 129, 0.15);
+.client-status-badge.active,
+.client-status-badge.status-ativo {
+    background: rgba(16, 185, 129, 0.16);
     color: #10b981;
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    border: 1px solid rgba(16, 185, 129, 0.38);
 }
 
-.client-status-badge.inactive {
-    background: rgba(239, 68, 68, 0.15);
+.client-status-badge.status-nao-fidelizado {
+    background: rgba(245, 158, 11, 0.16);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.38);
+}
+
+.client-status-badge.status-inativo {
+    background: rgba(148, 163, 184, 0.13);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.32);
+}
+
+.client-status-badge.inactive,
+.client-status-badge.status-loja-fechada {
+    background: rgba(239, 68, 68, 0.16);
     color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    border: 1px solid rgba(239, 68, 68, 0.38);
 }
 
-.client-brand-mini-tag {
+/* Status Filter Pills */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     display: inline-block;
-    background: rgba(255, 255, 255, 0.06);
+    margin-right: 4px;
+}
+.status-dot.dot-green { background: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.5); }
+.status-dot.dot-orange { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.5); }
+.status-dot.dot-gray { background: #94a3b8; }
+.status-dot.dot-red { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.5); }
+
+.client-pill-btn.pill-status-ativo.active {
+    background: rgba(16, 185, 129, 0.22) !important;
+    border-color: #10b981 !important;
+    color: #34d399 !important;
+}
+.client-pill-btn.pill-status-nao-fidelizado.active {
+    background: rgba(245, 158, 11, 0.22) !important;
+    border-color: #f59e0b !important;
+    color: #fbbf24 !important;
+}
+.client-pill-btn.pill-status-inativo.active {
+    background: rgba(148, 163, 184, 0.2) !important;
+    border-color: #94a3b8 !important;
+    color: #cbd5e1 !important;
+}
+.client-pill-btn.pill-status-loja-fechada.active {
+    background: rgba(239, 68, 68, 0.22) !important;
+    border-color: #ef4444 !important;
+    color: #f87171 !important;
+}
+
+/* Container horizontal harmÃ´nico de marcas na tabela */
+.client-brands-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+    min-width: 190px;
+}
+
+/* Tag de marca - Nunca quebra o texto (ex: 'NEW ERA' sempre em 1 linha) */
+.client-brand-mini-tag {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+    white-space: nowrap !important;
+    padding: 0.24rem 0.55rem !important;
+    border-radius: 6px !important;
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.3px !important;
+    line-height: 1.2 !important;
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: var(--text-secondary);
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-size: 0.68rem;
-    font-weight: 600;
-    margin: 1px;
+    transition: all 0.2s ease;
+}
+
+.client-brand-mini-tag.brand-status-ativo {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: #34d399 !important;
+    border: 1px solid rgba(16, 185, 129, 0.35) !important;
+}
+
+.client-brand-mini-tag.brand-status-nao-fidelizado {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: #fbbf24 !important;
+    border: 1px solid rgba(245, 158, 11, 0.35) !important;
+}
+
+.client-brand-mini-tag.brand-status-loja-fechada {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #f87171 !important;
+    border: 1px solid rgba(239, 68, 68, 0.35) !important;
+}
+
+.brand-tag-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.67rem !important;
+    font-weight: 600 !important;
+    background: rgba(0, 0, 0, 0.4) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    padding: 0.08rem 0.35rem !important;
+    border-radius: 4px !important;
+    letter-spacing: 0 !important;
+    margin-left: 0.2rem !important;
+}
+
+/* CNPJ sempre em uma Ãºnica linha */
+.client-cnpj-cell {
+    white-space: nowrap !important;
+    font-variant-numeric: tabular-nums;
 }
 
 .btn-table-action {
@@ -3270,10 +3369,115 @@ body:not(.is-admin) .admin-only {
     background: rgba(30, 41, 59, 0.4);
 }
 
-.cfm-brand-card.active {
-    background: rgba(99, 102, 241, 0.08);
-    border-color: rgba(99, 102, 241, 0.6);
-    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.15);
+.cfm-brand-card.active,
+.cfm-brand-card.status-ativo {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.55);
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.12);
+}
+.cfm-brand-card.status-nao-fidelizado {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.55);
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.12);
+}
+.cfm-brand-card.status-loja-fechada {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.55);
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.12);
+}
+
+.cfm-brand-status-options {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.35rem;
+    margin-bottom: 0.55rem;
+}
+.cfm-brand-status-btn {
+    padding: 0.35rem 0.2rem;
+    border-radius: 6px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    transition: all 0.2s ease;
+    text-align: center;
+    white-space: nowrap;
+}
+.cfm-brand-status-btn:hover {
+    filter: brightness(1.2);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+.cfm-brand-status-btn.active.btn-opt-ativo {
+    background: rgba(16, 185, 129, 0.25);
+    border-color: #10b981;
+    color: #34d399;
+}
+.cfm-brand-status-btn.active.btn-opt-nao-fidelizado {
+    background: rgba(245, 158, 11, 0.25);
+    border-color: #f59e0b;
+    color: #fbbf24;
+}
+.cfm-brand-status-btn.active.btn-opt-inativo {
+    background: rgba(148, 163, 184, 0.22);
+    border-color: #94a3b8;
+    color: #cbd5e1;
+}
+.cfm-brand-status-btn.active.btn-opt-loja-fechada {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: #ef4444;
+    color: #f87171;
+}
+
+.cfm-brand-status-tag.status-ativo {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+.cfm-brand-status-tag.status-nao-fidelizado {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.cfm-brand-status-tag.status-inativo {
+    background: rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+.cfm-brand-status-tag.status-loja-fechada {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.cdm-brand-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 500;
+}
+.cdm-brand-badge.status-ativo {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+}
+.cdm-brand-badge.status-nao-fidelizado {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+}
+.cdm-brand-badge.status-loja-fechada {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
 }
 
 .cfm-brand-card-top {

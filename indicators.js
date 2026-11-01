@@ -1039,13 +1039,13 @@
                 map.set(cleanC, c);
                 map.set(cleanC.padStart(14, '0'), c);
             }
-            const neCod = (c['CODIGO NEW ERA'] || '').toString().trim();
+            const neCod = (c['NEW ERA'] || c['CODIGO NEW ERA'] || '').toString().trim();
             if (neCod && neCod !== '-' && neCod !== 'None') {
                 map.set(`NE_${neCod}`, c);
                 const cleanNe = cleanDigits(neCod);
                 if (cleanNe) map.set(`NE_${cleanNe}`, c);
             }
-            const arezzoCod = (c['CODIGO AREZZO'] || '').toString().trim();
+            const arezzoCod = (c['VANS'] || c['CODIGO AREZZO'] || '').toString().trim();
             if (arezzoCod && arezzoCod !== '-' && arezzoCod !== 'None') {
                 map.set(`AR_${arezzoCod}`, c);
                 const cleanAr = cleanDigits(arezzoCod);
