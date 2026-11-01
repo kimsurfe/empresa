@@ -3728,8 +3728,8 @@ window.isClientBrandActive = function(client, brand) {
     const val = client[brand];
     if (val !== null && val !== undefined && val !== '' && val !== '0' && val !== 0 && val !== false) {
         const sVal = String(val).trim().toUpperCase();
-        if (sVal !== 'NAO' && sVal !== 'NÃO' && sVal !== 'NULL' && sVal !== 'UNDEFINED') {
-            return true; // Contém 'SIM', '1' ou o código do cliente (ex: '10311')
+        if (sVal !== 'NAO' && sVal !== 'NÃO' && sVal !== 'NULL' && sVal !== 'UNDEFINED' && sVal !== 'INATIVO') {
+            return true; // Contém 'SIM', '1', 'ATIVO' ou o código do cliente (ex: '10311')
         }
     }
     // Caso especial: para NEW ERA, se houver 'CODIGO NEW ERA' preenchido, o cliente fica ativo na marca
@@ -3750,6 +3750,89 @@ window.isClientBrandActive = function(client, brand) {
 };
 const isClientBrandActive = window.isClientBrandActive;
 
+window.getClientGeneralStatus = function(client) {
+    if (!client) return 'INATIVO';
+
+    const rawStatus = client['STATUS'];
+    if (rawStatus !== undefined && rawStatus !== null && rawStatus !== '') {
+        const s = String(rawStatus).trim().toUpperCase();
+        if (s === 'LOJA_FECHADA' || s === 'LOJA FECHADA' || s === 'FECHADA' || s === 'VERMELHO') {
+            return 'LOJA_FECHADA';
+        }
+        if (s === 'NAO_FIDELIZADO' || s === 'NÃO FIDELIZADO' || s === 'NAO FIDELIZADO' || s === 'LARANJA') {
+            return 'NAO_FIDELIZADO';
+        }
+        if (s === 'ATIVO' || s === 'SIM' || s === '1' || s === 'VERDE') {
+            return 'ATIVO';
+        }
+        if (s === 'INATIVO' || s === 'NAO' || s === 'NÃO' || s === '0') {
+            return 'INATIVO';
+        }
+    }
+
+    let hasActive = false;
+    let hasNaoFidelizado = false;
+    let hasLojaFechada = false;
+
+    CLIENT_BRAND_COLS.forEach(b => {
+        const val = client[b];
+        if (val !== undefined && val !== null && val !== '') {
+            const sv = String(val).trim().toUpperCase();
+            if (sv.includes('FECHAD') || sv === 'VERMELHO') hasLojaFechada = true;
+            else if (sv.includes('FIDELIZAD') || sv === 'LARANJA') hasNaoFidelizado = true;
+            else if (window.isClientBrandActive(client, b)) hasActive = true;
+        } else if (window.isClientBrandActive(client, b)) {
+            hasActive = true;
+        }
+    });
+
+    if (hasActive) return 'ATIVO';
+    if (hasNaoFidelizado) return 'NAO_FIDELIZADO';
+    if (hasLojaFechada) return 'LOJA_FECHADA';
+
+    return 'INATIVO';
+};
+
+window.getClientBrandStatus = function(client, brand) {
+    if (!client) return 'INATIVO';
+
+    const specificStatus = client[brand + '_STATUS'];
+    if (specificStatus) {
+        const s = String(specificStatus).trim().toUpperCase();
+        if (s.includes('FECHAD') || s === 'VERMELHO') return 'LOJA_FECHADA';
+        if (s.includes('FIDELIZAD') || s === 'LARANJA') return 'NAO_FIDELIZADO';
+        if (s === 'ATIVO' || s === 'SIM' || s === '1') return 'ATIVO';
+        if (s === 'INATIVO' || s === 'NAO' || s === 'NÃO' || s === '0') return 'INATIVO';
+    }
+
+    const val = client[brand];
+    if (val !== undefined && val !== null && val !== '') {
+        const sv = String(val).trim().toUpperCase();
+        if (sv.includes('FECHAD') || sv === 'VERMELHO') return 'LOJA_FECHADA';
+        if (sv.includes('FIDELIZAD') || sv === 'LARANJA') return 'NAO_FIDELIZADO';
+        if (sv === 'INATIVO' || sv === 'NAO' || sv === 'NÃO' || sv === '0' || sv === 'NULL' || sv === 'UNDEFINED') return 'INATIVO';
+    }
+
+    if (window.isClientBrandActive(client, brand)) {
+        return 'ATIVO';
+    }
+
+    return 'INATIVO';
+};
+
+window.renderClientStatusBadge = function(status) {
+    if (status === 'ATIVO') {
+        return '<span class="client-status-badge status-ativo"><i class="bx bx-check-circle"></i> Ativo</span>';
+    }
+    if (status === 'NAO_FIDELIZADO') {
+        return '<span class="client-status-badge status-nao-fidelizado"><i class="bx bx-time-five"></i> Não Fidelizado</span>';
+    }
+    if (status === 'LOJA_FECHADA') {
+        return '<span class="client-status-badge status-loja-fechada"><i class="bx bx-store-alt"></i> Loja Fechada</span>';
+    }
+    return '<span class="client-status-badge status-inativo"><i class="bx bx-minus-circle"></i> Inativo</span>';
+};
+
 let clientsMasterData = [];
 window.clientsMasterData = clientsMasterData;
 let clientsFilteredData = [];
@@ -3769,20 +3852,35 @@ window.initClientsModule = function() {
                 const mapByCnpj = new Map();
                 clientsMasterData.forEach(c => {
                     const cleanC = cleanDigits(c['CNPJ']);
-                    if (cleanC) mapByCnpj.set(cleanC, c);
+                    if (cleanC) {
+                        // Migra códigos legados que possam estar em cache
+                        if (c['CODIGO AREZZO'] && (!c['VANS'] || c['VANS'] === 'SIM' || c['VANS'] === '1')) {
+                            c['VANS'] = c['CODIGO AREZZO'];
+                        }
+                        if (c['CODIGO NEW ERA'] && (!c['NEW ERA'] || c['NEW ERA'] === 'SIM' || c['NEW ERA'] === '1')) {
+                            c['NEW ERA'] = c['CODIGO NEW ERA'];
+                        }
+                        delete c['CODIGO AREZZO'];
+                        delete c['CODIGO NEW ERA'];
+                        CLIENT_BRAND_COLS.forEach(b => {
+                            if (c[b] === 1 || c[b] === '1') c[b] = 'SIM';
+                        });
+                        mapByCnpj.set(cleanC, c);
+                    }
                 });
                 window.INITIAL_CLIENTS_DATA.forEach(initC => {
                     const cleanC = cleanDigits(initC['CNPJ']);
                     if (cleanC && mapByCnpj.has(cleanC)) {
                         const existing = mapByCnpj.get(cleanC);
-                        if (initC['VANS'] && (!existing['VANS'] || existing['VANS'] === 'SIM')) {
+                        if (initC['VANS'] && (!existing['VANS'] || existing['VANS'] === 'SIM' || existing['VANS'] === '1')) {
                             existing['VANS'] = initC['VANS'];
                         }
-                        if (initC['NEW ERA'] && (!existing['NEW ERA'] || existing['NEW ERA'] === 'SIM')) {
+                        if (initC['NEW ERA'] && (!existing['NEW ERA'] || existing['NEW ERA'] === 'SIM' || existing['NEW ERA'] === '1')) {
                             existing['NEW ERA'] = initC['NEW ERA'];
                         }
-                        delete existing['CODIGO AREZZO'];
-                        delete existing['CODIGO NEW ERA'];
+                        CLIENT_BRAND_COLS.forEach(b => {
+                            if (existing[b] === 1 || existing[b] === '1') existing[b] = 'SIM';
+                        });
                     } else if (cleanC) {
                         clientsMasterData.push(initC);
                         mapByCnpj.set(cleanC, initC);
