@@ -21,7 +21,7 @@
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     
     <!-- CSS Customizado -->
-    <link rel="stylesheet" href="style.css?v=58">
+    <link rel="stylesheet" href="style.css?v=60">
 </head>
 <body>
     <div class="app-container">
@@ -110,9 +110,7 @@
                     </button>
                 </div>
 
-
-
-            </nav>
+</nav>
 
             <div class="sidebar-footer" style="display: none;">
                 <!-- Footer removido para evitar quebra de layout -->
@@ -575,11 +573,10 @@
                         <div class="clients-status-pills">
                             <span class="subfilter-caption"><i class='bx bx-toggle-right'></i> Status:</span>
                             <button type="button" class="client-pill-btn active" data-status-val="all" onclick="setClientStatusFilter('all')">Todos</button>
-                            <button type="button" class="client-pill-btn pill-status-ativo" data-status-val="ATIVO" onclick="setClientStatusFilter('ATIVO')"><span class="status-dot dot-green"></span> Ativos</button>
-                            <button type="button" class="client-pill-btn pill-status-nao-fidelizado" data-status-val="NAO_FIDELIZADO" onclick="setClientStatusFilter('NAO_FIDELIZADO')"><span class="status-dot dot-orange"></span> Não Fidelizados</button>
-                            <button type="button" class="client-pill-btn pill-status-inativo" data-status-val="INATIVO" onclick="setClientStatusFilter('INATIVO')"><span class="status-dot dot-gray"></span> Inativos</button>
-                            <button type="button" class="client-pill-btn pill-status-loja-fechada" data-status-val="LOJA_FECHADA" onclick="setClientStatusFilter('LOJA_FECHADA')"><span class="status-dot dot-red"></span> Loja Fechada</button>
-                        </div>
+                            <button type="button" class="client-pill-btn pill-status-ativo" data-status-val="ATIVO" onclick="setClientStatusFilter('ATIVO')"><span class="status-dot dot-green"></span> Ativa</button>
+                            <button type="button" class="client-pill-btn pill-status-loja-fechada" data-status-val="INATIVO" onclick="setClientStatusFilter('INATIVO')"><span class="status-dot dot-red"></span> Inativa</button>
+
+</div>
                         <div class="clients-brand-pills-wrapper">
                             <span class="subfilter-caption"><i class='bx bx-purchase-tag'></i> Marca:</span>
                             <div class="clients-brand-pills-list" id="clients-brand-pills-list">
@@ -1624,9 +1621,7 @@
                 </div>
             </div>
 
-
-
-        </main>
+</main>
     </div>
 
     <!-- Modal: Nova Tarefa -->
@@ -2068,9 +2063,9 @@
                         </div>
                         <div class="form-group col-span-2">
                             <label for="cfm-status">Status do Cliente *</label>
-                            <select id="cfm-status" class="cfm-input" required>
-                                <option value="SIM">SIM (Cliente Ativo)</option>
-                                <option value="NAO">NÃO (Cliente Inativo)</option>
+                            <select id="cfm-status" class="cfm-input" onchange="onClientFormStatusChange(this.value)" required>
+                                <option value="ATIVO">🟢 ATIVA</option>
+                                <option value="INATIVO">🔴 INATIVA</option>
                             </select>
                         </div>
                         <div class="form-group col-span-2">
@@ -2282,7 +2277,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js?v=28"></script>
-    <script src="app.js?v=58"></script>
+    <script src="app.js?v=60"></script>
     <script src="indicators.js?v=53" charset="UTF-8"></script>
 </body>
 </html>

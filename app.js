@@ -3753,42 +3753,55 @@ const isClientBrandActive = window.isClientBrandActive;
 window.getClientGeneralStatus = function(client) {
     if (!client) return 'INATIVO';
 
+    // 1. Campo explícito 'CLIENTE ATIVO?' ou 'STATUS'
+    const ativoField = client['CLIENTE ATIVO?'];
+    if (ativoField !== undefined && ativoField !== null && ativoField !== '') {
+        const s = String(ativoField).trim().toUpperCase();
+        if (s === 'NAO' || s === 'NÃO' || s === '0' || s === 'INATIVO' || s.includes('FECHAD')) {
+            return 'INATIVO';
+        }
+        if (s === 'SIM' || s === '1' || s === 'ATIVO') {
+            // Se todas as marcas cadastradas forem LOJA_FECHADA, o cliente é considerado INATIVO (Loja Fechada)
+            let allFechada = true;
+            let hasAny = false;
+            CLIENT_BRAND_COLS.forEach(b => {
+                const val = client[b];
+                const st = client[b + '_STATUS'];
+                if (st || (val && val !== '0' && val !== 'NAO' && val !== 'NÃO' && val !== 'NULL')) {
+                    hasAny = true;
+                    if (st !== 'LOJA_FECHADA' && !String(val).toUpperCase().includes('FECHAD')) {
+                        allFechada = false;
+                    }
+                }
+            });
+            if (hasAny && allFechada) return 'INATIVO';
+            return 'ATIVO';
+        }
+    }
+
     const rawStatus = client['STATUS'];
     if (rawStatus !== undefined && rawStatus !== null && rawStatus !== '') {
         const s = String(rawStatus).trim().toUpperCase();
-        if (s === 'LOJA_FECHADA' || s === 'LOJA FECHADA' || s === 'FECHADA' || s === 'VERMELHO') {
-            return 'LOJA_FECHADA';
-        }
-        if (s === 'NAO_FIDELIZADO' || s === 'NÃO FIDELIZADO' || s === 'NAO FIDELIZADO' || s === 'LARANJA') {
-            return 'NAO_FIDELIZADO';
+        if (s === 'LOJA_FECHADA' || s === 'LOJA FECHADA' || s === 'FECHADA' || s === 'VERMELHO' || s === 'INATIVO' || s === 'NAO' || s === 'NÃO') {
+            return 'INATIVO';
         }
         if (s === 'ATIVO' || s === 'SIM' || s === '1' || s === 'VERDE') {
             return 'ATIVO';
         }
-        if (s === 'INATIVO' || s === 'NAO' || s === 'NÃO' || s === '0') {
-            return 'INATIVO';
-        }
     }
 
+    // 2. Verificar marcas
     let hasActive = false;
-    let hasNaoFidelizado = false;
-    let hasLojaFechada = false;
+    let hasFechada = false;
 
     CLIENT_BRAND_COLS.forEach(b => {
-        const val = client[b];
-        if (val !== undefined && val !== null && val !== '') {
-            const sv = String(val).trim().toUpperCase();
-            if (sv.includes('FECHAD') || sv === 'VERMELHO') hasLojaFechada = true;
-            else if (sv.includes('FIDELIZAD') || sv === 'LARANJA') hasNaoFidelizado = true;
-            else if (window.isClientBrandActive(client, b)) hasActive = true;
-        } else if (window.isClientBrandActive(client, b)) {
-            hasActive = true;
-        }
+        const st = window.getClientBrandStatus(client, b);
+        if (st === 'ATIVO' || st === 'NAO_FIDELIZADO') hasActive = true;
+        if (st === 'LOJA_FECHADA') hasFechada = true;
     });
 
     if (hasActive) return 'ATIVO';
-    if (hasNaoFidelizado) return 'NAO_FIDELIZADO';
-    if (hasLojaFechada) return 'LOJA_FECHADA';
+    if (hasFechada) return 'INATIVO';
 
     return 'INATIVO';
 };
@@ -3821,16 +3834,10 @@ window.getClientBrandStatus = function(client, brand) {
 };
 
 window.renderClientStatusBadge = function(status) {
-    if (status === 'ATIVO') {
-        return '<span class="client-status-badge status-ativo"><i class="bx bx-check-circle"></i> Ativo</span>';
+    if (status === 'INATIVO' || status === 'LOJA_FECHADA' || status === 'NAO') {
+        return '<span class="client-status-badge status-loja-fechada" title="Inativa"><i class="bx bx-store-alt"></i> Inativa</span>';
     }
-    if (status === 'NAO_FIDELIZADO') {
-        return '<span class="client-status-badge status-nao-fidelizado"><i class="bx bx-time-five"></i> Não Fidelizado</span>';
-    }
-    if (status === 'LOJA_FECHADA') {
-        return '<span class="client-status-badge status-loja-fechada"><i class="bx bx-store-alt"></i> Loja Fechada</span>';
-    }
-    return '<span class="client-status-badge status-inativo"><i class="bx bx-minus-circle"></i> Inativo</span>';
+    return '<span class="client-status-badge status-ativo" title="Ativa"><i class="bx bx-check-circle"></i> Ativa</span>';
 };
 
 let clientsMasterData = [];
@@ -4154,7 +4161,7 @@ function renderClientsTable() {
                     <th style="min-width: 180px;">Razão Social / Nome Fantasia</th>
                     <th style="width: 90px; white-space: nowrap;">Grupo</th>
                     <th style="width: 90px; white-space: nowrap;">Grupo Real</th>
-                    <th style="width: 105px; white-space: nowrap;">Cidade / UF</th>
+                    <th style="width: 85px; white-space: nowrap; font-size: 0.72rem;">Cidade / UF</th>
                     <th style="text-align: center; width: 85px; white-space: nowrap;">Status</th>
                     <th style="width: 180px;">Marcas</th>
                     <th style="text-align: right; width: 85px; white-space: nowrap;">Ações</th>
@@ -4209,7 +4216,7 @@ function renderClientsTable() {
                 </td>
                 <td style="color: var(--text-secondary); font-size: 0.78rem; white-space: nowrap;">${escapeHTML(grupo)}</td>
                 <td style="color: var(--text-secondary); font-size: 0.78rem; white-space: nowrap;">${escapeHTML(grupoReal)}</td>
-                <td style="white-space: nowrap; font-size: 0.78rem; font-weight: 500;">${escapeHTML(cidadeUf)}</td>
+                <td style="white-space: nowrap; font-size: 0.70rem; font-weight: 400; color: var(--text-secondary);">${escapeHTML(cidadeUf)}</td>
                 <td style="text-align: center; white-space: nowrap;">${statusBadge}</td>
                 <td><div class="client-brands-container">${brandsHtml}</div></td>
                 <td style="text-align: right;" onclick="event.stopPropagation()">
@@ -4300,12 +4307,12 @@ window.openClientDetailModal = function(clientIndex) {
     const clientStatus = window.getClientGeneralStatus(client);
     if (statusBadgeEl) {
         let badgeClass = 'status-inativo';
-        let badgeIcon = 'bx-minus-circle';
-        let badgeLabel = 'Inativo';
+        let badgeIcon = 'bx-store-alt';
+        let badgeLabel = 'Inativa';
         if (clientStatus === 'ATIVO') {
             badgeClass = 'status-ativo';
             badgeIcon = 'bx-check-circle';
-            badgeLabel = 'Cliente Ativo';
+            badgeLabel = 'Ativa';
         } else if (clientStatus === 'NAO_FIDELIZADO') {
             badgeClass = 'status-nao-fidelizado';
             badgeIcon = 'bx-time-five';
@@ -4313,7 +4320,7 @@ window.openClientDetailModal = function(clientIndex) {
         } else if (clientStatus === 'LOJA_FECHADA') {
             badgeClass = 'status-loja-fechada';
             badgeIcon = 'bx-store-alt';
-            badgeLabel = 'Loja Fechada';
+            badgeLabel = 'Inativa';
         }
         statusBadgeEl.className = `client-status-badge ${badgeClass}`;
         statusBadgeEl.innerHTML = `<i class='bx ${badgeIcon}'></i> ${badgeLabel}`;
@@ -4984,7 +4991,7 @@ function renderFormBrandToggles(clientData = {}) {
     container.innerHTML = html;
 }
 
-window.onBrandStatusSelectChange = function(brand, newStatus) {
+window.onBrandStatusSelectChange = function(brand, newStatus, syncGeneral = true) {
     const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
     if (!card) return;
 
@@ -5005,6 +5012,31 @@ window.onBrandStatusSelectChange = function(brand, newStatus) {
     } else {
         card.classList.add('status-inativo');
     }
+
+    // Sincronização com o Status Geral do Cliente (vice-versa)
+    if (syncGeneral) {
+        const clientStatusEl = document.getElementById('cfm-status');
+        if (clientStatusEl) {
+            if (newStatus === 'LOJA_FECHADA') {
+                // Se definiu LOJA FECHADA, verificar se não há outras marcas abertas
+                let hasOtherActive = false;
+                CLIENT_BRAND_COLS.forEach(b => {
+                    if (b === brand) return;
+                    const c = document.querySelector(`.cfm-brand-card[data-brand="${b}"]`);
+                    const s = c ? c.querySelector('.cfm-brand-status-select')?.value : null;
+                    if (s === 'ATIVO' || s === 'NAO_FIDELIZADO') {
+                        hasOtherActive = true;
+                    }
+                });
+                if (!hasOtherActive) {
+                    clientStatusEl.value = 'INATIVO';
+                }
+            } else if (newStatus === 'ATIVO' || newStatus === 'NAO_FIDELIZADO') {
+                // Se qualquer marca for ativada, a loja está aberta
+                clientStatusEl.value = 'ATIVO';
+            }
+        }
+    }
 };
 
 window.setFormBrandStatus = function(brand, newStatus) {
@@ -5022,8 +5054,8 @@ window.onBrandCodeInput = function(brand, value) {
     if (!card) return;
     const select = card.querySelector('.cfm-brand-status-select');
     const trimmed = (value || '').trim();
-    // Se digitou código e estava inativo, ativa automaticamente na marca
-    if (trimmed && select && select.value === 'INATIVO') {
+    // Se digitou código e estava inativo ou loja fechada, ativa automaticamente na marca
+    if (trimmed && select && (select.value === 'INATIVO' || select.value === 'LOJA_FECHADA')) {
         select.value = 'ATIVO';
         window.onBrandStatusSelectChange(brand, 'ATIVO');
     }
@@ -5044,13 +5076,33 @@ window.toggleFormBrandCard = window.cycleFormBrandStatus;
 window.onBrandCodeChanged = window.onBrandCodeInput;
 
 window.onClientFormStatusChange = function(statusVal) {
-    // Se o cliente for marcado como LOJA FECHADA, atualizar marcas que estejam ativas
-    if (statusVal === 'LOJA_FECHADA') {
-        document.querySelectorAll('.cfm-brand-card').forEach(card => {
-            const b = card.getAttribute('data-brand');
-            const select = card.querySelector('.cfm-brand-status-select');
-            if (select && select.value !== 'INATIVO') {
-                window.setFormBrandStatus(b, 'LOJA_FECHADA');
+    const isLojaFechada = (statusVal === 'INATIVO' || statusVal === 'NAO' || statusVal === 'LOJA_FECHADA');
+
+    if (isLojaFechada) {
+        // Se a loja está fechada (INATIVO), todas as marcas viram LOJA FECHADA
+        CLIENT_BRAND_COLS.forEach(brand => {
+            const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
+            if (card) {
+                const select = card.querySelector('.cfm-brand-status-select');
+                if (select) select.value = 'LOJA_FECHADA';
+                window.onBrandStatusSelectChange(brand, 'LOJA_FECHADA', false);
+            }
+        });
+    } else {
+        // Status ATIVO - LOJA ABERTA:
+        // As marcas que estavam como LOJA FECHADA voltam para ATIVO (se tem código) ou INATIVO
+        CLIENT_BRAND_COLS.forEach(brand => {
+            const card = document.querySelector(`.cfm-brand-card[data-brand="${brand}"]`);
+            if (card) {
+                const select = card.querySelector('.cfm-brand-status-select');
+                const codeInput = card.querySelector('.cfm-brand-code-input');
+                const cur = select ? select.value : card.getAttribute('data-status');
+                if (cur === 'LOJA_FECHADA') {
+                    const hasCode = codeInput && codeInput.value.trim();
+                    const nextSt = hasCode ? 'ATIVO' : 'INATIVO';
+                    if (select) select.value = nextSt;
+                    window.onBrandStatusSelectChange(brand, nextSt, false);
+                }
             }
         });
     }
@@ -5120,7 +5172,7 @@ window.lookupCep = async function(cepVal) {
 };
 
 window.saveClientFormData = async function() {
-    const statusVal = document.getElementById('cfm-status')?.value || 'SIM';
+    const statusVal = document.getElementById('cfm-status')?.value || 'ATIVO';
     const fantasiaVal = document.getElementById('cfm-fantasia')?.value?.trim()?.toUpperCase();
     if (!fantasiaVal) {
         window.showNotification('Informe o Nome Fantasia da loja.', 'error');
@@ -5199,8 +5251,11 @@ window.saveClientFormData = async function() {
         }
     });
 
+    const isLojaFechada = (statusVal === 'INATIVO' || statusVal === 'NAO');
+
     const clientData = {
-        'CLIENTE ATIVO?': statusVal,
+        'CLIENTE ATIVO?': isLojaFechada ? 'NAO' : 'SIM',
+        'STATUS': isLojaFechada ? 'LOJA_FECHADA' : 'ATIVO',
         'CNPJ': cnpjVal,
         'FANTASIA': fantasiaVal,
         'RAZAO SOCIAL': razaoVal,
@@ -5655,9 +5710,9 @@ window.lookupCnpjData = async function() {
 
         // 3. Status Cadastral
         if (norm.statusAtivo === 'NAO') {
-            document.getElementById('cfm-status').value = 'NAO';
+            document.getElementById('cfm-status').value = 'INATIVO';
         } else if (existingClient['CLIENTE ATIVO?']) {
-            document.getElementById('cfm-status').value = (existingClient['CLIENTE ATIVO?'].toString().trim().toUpperCase() === 'NAO') ? 'NAO' : 'SIM';
+            document.getElementById('cfm-status').value = (existingClient['CLIENTE ATIVO?'].toString().trim().toUpperCase() === 'NAO') ? 'INATIVO' : 'ATIVO';
         }
 
         // 4. Endereço oficial
@@ -5775,7 +5830,7 @@ window.lookupCnpjData = async function() {
         document.getElementById('cfm-fantasia').value = norm.razaoSocial;
     }
 
-    if (norm.statusAtivo) document.getElementById('cfm-status').value = norm.statusAtivo;
+    if (norm.statusAtivo) document.getElementById('cfm-status').value = (norm.statusAtivo === 'NAO') ? 'INATIVO' : 'ATIVO';
     if (norm.cep) document.getElementById('cfm-cep').value = norm.cep;
     if (norm.logradouro) document.getElementById('cfm-rua').value = norm.logradouro;
     if (norm.numero) document.getElementById('cfm-numero').value = norm.numero;

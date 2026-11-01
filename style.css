@@ -3066,6 +3066,12 @@ body:not(.is-admin) .admin-only {
     text-transform: uppercase;
 }
 
+select.cfm-input option {
+    background: #1e293b;
+    color: #f8fafc;
+    padding: 0.5rem;
+}
+
 #client-edit-form input[type="text"],
 #client-edit-form textarea {
     text-transform: uppercase;
