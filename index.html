@@ -21,7 +21,7 @@
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     
     <!-- CSS Customizado -->
-    <link rel="stylesheet" href="style.css?v=21">
+    <link rel="stylesheet" href="style.css?v=29">
 </head>
 <body>
     <div class="app-container">
@@ -625,10 +625,22 @@
                             <i class='bx bx-line-chart' style="color: var(--accent-color);"></i> Indicadores Comerciais
                         </h1>
                         <span class="subtitle" style="color: var(--text-secondary); font-size: 0.9rem;" id="indicators-subtitle">
-                            Análise estratégica de vendas (Faturamento Bruto (Gross)) — NEW ERA • Atualizado em: 31/10/2026
+                            Análise estratégica de vendas (Faturamento Bruto (Gross)) â€” NEW ERA â€â Atualizado em: 31/10/2026
                         </span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                        <!-- Seletor de Base / Dataset -->
+                        <div class="ind-dataset-pills" style="display: inline-flex; background: rgba(255,255,255,0.06); padding: 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); gap: 4px;">
+                            <button type="button" class="btn-dataset-pill active" id="btn-dataset-extrato" onclick="switchIndicatorsDataset('extrato')" style="background: var(--accent-color, #3b82f6); color: white; border: none; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" title="Pedidos a Entregar (NEW ERA - EXTRATO PEDIDOS.xlsx)">
+                                <i class='bx bx-package'></i> Extrato de Pedidos (A Entregar)
+                            </button>
+                            <button type="button" class="btn-dataset-pill" id="btn-dataset-billing" onclick="switchIndicatorsDataset('billing')" style="background: transparent; color: var(--text-secondary); border: none; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" title="Faturamento Histórico Realizado (NEW ERA)">
+                                <i class='bx bx-receipt'></i> Faturamento Realizado
+                            </button>
+                            <button type="button" class="btn-dataset-pill" id="btn-dataset-comparison" onclick="switchIndicatorsDataset('comparison')" style="background: transparent; color: var(--text-secondary); border: none; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" title="Confronto direto: Pedidos a Entregar vs Faturamento Realizado">
+                                <i class='bx bx-git-compare'></i> A Entregar X Faturamento
+                            </button>
+                        </div>
                         <input type="file" id="billing-file-input" accept=".xlsx,.xls" style="display: none;" onchange="handleUploadBillingExcel(event)">
                         <button type="button" class="btn-indicators-secondary" onclick="document.getElementById('billing-file-input').click()" title="Importar ou atualizar planilha de faturamento">
                             <i class='bx bx-upload'></i> Atualizar Faturamento (.xlsx)
@@ -699,7 +711,7 @@
                             <label><i class='bx bx-time-five'></i> Semestre</label>
                             <div class="ind-cms" id="ind-cms-semester">
                                 <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-semester', event)">
-                                    <span class="ind-cms-label" id="ind-cms-semester-label">2º Semestre</span>
+                                    <span class="ind-cms-label" id="ind-cms-semester-label">2Âú Semestre</span>
                                     <i class='bx bx-chevron-down'></i>
                                 </button>
                                 <div class="ind-cms-dropdown hidden" id="ind-cms-semester-dropdown">
@@ -708,8 +720,8 @@
                                         <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('semester', false)">Limpar</button>
                                     </div>
                                     <div class="ind-cms-options-list" id="ind-cms-semester-list">
-                                        <label class="ind-cms-option"><input type="checkbox" value="1" onchange="onIndCMSCheckboxChange('semester')"> <span class="ind-cms-option-label">1º Semestre (Jan - Jun)</span></label>
-                                        <label class="ind-cms-option"><input type="checkbox" value="2" checked onchange="onIndCMSCheckboxChange('semester')"> <span class="ind-cms-option-label">2º Semestre (Jul - Dez)</span></label>
+                                        <label class="ind-cms-option"><input type="checkbox" value="1" onchange="onIndCMSCheckboxChange('semester')"> <span class="ind-cms-option-label">1Âú Semestre (Jan - Jun)</span></label>
+                                        <label class="ind-cms-option"><input type="checkbox" value="2" checked onchange="onIndCMSCheckboxChange('semester')"> <span class="ind-cms-option-label">2Âú Semestre (Jul - Dez)</span></label>
                                     </div>
                                 </div>
                             </div>
@@ -859,24 +871,30 @@
                 <div class="kpi-section-header">
                     <div class="kpi-section-title">
                         <i class='bx bx-bar-chart-alt-2' style="color: var(--accent-color);"></i> Indicadores Principais
+                        <span class="kpi-drag-hint" title="Arraste e solte os cards para reorganizar a ordem"><i class='bx bx-move'></i> Arraste os cards para reposicionar</span>
                     </div>
-                    <div class="kpi-mode-switcher">
-                        <button type="button" class="btn-kpi-mode active" data-mode="both" onclick="onKpiDisplayModeChange('both')" title="Exibir valores em R$ e quantidade de peças juntos">
-                            <i class='bx bx-layer'></i> Os Dois
+                    <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
+                        <button type="button" class="btn-kpi-reset-order" onclick="resetKpiCardsOrder()" title="Restaurar a ordem original dos cards">
+                            <i class='bx bx-reset'></i> Posições Padrão
                         </button>
-                        <button type="button" class="btn-kpi-mode" data-mode="values" onclick="onKpiDisplayModeChange('values')" title="Exibir somente valores financeiros em R$">
-                            <i class='bx bx-dollar'></i> Valores (R$)
-                        </button>
-                        <button type="button" class="btn-kpi-mode" data-mode="pieces" onclick="onKpiDisplayModeChange('pieces')" title="Exibir somente quantidade física em peças">
-                            <i class='bx bx-package'></i> Peças (Qtd)
-                        </button>
+                        <div class="kpi-mode-switcher">
+                            <button type="button" class="btn-kpi-mode active" data-mode="both" onclick="onKpiDisplayModeChange('both')" title="Exibir valores em R$ e quantidade de peças juntos">
+                                <i class='bx bx-layer'></i> Os Dois
+                            </button>
+                            <button type="button" class="btn-kpi-mode" data-mode="values" onclick="onKpiDisplayModeChange('values')" title="Exibir somente valores financeiros em R$">
+                                <i class='bx bx-dollar'></i> Valores (R$)
+                            </button>
+                            <button type="button" class="btn-kpi-mode" data-mode="pieces" onclick="onKpiDisplayModeChange('pieces')" title="Exibir somente quantidade física em peças">
+                                <i class='bx bx-package'></i> Peças (Qtd)
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- CARDS DE INDICADORES PRINCIPAIS (KPIS) -->
+                <!-- CARDS DE INDICADORES PRINCIPAIS (KPIS - EDITÁVEIS COM DRAG & DROP) -->
                 <div class="indicators-kpis-grid">
-                    <!-- KPI 1: Faturamento Total / Volume Total -->
-                    <div class="kpi-card highlight-accent">
+                    <!-- KPI 1: Booking Total / Faturamento Total / Faturamento Realizado -->
+                    <div class="kpi-card highlight-accent" id="kpi-card-total">
                         <div class="kpi-header">
                             <span class="kpi-title" id="kpi-total-title">Faturamento Total</span>
                             <div class="kpi-icon-badge" id="kpi-total-icon"><i class='bx bx-dollar-circle'></i></div>
@@ -890,8 +908,71 @@
                         </div>
                     </div>
 
-                    <!-- KPI 2: Faturamento Mês Atual / Volume no Mês -->
-                    <div class="kpi-card highlight-emerald">
+                    <!-- KPI 2: Peças a Entregar / A Entregar (Carteira) -->
+                    <div class="kpi-card highlight-emerald" id="kpi-card-pieces">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-pieces-title">Peças a Entregar</span>
+                            <div class="kpi-icon-badge"><i class='bx bx-package'></i></div>
+                        </div>
+                        <div class="kpi-value font-mono" id="kpi-total-pieces-val">0 pçs</div>
+                        <div class="kpi-footer">
+                            <span id="kpi-pieces-footer">volume total programado</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 3: Pedidos em Carteira / Total Geral Previsto -->
+                    <div class="kpi-card highlight-amber" id="kpi-card-orders">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-orders-title">Pedidos em Carteira</span>
+                            <div class="kpi-icon-badge"><i class='bx bx-receipt'></i></div>
+                        </div>
+                        <div class="kpi-value font-mono" id="kpi-unique-orders-val">0</div>
+                        <div class="kpi-footer">
+                            <span id="kpi-orders-footer">pedidos programados</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 4 (Solicitado logo após TOTAL GERAL PREVISTO): % Realizado vs Carteira / Ticket Médio -->
+                    <div class="kpi-card" id="kpi-card-ticket">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-ticket-title">Ticket Médio</span>
+                            <div class="kpi-icon-badge" id="kpi-ticket-icon"><i class='bx bx-receipt'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value font-mono" id="kpi-avg-ticket">R$ 0,00</div>
+                            <div class="kpi-sub-badge" id="kpi-ticket-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-ticket-footer">por cliente</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 5: Clientes Faturados / Clientes Booking / Lojas Faturadas -->
+                    <div class="kpi-card" id="kpi-card-clients">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-clients-title">Clientes Faturados</span>
+                            <div class="kpi-icon-badge"><i class='bx bx-store-alt'></i></div>
+                        </div>
+                        <div class="kpi-value font-mono" id="kpi-active-clients">0</div>
+                        <div class="kpi-footer">
+                            <span id="kpi-clients-coverage">lojas com compras ativas</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 6: Redes / Grupos / Lojas em Carteira -->
+                    <div class="kpi-card" id="kpi-card-groups">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-groups-title">Redes / Grupos</span>
+                            <div class="kpi-icon-badge"><i class='bx bx-sitemap'></i></div>
+                        </div>
+                        <div class="kpi-value font-mono" id="kpi-active-groups">0</div>
+                        <div class="kpi-footer">
+                            <span id="kpi-groups-coverage">redes corporativas</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI Suplementar (Modo Faturamento apenas): Faturamento no Mês -->
+                    <div class="kpi-card highlight-emerald" id="kpi-card-month" style="display: none;">
                         <div class="kpi-header">
                             <span class="kpi-title" id="kpi-month-title">Faturamento no Mês</span>
                             <div class="kpi-icon-badge" id="kpi-month-icon"><i class='bx bx-trending-up'></i></div>
@@ -905,8 +986,8 @@
                         </div>
                     </div>
 
-                    <!-- KPI 3: Faturamento do Dia / Volume do Dia -->
-                    <div class="kpi-card highlight-amber">
+                    <!-- KPI Suplementar (Modo Faturamento apenas): Faturamento do Dia -->
+                    <div class="kpi-card highlight-amber" id="kpi-card-day" style="display: none;">
                         <div class="kpi-header">
                             <span class="kpi-title" id="kpi-day-title">Faturamento do Dia</span>
                             <div class="kpi-icon-badge" id="kpi-day-icon"><i class='bx bx-calendar-check'></i></div>
@@ -919,49 +1000,10 @@
                             <span id="kpi-day-date">-</span>
                         </div>
                     </div>
-
-                    <!-- KPI 4: Clientes com Faturamento -->
-                    <div class="kpi-card">
-                        <div class="kpi-header">
-                            <span class="kpi-title">Clientes Faturados</span>
-                            <div class="kpi-icon-badge"><i class='bx bx-store-alt'></i></div>
-                        </div>
-                        <div class="kpi-value font-mono" id="kpi-active-clients">0</div>
-                        <div class="kpi-footer">
-                            <span id="kpi-clients-coverage">lojas com compras ativas</span>
-                        </div>
-                    </div>
-
-                    <!-- KPI 5: Redes / Grupos Atendidos -->
-                    <div class="kpi-card">
-                        <div class="kpi-header">
-                            <span class="kpi-title">Redes / Grupos</span>
-                            <div class="kpi-icon-badge"><i class='bx bx-sitemap'></i></div>
-                        </div>
-                        <div class="kpi-value font-mono" id="kpi-active-groups">0</div>
-                        <div class="kpi-footer">
-                            <span id="kpi-groups-coverage">redes corporativas</span>
-                        </div>
-                    </div>
-
-                    <!-- KPI 6: Ticket Médio / Média por Cliente -->
-                    <div class="kpi-card">
-                        <div class="kpi-header">
-                            <span class="kpi-title" id="kpi-ticket-title">Ticket Médio</span>
-                            <div class="kpi-icon-badge" id="kpi-ticket-icon"><i class='bx bx-receipt'></i></div>
-                        </div>
-                        <div class="kpi-value-container">
-                            <div class="kpi-value font-mono" id="kpi-avg-ticket">R$ 0,00</div>
-                            <div class="kpi-sub-badge" id="kpi-ticket-sub" style="display: none;"></div>
-                        </div>
-                        <div class="kpi-footer">
-                            <span id="kpi-ticket-footer">por cliente faturado</span>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- SEÇÃO DE GRÁFICOS (POWER BI STYLE) -->
-                <div class="indicators-charts-section">
+                <div class="indicators-charts-section" id="indicators-charts-section">
                     <!-- Painel Comparativo Multi-Ano (Ativado quando > 1 ano selecionado) -->
                     <div id="indicators-comparison-panel" class="chart-panel-card chart-full-width comparison-card" style="display: none;">
                         <div class="chart-header" style="flex-wrap: wrap; gap: 0.85rem; align-items: center;">
@@ -1046,7 +1088,7 @@
                         <div class="chart-header">
                             <div class="chart-title-group">
                                 <h3><i class='bx bx-pie-chart-alt-2' style="color: #f59e0b;"></i> Faturamento por Grupo Real</h3>
-                                <span class="chart-subtitle">Distribuição entre os principais grupos econômicos</span>
+                                <span class="chart-subtitle">Distribuição entre os principais grupos econ´micos</span>
                             </div>
                         </div>
                         <div class="chart-canvas-container" style="height: 290px;">
@@ -1056,7 +1098,7 @@
                 </div>
 
                 <!-- SEÇÃO DE RANKINGS COMERCIAIS -->
-                <div class="indicators-rankings-section">
+                <div class="indicators-rankings-section" id="indicators-rankings-section">
                     <div class="ranking-header-title" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.75rem;">
                         <div>
                             <h2><i class='bx bx-trophy' style="color: #f59e0b;"></i> Rankings Comerciais</h2>
@@ -1188,7 +1230,210 @@
                     </div>
                 </div>
 
-                <!-- SEÇÃO DE AUDITORIA / CONFERÊNCIA DE CNPJS NÃO VINCULADOS -->
+                <!-- SEÇÃO DE AUDITORIA / CONFERÃŠNCIA DE CNPJS NÃO VINCULADOS -->
+                                <!-- SEÇÃO DE GRÁFICOS DO CONFRONTO (A ENTREGAR X FATURAMENTO) -->
+                <div class="indicators-charts-section" id="comparison-charts-section" style="display: none;">
+                    <!-- Gráfico 1: Confronto Mensal -->
+                    <div class="chart-panel-card chart-full-width">
+                        <div class="chart-header" style="flex-wrap: wrap; gap: 0.85rem; align-items: center; justify-content: space-between;">
+                            <div class="chart-title-group">
+                                <h3><i class='bx bx-bar-chart-alt-2' style="color: var(--accent-color, #3b82f6);"></i> Confronto Mensal: Faturamento Realizado vs A Entregar</h3>
+                                <span class="chart-subtitle">Comparativo mensal com barras lado a lado e projeção total consolidada</span>
+                            </div>
+                            <div class="chart-tools" style="display: flex; gap: 0.5rem; align-items: center;">
+                                <button type="button" class="btn-comp-pill active" id="btn-comp-chart-mode-val" onclick="setComparisonChartDisplayMode('values')">
+                                    <i class='bx bx-dollar'></i> Valores (R$)
+                                </button>
+                                <button type="button" class="btn-comp-pill" id="btn-comp-chart-mode-qty" onclick="setComparisonChartDisplayMode('pieces')">
+                                    <i class='bx bx-package'></i> Peças (Un)
+                                </button>
+                            </div>
+                        </div>
+                        <div class="chart-canvas-container" style="height: 340px;">
+                            <canvas id="chart-comp-monthly"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Gráfico 2: Evolução Diária do Confronto -->
+                    <div class="chart-panel-card chart-half-width">
+                        <div class="chart-header">
+                            <div class="chart-title-group">
+                                <h3><i class='bx bx-line-chart' style="color: #10b981;"></i> Confronto por Data (Evolução Diária)</h3>
+                                <span class="chart-subtitle">Faturamento no dia vs Entregas programadas por data</span>
+                            </div>
+                        </div>
+                        <div class="chart-canvas-container" style="height: 300px;">
+                            <canvas id="chart-comp-daily"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Gráfico 3: Confronto por Divisão / Classe -->
+                    <div class="chart-panel-card chart-half-width">
+                        <div class="chart-header">
+                            <div class="chart-title-group">
+                                <h3><i class='bx bx-pie-chart-alt-2' style="color: #f59e0b;"></i> Confronto por Divisão / Classe</h3>
+                                <span class="chart-subtitle">Comparação de volumes entre HEADWEAR, APPAREL e ACCESSORIES</span>
+                            </div>
+                        </div>
+                        <div class="chart-canvas-container" style="height: 300px;">
+                            <canvas id="chart-comp-classes"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEÇÃO DE TABELAS DE CONFRONTAÇÃO DETALHADA -->
+                <div id="comparison-tables-section" class="chart-panel-card chart-full-width" style="display: none; margin-top: 1.25rem;">
+                    <div class="chart-header" style="flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 1rem;">
+                        <div class="chart-title-group">
+                            <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                                <h3><i class='bx bx-git-compare' style="color: #6366f1;"></i> Confronto Analítico: A Entregar vs Faturamento</h3>
+                                <span class="badge" id="comp-table-total-badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; font-weight: 600; padding: 3px 9px; border-radius: 12px; font-size: 0.75rem;">0 CNPJs Cruzados</span>
+                            </div>
+                            <span class="chart-subtitle">Confrontação direta e cruzamento das informações por CNPJ, por Mês e por Data</span>
+                        </div>
+
+                        <!-- Pílulas de Sub-Abas e Exportação -->
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                            <div class="comparison-pills-bar" style="margin: 0; padding: 2px;">
+                                <button type="button" class="btn-comp-subtab active" id="btn-subtab-cnpj" onclick="switchComparisonSubTab('cnpj')">
+                                    <i class='bx bx-store-alt'></i> Por CNPJ / Loja
+                                </button>
+                                <button type="button" class="btn-comp-subtab" id="btn-subtab-month" onclick="switchComparisonSubTab('month')">
+                                    <i class='bx bx-calendar'></i> Por Mês / Ano
+                                </button>
+                                <button type="button" class="btn-comp-subtab" id="btn-subtab-date" onclick="switchComparisonSubTab('date')">
+                                    <i class='bx bx-calendar-event'></i> Por Data
+                                </button>
+                            </div>
+                            <button type="button" class="btn-indicators-export" onclick="exportComparisonToExcel()" title="Exportar Confronto Analítico em Excel">
+                                <i class='bx bx-download'></i> Exportar Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Barra de Pesquisa e Ordenação (Visível na aba de CNPJ) -->
+                    <div id="comp-controls-bar" style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 1rem; margin-bottom: 1rem;">
+                        <div style="position: relative; flex: 1; min-width: 280px; max-width: 480px;">
+                            <i class='bx bx-search' style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 1.1rem;"></i>
+                            <input type="text" id="comp-search-input" class="ind-input" style="padding-left: 2.3rem; width: 100%; border-radius: 6px; font-size: 0.85rem;" placeholder="Buscar por CNPJ (com ou sem máscara) ou Nome do Cliente..." oninput="onComparisonSearchInput(this.value)">
+                        </div>
+                        <div id="comp-sort-container" style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label for="comp-sort-select" style="font-size: 0.82rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem;"><i class='bx bx-sort'></i> Ordenar:</label>
+                            <select id="comp-sort-select" class="ind-select" style="padding: 0.35rem 0.65rem; font-size: 0.82rem; width: auto;" onchange="onComparisonSortChange(this.value)">
+                                <option value="total_desc" selected>Maior Total Geral Previsto</option>
+                                <option value="fat_desc">Maior Faturamento Realizado</option>
+                                <option value="ext_desc">Maior A Entregar (Carteira)</option>
+                                <option value="pct_fat_desc">Maior % Faturado</option>
+                                <option value="pct_ext_desc">Maior % A Entregar</option>
+                                <option value="name_asc">Nome do Cliente (A - Z)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Tabela 1: Por CNPJ -->
+                    <div id="comp-tab-content-cnpj" class="comparison-tab-content">
+                        <div style="overflow-x: auto; max-height: 560px;" class="custom-scrollbar">
+                            <table class="comp-table" id="comp-table-cnpj">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" onclick="sortCompCnpjTable('cnpj')" id="th-cnpj-cnpj" style="min-width: 140px;">CNPJ <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompCnpjTable('fantasia')" id="th-cnpj-fantasia" style="min-width: 220px;">Cliente (Razão Social / Fantasia) <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompCnpjTable('rede')" id="th-cnpj-rede" style="min-width: 130px;">Cidade / Rede <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompCnpjTable('fatV')" id="th-cnpj-fatV" style="min-width: 130px; text-align: right;">Faturado (R$) <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompCnpjTable('fatQ')" id="th-cnpj-fatQ" style="min-width: 90px; text-align: right;">Peças Fat. <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompCnpjTable('extV')" id="th-cnpj-extV" style="min-width: 130px; text-align: right;">A Entregar (R$) <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompCnpjTable('extQ')" id="th-cnpj-extQ" style="min-width: 90px; text-align: right;">Peças Entr. <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable active-sort" onclick="sortCompCnpjTable('totalV')" id="th-cnpj-totalV" style="min-width: 140px; text-align: right;">Total Previsto (R$) <span class="th-sort-icon"><i class='bx bx-sort-down'></i></span></th>
+                                        <th class="sortable" onclick="sortCompCnpjTable('pctFat')" id="th-cnpj-pctFat" style="min-width: 150px; text-align: center;">% Realizado vs Carteira <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th style="min-width: 80px; text-align: center;">Detalhes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="comp-tbody-cnpj">
+                                    <!-- Linhas injetadas via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tabela 2: Por Mês / Ano -->
+                    <div id="comp-tab-content-month" class="comparison-tab-content" style="display: none;">
+                        <div style="overflow-x: auto; max-height: 560px;" class="custom-scrollbar">
+                            <table class="comp-table" id="comp-table-month">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable active-sort" onclick="sortCompMonthTable('key')" id="th-month-key" style="min-width: 130px;">Mês / Ano <span class="th-sort-icon"><i class='bx bx-sort-down'></i></span></th>
+                                        <th class="sortable" onclick="sortCompMonthTable('fatV')" id="th-month-fatV" style="min-width: 130px; text-align: right;">Faturado (R$) <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompMonthTable('fatQ')" id="th-month-fatQ" style="min-width: 100px; text-align: right;">Peças Fat. <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompMonthTable('extV')" id="th-month-extV" style="min-width: 130px; text-align: right;">A Entregar (R$) <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompMonthTable('extQ')" id="th-month-extQ" style="min-width: 100px; text-align: right;">Peças Entr. <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompMonthTable('totalV')" id="th-month-totalV" style="min-width: 140px; text-align: right;">Total Consolidado (R$) <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompMonthTable('totalQ')" id="th-month-totalQ" style="min-width: 110px; text-align: right;">Total Peças <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th style="min-width: 170px; text-align: center;">% Faturado vs % Carteira</th>
+                                        <th class="sortable" onclick="sortCompMonthTable('fatStoresCount')" id="th-month-fatStoresCount" style="min-width: 100px; text-align: right;">Lojas Fat. <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompMonthTable('extStoresCount')" id="th-month-extStoresCount" style="min-width: 100px; text-align: right;">Lojas Entr. <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="comp-tbody-month">
+                                    <!-- Linhas injetadas via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tabela 3: Por Data -->
+                    <div id="comp-tab-content-date" class="comparison-tab-content" style="display: none;">
+                        <div class="comp-date-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.6rem; padding: 0.2rem 0;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <button type="button" class="btn-comp-pill active" id="btn-comp-date-group-toggle" onclick="toggleCompDateGrouping()">
+                                    <i class='bx bx-folder'></i> Agrupado por Mês
+                                </button>
+                                <button type="button" class="btn-comp-pill" id="btn-comp-date-expand-all" onclick="toggleAllCompDateMonths()">
+                                    <i class='bx bx-collapse-vertical' id="icon-comp-date-expand-all"></i> <span id="label-comp-date-expand-all">Recolher Todos</span>
+                                </button>
+                            </div>
+                            <div class="comp-table-toolbar-badge" id="comp-date-summary-badge">
+                                <!-- Preenchido dinamicamente via JS -->
+                            </div>
+                        </div>
+                        <div style="overflow-x: auto; max-height: 560px;" class="custom-scrollbar">
+                            <table class="comp-table" id="comp-table-date">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable active-sort" onclick="sortCompDateTable('date')" id="th-date-date" style="min-width: 160px;">
+                                            Data / Mês <span class="th-sort-icon"><i class='bx bx-sort-down'></i></span>
+                                        </th>
+                                        <th class="sortable" onclick="sortCompDateTable('weekday')" id="th-date-weekday" style="min-width: 110px;">
+                                            Dia Semana <span class="th-sort-icon"><i class='bx bx-sort'></i></span>
+                                        </th>
+                                        <th class="sortable" onclick="sortCompDateTable('fatV')" id="th-date-fatV" style="min-width: 140px; text-align: right;">
+                                            Faturado no Dia (R$) <span class="th-sort-icon"><i class='bx bx-sort'></i></span>
+                                        </th>
+                                        <th class="sortable" onclick="sortCompDateTable('fatQ')" id="th-date-fatQ" style="min-width: 100px; text-align: right;">
+                                            Peças Fat. <span class="th-sort-icon"><i class='bx bx-sort'></i></span>
+                                        </th>
+                                        <th class="sortable" onclick="sortCompDateTable('extV')" id="th-date-extV" style="min-width: 140px; text-align: right;">
+                                            A Entregar no Dia (R$) <span class="th-sort-icon"><i class='bx bx-sort'></i></span>
+                                        </th>
+                                        <th class="sortable" onclick="sortCompDateTable('extQ')" id="th-date-extQ" style="min-width: 100px; text-align: right;">
+                                            Peças Entr. <span class="th-sort-icon"><i class='bx bx-sort'></i></span>
+                                        </th>
+                                        <th class="sortable" onclick="sortCompDateTable('totalV')" id="th-date-totalV" style="min-width: 150px; text-align: right;">
+                                            Total do Dia (R$) <span class="th-sort-icon"><i class='bx bx-sort'></i></span>
+                                        </th>
+                                        <th class="sortable" onclick="sortCompDateTable('status')" id="th-date-status" style="min-width: 130px; text-align: center;">
+                                            Status do Dia <span class="th-sort-icon"><i class='bx bx-sort'></i></span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="comp-tbody-date">
+                                    <!-- Linhas injetadas via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEÇÃO DE AUDITORIA / CONFERÃŠNCIA DE CNPJS NÃO VINCULADOS -->
                 <div class="indicators-audit-card" id="indicators-audit-section" style="display: none;">
                     <div class="audit-header" onclick="toggleAuditDetails()" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
                         <div style="display: flex; align-items: center; gap: 0.6rem;">
@@ -1668,7 +1913,7 @@
                         </div>
                         <div class="form-group col-span-2">
                             <label for="cfm-fantasia">Nome Fantasia *</label>
-                            <input type="text" id="cfm-fantasia" class="cfm-input" placeholder="Ex: Central Surf Shopping Metrô" required autocomplete="off">
+                            <input type="text" id="cfm-fantasia" class="cfm-input" placeholder="Ex: Central Surf Shopping Metr´" required autocomplete="off">
                         </div>
                         <div class="form-group col-span-2">
                             <label for="cfm-razao">Razão Social</label>
@@ -1834,16 +2079,19 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <!-- Dados Iniciais de Clientes (Extraídos do OneDrive) -->
-    <script src="clients-data.js?v=21"></script>
+    <script src="clients-data.js?v=28"></script>
 
     <!-- Dados Iniciais de Faturamento (NEW ERA) -->
-    <script src="billing-data.js?v=21"></script>
+    <script src="billing-data.js?v=28"></script>
+
+    <!-- Dados do Extrato de Pedidos a Entregar (NEW ERA) -->
+    <script src="extrato-pedidos-data.js?v=29"></script>
 
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="firebase-config.js?v=21"></script>
-    <script src="app.js?v=21"></script>
-    <script src="indicators.js?v=21"></script>
+    <script src="firebase-config.js?v=28"></script>
+    <script src="app.js?v=28"></script>
+    <script src="indicators.js?v=29"></script>
 </body>
 </html>

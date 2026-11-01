@@ -1,4 +1,4 @@
-/* style.css - Design Premium Calendário, Tabs, Kanban e Sidebar */
+﻿/* style.css - Design Premium Calendário, Tabs, Kanban e Sidebar */
 
 :root {
     /* Color Palette */
@@ -3386,6 +3386,7 @@ body:not(.is-admin) .admin-only {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    min-width: 0;
 }
 
 .ind-input-group label {
@@ -3449,6 +3450,7 @@ body:not(.is-admin) .admin-only {
 .ind-cms {
     position: relative;
     width: 100%;
+    min-width: 0;
     font-family: var(--font-family);
     z-index: 5;
 }
@@ -3459,6 +3461,8 @@ body:not(.is-admin) .admin-only {
 
 .ind-cms-btn {
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     background: rgba(15, 23, 42, 0.7);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -3473,6 +3477,7 @@ body:not(.is-admin) .admin-only {
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
     text-align: left;
+    overflow: hidden;
 }
 
 .ind-cms-btn:hover {
@@ -3489,6 +3494,7 @@ body:not(.is-admin) .admin-only {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
     flex: 1;
     font-weight: 500;
 }
@@ -4307,4 +4313,247 @@ body:not(.is-admin) .admin-only {
     .kpi-value {
         font-size: 1.3rem;
     }
+}
+
+
+/* ==========================================================================
+   CONFRONTO COMERCIAL: A ENTREGAR X FATURAMENTO
+   ========================================================================== */
+.btn-comp-subtab {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary, #94a3b8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.45rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s ease;
+}
+.btn-comp-subtab:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+.btn-comp-subtab.active {
+    background: var(--accent-color, #3b82f6);
+    color: #ffffff;
+    border-color: var(--accent-color, #3b82f6);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+}
+
+.comp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    text-align: left;
+}
+.comp-table th {
+    background: rgba(15, 23, 42, 0.95);
+    color: var(--text-secondary, #94a3b8);
+    font-weight: 600;
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+.comp-table td {
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--text-primary, #f8fafc);
+    vertical-align: middle;
+}
+.comp-table tbody tr.comp-row:hover td {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.comp-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.comp-table th.sortable:hover {
+    background: rgba(30, 41, 59, 0.95);
+    color: #f8fafc;
+}
+.comp-table th.sortable .th-sort-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    font-size: 0.85rem;
+    vertical-align: middle;
+    opacity: 0.45;
+    transition: opacity 0.15s, color 0.15s;
+}
+.comp-table th.sortable:hover .th-sort-icon {
+    opacity: 0.85;
+}
+.comp-table th.sortable.active-sort {
+    color: var(--accent-color, #3b82f6);
+}
+.comp-table th.sortable.active-sort .th-sort-icon {
+    opacity: 1;
+    color: var(--accent-color, #3b82f6);
+}
+
+.comp-month-group-row {
+    background: rgba(30, 41, 59, 0.85) !important;
+    border-top: 1px solid rgba(59, 130, 246, 0.35);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.comp-month-group-row:hover td {
+    background: rgba(51, 65, 85, 0.95) !important;
+}
+.comp-month-group-row td {
+    padding: 0.72rem 0.85rem;
+}
+.comp-date-day-row td {
+    background: rgba(15, 23, 42, 0.25);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+.comp-date-day-row:hover td {
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.comp-table-toolbar-badge {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.comp-progress-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    min-width: 130px;
+}
+.comp-progress-bar {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    width: 100%;
+}
+.comp-bar-fat {
+    background: #3b82f6;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+.comp-bar-ext {
+    background: #10b981;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+.comp-progress-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    font-family: monospace;
+}
+
+.btn-comp-detail {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    padding: 0.25rem 0.55rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    transition: all 0.2s;
+}
+.btn-comp-detail:hover {
+    background: #3b82f6;
+    color: #ffffff;
+}
+
+.comp-detail-box {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+}
+
+/* Drag and Drop para Cards de KPIs */
+.kpi-card[draggable="true"] {
+    cursor: grab;
+    user-select: none;
+}
+.kpi-card[draggable="true"]:active {
+    cursor: grabbing;
+}
+.kpi-card.kpi-dragging {
+    opacity: 0.35 !important;
+    transform: scale(0.96) !important;
+    border: 2px dashed var(--accent-color, #3b82f6) !important;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4) !important;
+}
+.kpi-card.kpi-drag-over {
+    border-color: var(--accent-color, #3b82f6) !important;
+    box-shadow: 0 0 0 2px var(--accent-color, #3b82f6), 0 8px 24px rgba(59, 130, 246, 0.3) !important;
+    transform: translateY(-3px) scale(1.02) !important;
+}
+.kpi-drag-handle {
+    opacity: 0.35;
+    transition: opacity 0.2s ease, color 0.2s ease;
+    color: var(--text-secondary, #94a3b8);
+    font-size: 1.15rem;
+    margin-right: 6px;
+    cursor: grab;
+    display: inline-flex;
+    align-items: center;
+}
+.kpi-card:hover .kpi-drag-handle {
+    opacity: 0.75;
+}
+.kpi-drag-handle:hover {
+    opacity: 1;
+    color: var(--accent-color, #3b82f6);
+}
+.kpi-drag-hint {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #94a3b8);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    opacity: 0.8;
+    margin-left: 0.75rem;
+    font-weight: normal;
+}
+.btn-kpi-reset-order {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary, #94a3b8);
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+.btn-kpi-reset-order:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary, #ffffff);
 }

@@ -9,10 +9,126 @@
     let activeBrand = 'NEW ERA';
     let availableYears = [];
     let rankingDisplayLimit = 10;
+    let currentDatasetType = localStorage.getItem('empresa_indicators_dataset_type') || 'extrato';
     let currentKpiDisplayMode = localStorage.getItem('empresa_indicators_kpi_mode') || 'both';
     if (!['both', 'values', 'pieces'].includes(currentKpiDisplayMode)) {
         currentKpiDisplayMode = 'both';
     }
+
+    // Variáveis e instâncias do Confronto (A Entregar X Faturamento)
+    let chartCompMonthlyInstance = null;
+    let chartCompDailyInstance = null;
+    let chartCompClassesInstance = null;
+    let currentCompSubTab = 'cnpj';
+    let currentCompSort = 'total_desc';
+    let currentCompSearch = '';
+    let compChartDisplayMode = 'values';
+    let currentCompCnpjList = [];
+    let currentCompMonthList = [];
+    let currentCompDateList = [];
+    let compExpandedCnpjs = new Set();
+    let lastCompFilteredBilling = [];
+    let lastCompFilteredExtrato = [];
+
+    // Estado de OrdenaÃ§Ã£o e Agrupamento das Tabelas de Confronto
+    let compDateSortCol = 'date';
+    let compDateSortDir = 'desc'; // 'desc' (maior para menor / mais recente) ou 'asc' (menor para maior)
+    let compDateGroupByMonth = true; // Por padrÃ£o agrupa pelo mÃªs
+    let compDateCollapsedMonths = new Set();
+    let compMonthSortCol = 'key';
+    let compMonthSortDir = 'desc';
+    let compCnpjSortCol = 'totalV';
+    let compCnpjSortDir = 'desc';
+
+    function getExtratoData() {
+        const savedCustom = localStorage.getItem('empresa_extrato_new_era_custom');
+        let parsed = null;
+        if (savedCustom) {
+            try { parsed = JSON.parse(savedCustom); } catch(e) {}
+        }
+        return (parsed && Array.isArray(parsed) && parsed.length > 0)
+            ? parsed
+            : (window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA && Array.isArray(window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA) ? [...window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA] : []);
+    }
+
+    function getBillingData() {
+        const savedCustom = localStorage.getItem('empresa_billing_new_era_custom');
+        let parsed = null;
+        if (savedCustom) {
+            try { parsed = JSON.parse(savedCustom); } catch(e) {}
+        }
+        return (parsed && Array.isArray(parsed) && parsed.length > 0)
+            ? parsed
+            : (window.INITIAL_BILLING_NEW_ERA && Array.isArray(window.INITIAL_BILLING_NEW_ERA) ? [...window.INITIAL_BILLING_NEW_ERA] : []);
+    }
+
+    window.switchIndicatorsDataset = function(type) {
+        if (!['billing', 'extrato', 'comparison'].includes(type)) type = 'extrato';
+        currentDatasetType = type;
+        localStorage.setItem('empresa_indicators_dataset_type', type);
+
+        // Atualizar estado visual dos botões de seleção de dataset
+        const btnExtrato = document.getElementById('btn-dataset-extrato');
+        const btnBilling = document.getElementById('btn-dataset-billing');
+        const btnComp = document.getElementById('btn-dataset-comparison');
+        if (btnExtrato) {
+            btnExtrato.style.background = type === 'extrato' ? 'var(--accent-color, #3b82f6)' : 'transparent';
+            btnExtrato.style.color = type === 'extrato' ? '#ffffff' : 'var(--text-secondary)';
+        }
+        if (btnBilling) {
+            btnBilling.style.background = type === 'billing' ? 'var(--accent-color, #3b82f6)' : 'transparent';
+            btnBilling.style.color = type === 'billing' ? '#ffffff' : 'var(--text-secondary)';
+        }
+        if (btnComp) {
+            btnComp.style.background = type === 'comparison' ? 'var(--accent-color, #3b82f6)' : 'transparent';
+            btnComp.style.color = type === 'comparison' ? '#ffffff' : 'var(--text-secondary)';
+        }
+
+        // Alternar visibilidade das seções do dashboard
+        const indChartsSec = document.getElementById('indicators-charts-section');
+        const indRankSec = document.getElementById('indicators-rankings-section');
+        const indAuditSec = document.getElementById('indicators-audit-section');
+        const compChartsSec = document.getElementById('comparison-charts-section');
+        const compTablesSec = document.getElementById('comparison-tables-section');
+
+        if (type === 'comparison') {
+            if (indChartsSec) indChartsSec.style.display = 'none';
+            if (indRankSec) indRankSec.style.display = 'none';
+            if (indAuditSec) indAuditSec.style.display = 'none';
+            if (compChartsSec) compChartsSec.style.display = 'grid';
+            if (compTablesSec) compTablesSec.style.display = 'block';
+            billingMasterData = [...getBillingData(), ...getExtratoData()];
+        } else {
+            if (indChartsSec) indChartsSec.style.display = 'grid';
+            if (indRankSec) indRankSec.style.display = 'block';
+            if (compChartsSec) compChartsSec.style.display = 'none';
+            if (compTablesSec) compTablesSec.style.display = 'none';
+
+            if (type === 'extrato') {
+                billingMasterData = getExtratoData();
+            } else {
+                billingMasterData = getBillingData();
+            }
+        }
+
+        computeLatestReportDate();
+        const def = getDefaultPeriod();
+        const startInput = document.getElementById('filter-ind-start-date');
+        const endInput = document.getElementById('filter-ind-end-date');
+        if (startInput) startInput.value = def.start;
+        if (endInput) endInput.value = def.end;
+
+        const semList = document.getElementById('ind-cms-semester-list');
+        if (semList) {
+            semList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+            });
+            updateIndCMSLabel('semester');
+        }
+
+        populateAllIndCMS(false);
+        applyIndicatorsFilter();
+    };
 
     window.onKpiDisplayModeChange = function(mode) {
         if (!['both', 'values', 'pieces'].includes(mode)) mode = 'both';
@@ -43,27 +159,20 @@
         }
     };
 
-    let latestReportDate = '31/10/2026';
+    let latestReportDate = '08/10/2026';
 
     function computeLatestReportDate() {
-        if (window.BILLING_LAST_UPDATED) {
-            latestReportDate = window.BILLING_LAST_UPDATED;
-            return;
+        if (currentDatasetType === 'comparison') {
+            const extDate = localStorage.getItem('empresa_extrato_last_updated') || window.EXTRATO_LAST_UPDATED || '08/10/2026';
+            const billDate = localStorage.getItem('empresa_billing_last_updated') || window.BILLING_LAST_UPDATED || '31/10/2026';
+            latestReportDate = `${extDate} / ${billDate}`;
+        } else if (currentDatasetType === 'extrato') {
+            const saved = localStorage.getItem('empresa_extrato_last_updated');
+            latestReportDate = saved || window.EXTRATO_LAST_UPDATED || '08/10/2026';
+        } else {
+            const saved = localStorage.getItem('empresa_billing_last_updated');
+            latestReportDate = saved || window.BILLING_LAST_UPDATED || '31/10/2026';
         }
-        let maxDate = null;
-        let maxStr = '31/10/2026';
-        if (billingMasterData && billingMasterData.length > 0) {
-            billingMasterData.forEach(item => {
-                if (item.d) {
-                    const dObj = parseDateBR(item.d);
-                    if (dObj && (!maxDate || dObj > maxDate)) {
-                        maxDate = dObj;
-                        maxStr = item.d.split(' ')[0];
-                    }
-                }
-            });
-        }
-        latestReportDate = maxStr;
     }
 
     window.setRankingLimit = function(limit) {
@@ -82,6 +191,7 @@
     let chartDailyInstance = null;
     let chartMonthlyInstance = null;
     let chartGroupInstance = null;
+    let chartCommercialGroupInstance = null;
     let chartComparisonInstance = null;
     let currentComparisonMetric = 'monthly';
 
@@ -128,41 +238,183 @@
     function getDefaultPeriod() {
         const now = new Date();
         const curYear = now.getFullYear().toString();
-        const curSemester = now.getMonth() < 6 ? '1' : '2';
-        const start = curSemester === '1' ? `${curYear}-01-01` : `${curYear}-07-01`;
-        const end = curSemester === '1' ? `${curYear}-06-30` : `${curYear}-12-31`;
-        return { curYear, curSemester, start, end };
+        // Ano completo como período padrão
+        return { curYear, curSemester: 'all', start: `${curYear}-01-01`, end: `${curYear}-12-31` };
     }
 
     // Inicialização do Módulo de Indicadores
+    
+    // --------------------------------------------------------------------------
+    // DRAG AND DROP & ORDEM PERSONALIZADA DOS CARDS DE KPIS
+    // --------------------------------------------------------------------------
+    const DEFAULT_KPI_ORDER = [
+        'kpi-card-total',
+        'kpi-card-pieces',
+        'kpi-card-orders',
+        'kpi-card-ticket',
+        'kpi-card-clients',
+        'kpi-card-groups',
+        'kpi-card-month',
+        'kpi-card-day'
+    ];
+
+    window.applyKpiCardsOrder = function() {
+        const grid = document.querySelector('.indicators-kpis-grid');
+        if (!grid) return;
+
+        let savedOrder = null;
+        try {
+            const raw = localStorage.getItem('empresa_indicators_kpi_order');
+            if (raw) savedOrder = JSON.parse(raw);
+        } catch(e) {}
+
+        const order = (Array.isArray(savedOrder) && savedOrder.length > 0) ? savedOrder : DEFAULT_KPI_ORDER;
+
+        order.forEach(cardId => {
+            const card = document.getElementById(cardId);
+            if (card && card.parentElement === grid) {
+                grid.appendChild(card);
+            }
+        });
+    };
+
+    window.resetKpiCardsOrder = function() {
+        localStorage.removeItem('empresa_indicators_kpi_order');
+        window.applyKpiCardsOrder();
+        if (window.showNotification) {
+            window.showNotification('Posição dos cards restaurada para o padrão!', 'info');
+        }
+    };
+
+    let draggedKpiCard = null;
+
+    function setupKpiCardsDragAndDrop() {
+        const grid = document.querySelector('.indicators-kpis-grid');
+        if (!grid) return;
+
+        const cards = grid.querySelectorAll('.kpi-card');
+        cards.forEach(card => {
+            card.setAttribute('draggable', 'true');
+
+            const header = card.querySelector('.kpi-header');
+            if (header && !header.querySelector('.kpi-drag-handle')) {
+                const handle = document.createElement('div');
+                handle.className = 'kpi-drag-handle';
+                handle.title = 'Clique e arraste para reposicionar este card';
+                handle.innerHTML = `<i class='bx bx-dots-vertical-rounded'></i>`;
+                header.insertBefore(handle, header.firstChild);
+            }
+
+            card.ondragstart = function(e) {
+                draggedKpiCard = this;
+                this.classList.add('kpi-dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', this.id); } catch(err) {}
+            };
+
+            card.ondragover = function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (draggedKpiCard && this !== draggedKpiCard) {
+                    this.classList.add('kpi-drag-over');
+                }
+            };
+
+            card.ondragleave = function(e) {
+                this.classList.remove('kpi-drag-over');
+            };
+
+            card.ondrop = function(e) {
+                e.preventDefault();
+                this.classList.remove('kpi-drag-over');
+                if (!draggedKpiCard || this === draggedKpiCard) return;
+
+                const parentGrid = this.parentElement;
+                if (!parentGrid) return;
+
+                const rect = this.getBoundingClientRect();
+                const isAfter = (e.clientX > rect.left + rect.width / 2);
+
+                if (isAfter) {
+                    parentGrid.insertBefore(draggedKpiCard, this.nextSibling);
+                } else {
+                    parentGrid.insertBefore(draggedKpiCard, this);
+                }
+
+                const newOrder = Array.from(parentGrid.querySelectorAll('.kpi-card')).map(c => c.id);
+                localStorage.setItem('empresa_indicators_kpi_order', JSON.stringify(newOrder));
+
+                if (window.showNotification) {
+                    window.showNotification('Posição dos cards salva!', 'success');
+                }
+            };
+
+            card.ondragend = function(e) {
+                this.classList.remove('kpi-dragging');
+                grid.querySelectorAll('.kpi-card').forEach(c => {
+                    c.classList.remove('kpi-drag-over', 'kpi-dragging');
+                });
+                draggedKpiCard = null;
+            };
+        });
+    }
+
     window.initIndicatorsModule = function() {
-        const CURRENT_BILLING_VERSION = '20261031_cnpj_v3';
+        const CURRENT_BILLING_VERSION = '20261031_extrato_v1';
         const savedVersion = localStorage.getItem('empresa_billing_version');
         if (savedVersion !== CURRENT_BILLING_VERSION) {
-            localStorage.removeItem('empresa_billing_new_era_custom');
             localStorage.setItem('empresa_billing_version', CURRENT_BILLING_VERSION);
         }
 
+        currentDatasetType = localStorage.getItem('empresa_indicators_dataset_type') || 'extrato';
+
+        // Atualizar estado visual dos botões de seleção de dataset
+        const btnExtrato = document.getElementById('btn-dataset-extrato');
+        const btnBilling = document.getElementById('btn-dataset-billing');
+        const btnComp = document.getElementById('btn-dataset-comparison');
+        if (btnExtrato) {
+            btnExtrato.style.background = currentDatasetType === 'extrato' ? 'var(--accent-color, #3b82f6)' : 'transparent';
+            btnExtrato.style.color = currentDatasetType === 'extrato' ? '#ffffff' : 'var(--text-secondary)';
+        }
+        if (btnBilling) {
+            btnBilling.style.background = currentDatasetType === 'billing' ? 'var(--accent-color, #3b82f6)' : 'transparent';
+            btnBilling.style.color = currentDatasetType === 'billing' ? '#ffffff' : 'var(--text-secondary)';
+        }
+        if (btnComp) {
+            btnComp.style.background = currentDatasetType === 'comparison' ? 'var(--accent-color, #3b82f6)' : 'transparent';
+            btnComp.style.color = currentDatasetType === 'comparison' ? '#ffffff' : 'var(--text-secondary)';
+        }
+
+        const indChartsSec = document.getElementById('indicators-charts-section');
+        const indRankSec = document.getElementById('indicators-rankings-section');
+        const indAuditSec = document.getElementById('indicators-audit-section');
+        const compChartsSec = document.getElementById('comparison-charts-section');
+        const compTablesSec = document.getElementById('comparison-tables-section');
+
+        if (currentDatasetType === 'comparison') {
+            if (indChartsSec) indChartsSec.style.display = 'none';
+            if (indRankSec) indRankSec.style.display = 'none';
+            if (indAuditSec) indAuditSec.style.display = 'none';
+            if (compChartsSec) compChartsSec.style.display = 'grid';
+            if (compTablesSec) compTablesSec.style.display = 'block';
+        } else {
+            if (indChartsSec) indChartsSec.style.display = 'grid';
+            if (indRankSec) indRankSec.style.display = 'block';
+            if (compChartsSec) compChartsSec.style.display = 'none';
+            if (compTablesSec) compTablesSec.style.display = 'none';
+        }
+
         try {
-            const savedCustom = localStorage.getItem('empresa_billing_new_era_custom');
-            if (savedCustom) {
-                const parsed = JSON.parse(savedCustom);
-                if (Array.isArray(parsed) && parsed.length >= 30000) {
-                    billingMasterData = parsed;
-                } else if (window.INITIAL_BILLING_NEW_ERA && Array.isArray(window.INITIAL_BILLING_NEW_ERA)) {
-                    billingMasterData = [...window.INITIAL_BILLING_NEW_ERA];
-                    localStorage.removeItem('empresa_billing_new_era_custom');
-                } else {
-                    billingMasterData = parsed;
-                }
-            } else if (window.INITIAL_BILLING_NEW_ERA && Array.isArray(window.INITIAL_BILLING_NEW_ERA)) {
-                billingMasterData = [...window.INITIAL_BILLING_NEW_ERA];
+            if (currentDatasetType === 'comparison') {
+                billingMasterData = [...getBillingData(), ...getExtratoData()];
+            } else if (currentDatasetType === 'extrato') {
+                billingMasterData = getExtratoData();
             } else {
-                billingMasterData = [];
+                billingMasterData = getBillingData();
             }
         } catch (e) {
-            console.error('Erro ao carregar dados de faturamento:', e);
-            billingMasterData = window.INITIAL_BILLING_NEW_ERA || [];
+            console.error('Erro ao carregar dados de indicadores:', e);
+            billingMasterData = window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA || window.INITIAL_BILLING_NEW_ERA || [];
         }
 
         computeLatestReportDate();
@@ -174,6 +426,8 @@
         if (endInput) endInput.value = def.end;
 
         populateAllIndCMS(true);
+        window.applyKpiCardsOrder();
+        setupKpiCardsDragAndDrop();
 
         // Sincronizar configuração de exibição dos KPIs (Valores / Peças / Os Dois)
         const kpiModeSelect = document.getElementById('filter-ind-kpi-mode');
@@ -188,11 +442,37 @@
                 if (doc.exists && doc.data().list && Array.isArray(doc.data().list)) {
                     const remote = doc.data().list;
                     if (remote.length > 0) {
-                        billingMasterData = remote;
-                        localStorage.setItem('empresa_billing_new_era_custom', JSON.stringify(billingMasterData));
-                        populateAllIndCMS(false);
-                        if (sessionStorage.getItem('last_active_tab') === 'indicators') {
-                            applyIndicatorsFilter();
+                        localStorage.setItem('empresa_billing_new_era_custom', JSON.stringify(remote));
+                        if (doc.data().lastUpdated) {
+                            localStorage.setItem('empresa_billing_last_updated', doc.data().lastUpdated);
+                        }
+                        if (currentDatasetType === 'billing') {
+                            billingMasterData = remote;
+                            computeLatestReportDate();
+                            populateAllIndCMS(false);
+                            if (sessionStorage.getItem('last_active_tab') === 'indicators') {
+                                applyIndicatorsFilter();
+                            }
+                        }
+                    }
+                }
+            });
+
+            window.db.collection('settings').doc('extrato_new_era').onSnapshot((doc) => {
+                if (doc.exists && doc.data().list && Array.isArray(doc.data().list)) {
+                    const remote = doc.data().list;
+                    if (remote.length > 0) {
+                        localStorage.setItem('empresa_extrato_new_era_custom', JSON.stringify(remote));
+                        if (doc.data().lastUpdated) {
+                            localStorage.setItem('empresa_extrato_last_updated', doc.data().lastUpdated);
+                        }
+                        if (currentDatasetType === 'extrato') {
+                            billingMasterData = remote;
+                            computeLatestReportDate();
+                            populateAllIndCMS(false);
+                            if (sessionStorage.getItem('last_active_tab') === 'indicators') {
+                                applyIndicatorsFilter();
+                            }
                         }
                     }
                 }
@@ -244,14 +524,27 @@
         const list = document.getElementById(`ind-cms-${dim}-list`);
         if (!list) return;
         const q = (query || '').toLowerCase().trim();
+        const cleanQ = cleanDigits(q);
         const options = list.querySelectorAll('.ind-cms-option');
         options.forEach(opt => {
             const text = opt.textContent.toLowerCase();
-            if (!q || text.includes(q)) {
-                opt.style.display = 'flex';
-            } else {
-                opt.style.display = 'none';
+            const cnpjs = (opt.getAttribute('data-cnpjs') || '').toLowerCase();
+            const cleanCnpjs = cleanDigits(cnpjs);
+
+            let matches = false;
+            if (!q) {
+                matches = true;
+            } else if (text.includes(q)) {
+                matches = true;
+            } else if (cnpjs && cnpjs.includes(q)) {
+                // Busca por CNPJ formatado com pontos, traços e barras
+                matches = true;
+            } else if (cleanQ && cleanCnpjs && cleanCnpjs.includes(cleanQ)) {
+                // Busca por CNPJ digitando somente números
+                matches = true;
             }
+
+            opt.style.display = matches ? 'flex' : 'none';
         });
     };
 
@@ -261,17 +554,11 @@
         const endInput = document.getElementById('filter-ind-end-date');
         if (!startInput || !endInput) return;
 
-        if (selectedYears.length > 1) {
+        if (selectedYears.length > 0) {
             const yearNums = selectedYears.map(y => parseInt(y, 10)).filter(n => !isNaN(n));
             if (yearNums.length > 0) {
                 const minYear = Math.min(...yearNums);
                 const maxYear = Math.max(...yearNums);
-                startInput.value = `${minYear}-01-01`;
-                endInput.value = `${maxYear}-12-31`;
-            }
-        } else if (selectedYears.length === 1) {
-            const singleYear = parseInt(selectedYears[0], 10);
-            if (!isNaN(singleYear)) {
                 const selectedSemesters = getIndCMSSelectedValues('semester');
                 let startMonthDay = '01-01';
                 let endMonthDay = '12-31';
@@ -284,8 +571,8 @@
                         endMonthDay = '12-31';
                     }
                 }
-                startInput.value = `${singleYear}-${startMonthDay}`;
-                endInput.value = `${singleYear}-${endMonthDay}`;
+                startInput.value = `${minYear}-${startMonthDay}`;
+                endInput.value = `${maxYear}-${endMonthDay}`;
             }
         }
     }
@@ -299,16 +586,36 @@
         });
         updateIndCMSLabel(dim);
         if (dim === 'year') {
+            // Ao selecionar ano(s), marca os dois semestres e expande para o ano todo
+            const semList = document.getElementById('ind-cms-semester-list');
+            if (semList) {
+                semList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.checked = true;
+                });
+                updateIndCMSLabel('semester');
+            }
+            syncDatesWithSelectedYears();
+        } else if (dim === 'semester') {
             syncDatesWithSelectedYears();
         }
         applyIndicatorsFilter();
     };
 
     window.onIndCMSCheckboxChange = function(dim) {
-        updateIndCMSLabel(dim);
         if (dim === 'year') {
+            // Quando seleciona o ano (como 2027), deixa selecionado os 2 semestres e também o ano todo nas datas
+            const semList = document.getElementById('ind-cms-semester-list');
+            if (semList) {
+                semList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.checked = true;
+                });
+                updateIndCMSLabel('semester');
+            }
+            syncDatesWithSelectedYears();
+        } else if (dim === 'semester') {
             syncDatesWithSelectedYears();
         }
+        updateIndCMSLabel(dim);
         applyIndicatorsFilter();
     };
 
@@ -329,6 +636,7 @@
         const count = checkedCheckboxes.length;
         const total = allCheckboxes.length;
 
+        const isExtrato = (currentDatasetType === 'extrato');
         const defaultLabels = {
             'brand': 'Todas as Marcas',
             'year': 'Todos os Anos',
@@ -337,20 +645,37 @@
             'group': 'Todos os Grupos',
             'group-real': 'Todos os Grupos Reais',
             'class': 'Todas as Divisões',
-            'nf': 'Todas as NFs'
+            'nf': isExtrato ? 'Todos os Pedidos' : 'Todas as NFs'
         };
 
         if (count === 0 || count === total) {
             labelEl.textContent = defaultLabels[dim] || 'Todos';
+            labelEl.title = defaultLabels[dim] || 'Todos';
         } else if (count === 1) {
             const span = checkedCheckboxes[0].closest('label').querySelector('.ind-cms-option-label') || checkedCheckboxes[0].closest('label');
-            labelEl.textContent = span.textContent.trim();
-        } else if (count === 2) {
-            const span1 = checkedCheckboxes[0].closest('label').querySelector('.ind-cms-option-label') || checkedCheckboxes[0].closest('label');
-            const span2 = checkedCheckboxes[1].closest('label').querySelector('.ind-cms-option-label') || checkedCheckboxes[1].closest('label');
-            labelEl.textContent = `${span1.textContent.trim()}, ${span2.textContent.trim()}`;
+            const fullText = span.textContent.trim();
+            labelEl.textContent = fullText;
+            labelEl.title = fullText;
         } else {
-            labelEl.innerHTML = `${defaultLabels[dim] || 'Filtro'} <span class="ind-cms-badge">${count}</span>`;
+            // Mais de 1 selecionado: exibe contagem limpa e elegante sem estourar o layout
+            if (dim === 'client') {
+                labelEl.innerHTML = `${count} lojas selecionadas <span class="ind-cms-badge">${count}</span>`;
+            } else if (dim === 'nf') {
+                const labelText = isExtrato ? `${count} pedidos` : `${count} NFs`;
+                labelEl.innerHTML = `${labelText} <span class="ind-cms-badge">${count}</span>`;
+            } else if (dim === 'year') {
+                const yearVals = Array.from(checkedCheckboxes).map(c => c.value).sort();
+                labelEl.textContent = yearVals.join(', ');
+            } else if (dim === 'semester') {
+                labelEl.textContent = 'Todos os Semestres';
+            } else if (dim === 'group' || dim === 'group-real') {
+                labelEl.innerHTML = `${count} grupos <span class="ind-cms-badge">${count}</span>`;
+            } else if (dim === 'class') {
+                labelEl.innerHTML = `${count} divisões <span class="ind-cms-badge">${count}</span>`;
+            } else {
+                labelEl.innerHTML = `${defaultLabels[dim] || 'Filtro'} <span class="ind-cms-badge">${count}</span>`;
+            }
+            labelEl.title = `${count} itens selecionados`;
         }
     }
 
@@ -407,41 +732,77 @@
         }
 
         // 2. SEMESTRES
+        const semList = document.getElementById('ind-cms-semester-list');
+        if (semList && isInitial) {
+            semList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+            });
+        }
         updateIndCMSLabel('semester');
 
         // 3. MARCAS
         updateIndCMSLabel('brand');
 
-        // 4. CLIENTES (Junção Fantasia - Razão Social)
+        // 4. CLIENTES (Junção Fantasia - Razão Social com indexação de CNPJ para busca)
         const clientList = document.getElementById('ind-cms-client-list');
         if (clientList) {
-            const clientsSet = new Set();
+            const clientInfoMap = new Map();
             const baseClients = getActiveClientsList();
 
             baseClients.forEach(c => {
                 const fant = (c['FANTASIA'] || c['NOME FANTASIA'] || '').toString().trim();
                 const raz = (c['RAZAO SOCIAL'] || c['RAZÃO SOCIAL'] || '').toString().trim();
+                let comb = '';
                 if (fant && raz && fant.toUpperCase() !== raz.toUpperCase()) {
-                    clientsSet.add(`${fant} - ${raz}`);
-                } else if (fant || raz) {
-                    clientsSet.add(fant || raz);
+                    comb = `${fant} - ${raz}`;
+                } else {
+                    comb = fant || raz;
+                }
+                if (!comb) return;
+
+                if (!clientInfoMap.has(comb)) {
+                    clientInfoMap.set(comb, { name: comb, cnpjs: new Set() });
+                }
+                const rawCnpj = (c['CNPJ'] || '').toString();
+                const cleanC = cleanDigits(rawCnpj);
+                if (cleanC) {
+                    clientInfoMap.get(comb).cnpjs.add(cleanC);
+                    clientInfoMap.get(comb).cnpjs.add(formatCNPJMask(cleanC.padStart(14, '0')));
                 }
             });
 
             billingMasterData.forEach(item => {
                 const comb = getClientCombinedName(item, clientsMap);
                 if (comb && comb !== 'Cliente sem cadastro') {
-                    clientsSet.add(comb);
+                    if (!clientInfoMap.has(comb)) {
+                        clientInfoMap.set(comb, { name: comb, cnpjs: new Set() });
+                    }
+                    if (item.c) {
+                        const cleanC = cleanDigits(item.c);
+                        if (cleanC) {
+                            clientInfoMap.get(comb).cnpjs.add(cleanC);
+                            clientInfoMap.get(comb).cnpjs.add(formatCNPJMask(cleanC.padStart(14, '0')));
+                        }
+                    }
+                    const clientMatch = resolveClientForItem(item, clientsMap);
+                    if (clientMatch && clientMatch['CNPJ']) {
+                        const cleanC = cleanDigits(clientMatch['CNPJ']);
+                        if (cleanC) {
+                            clientInfoMap.get(comb).cnpjs.add(cleanC);
+                            clientInfoMap.get(comb).cnpjs.add(formatCNPJMask(cleanC.padStart(14, '0')));
+                        }
+                    }
                 }
             });
 
-            const sortedClients = Array.from(clientsSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+            const sortedClients = Array.from(clientInfoMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
             let clientHtml = '';
             sortedClients.forEach(c => {
+                const cnpjsStr = Array.from(c.cnpjs).join(' ');
                 clientHtml += `
-                    <label class="ind-cms-option" title="${escapeHTML(c)}">
-                        <input type="checkbox" value="${escapeHTML(c)}" onchange="onIndCMSCheckboxChange('client')">
-                        <span class="ind-cms-option-label">${escapeHTML(c)}</span>
+                    <label class="ind-cms-option" title="${escapeHTML(c.name)}" data-cnpjs="${escapeHTML(cnpjsStr)}">
+                        <input type="checkbox" value="${escapeHTML(c.name)}" onchange="onIndCMSCheckboxChange('client')">
+                        <span class="ind-cms-option-label">${escapeHTML(c.name)}</span>
                     </label>
                 `;
             });
@@ -520,9 +881,21 @@
             updateIndCMSLabel('class');
         }
 
-        // 8. NOTA FISCAL
+        // 8. NOTA FISCAL / PEDIDO
         const nfList = document.getElementById('ind-cms-nf-list');
         if (nfList) {
+            const isExtrato = (currentDatasetType === 'extrato');
+            
+            // Atualizar cabeçalho do filtro de NF/Pedido
+            const nfFilterTitle = document.getElementById('ind-filter-nf-label-title');
+            if (nfFilterTitle) {
+                nfFilterTitle.textContent = isExtrato ? 'Pedido' : 'Nota Fiscal';
+            }
+            const nfSearchInput = document.querySelector('#ind-cms-nf-dropdown .ind-cms-search-input');
+            if (nfSearchInput) {
+                nfSearchInput.placeholder = isExtrato ? 'Pesquisar pedido...' : 'Pesquisar número de NF...';
+            }
+
             const nfsSet = new Set();
             billingMasterData.forEach(item => {
                 if (item.nf && item.nf.trim()) {
@@ -532,10 +905,11 @@
             const sortedNfs = Array.from(nfsSet).sort((a, b) => b.localeCompare(a));
             let nfHtml = '';
             sortedNfs.forEach(nf => {
+                const optText = isExtrato ? escapeHTML(nf) : `NF ${escapeHTML(nf)}`;
                 nfHtml += `
-                    <label class="ind-cms-option font-mono" title="NF ${escapeHTML(nf)}">
+                    <label class="ind-cms-option font-mono" title="${optText}">
                         <input type="checkbox" value="${escapeHTML(nf)}" onchange="onIndCMSCheckboxChange('nf')">
-                        <span class="ind-cms-option-label">NF ${escapeHTML(nf)}</span>
+                        <span class="ind-cms-option-label">${optText}</span>
                     </label>
                 `;
             });
@@ -586,11 +960,11 @@
             updateIndCMSLabel('year');
         }
 
-        // Reset Semestre: curSemester checked
+        // Reset Semestre: marca ambos os semestres
         const semList = document.getElementById('ind-cms-semester-list');
         if (semList) {
             semList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                cb.checked = (cb.value === def.curSemester);
+                cb.checked = true;
             });
             updateIndCMSLabel('semester');
         }
@@ -689,6 +1063,18 @@
 
     // Aplicação dos Filtros e Atualização Completa da Tela
     window.applyIndicatorsFilter = function() {
+        const isComp = (currentDatasetType === 'comparison');
+        const indChartsSec = document.getElementById('indicators-charts-section');
+        const indRankSec = document.getElementById('indicators-rankings-section');
+        const indAuditSec = document.getElementById('indicators-audit-section');
+        const compChartsSec = document.getElementById('comparison-charts-section');
+        const compTablesSec = document.getElementById('comparison-tables-section');
+
+        if (indChartsSec) indChartsSec.style.display = isComp ? 'none' : 'grid';
+        if (indRankSec) indRankSec.style.display = isComp ? 'none' : 'block';
+        if (indAuditSec && isComp) indAuditSec.style.display = 'none';
+        if (compChartsSec) compChartsSec.style.display = isComp ? 'grid' : 'none';
+        if (compTablesSec) compTablesSec.style.display = isComp ? 'block' : 'none';
         const selectedBrands = getIndCMSSelectedValues('brand');
         const selectedYears = getIndCMSSelectedValues('year');
         const selectedSemesters = getIndCMSSelectedValues('semester');
@@ -706,84 +1092,84 @@
 
         const clientsMap = buildClientsMap();
 
-        billingFilteredData = billingMasterData.filter(item => {
-            // Normalizar valor financeiro baseado na métrica (Gross ou Net)
+        function runItemFilter(item) {
             const itemGross = item.vg !== undefined ? item.vg : (item.v || 0);
             const itemNet = item.vn !== undefined ? item.vn : (item.v || 0);
             item.v = (metricVal === 'net') ? itemNet : itemGross;
 
-            // Data de emissão (venda/faturamento)
             const dObj = parseDateBR(item.d);
             if (dObj) {
                 const itemYear = dObj.getFullYear().toString();
-                const itemMonth = dObj.getMonth() + 1; // 1 a 12
+                const itemMonth = dObj.getMonth() + 1;
                 const itemSemester = itemMonth <= 6 ? '1' : '2';
 
-                // Filtro por Data Inicial / Final (Período Personalizado)
                 if (startObj && dObj < startObj) return false;
                 if (endObj && dObj > endObj) return false;
 
-                // Filtro de Anos (Multi-Select)
-                if (selectedYears.length > 0 && !selectedYears.includes(itemYear)) {
-                    return false;
-                }
-
-                // Filtro de Semestres (Multi-Select)
-                if (selectedSemesters.length > 0 && !selectedSemesters.includes(itemSemester)) {
-                    return false;
-                }
+                if (selectedYears.length > 0 && !selectedYears.includes(itemYear)) return false;
+                if (selectedSemesters.length > 0 && !selectedSemesters.includes(itemSemester)) return false;
             } else if (selectedYears.length > 0 || startDateVal || endDateVal) {
                 return false;
             }
 
-            // Filtro Marca (Multi-Select)
-            if (selectedBrands.length > 0 && !selectedBrands.includes('NEW ERA')) {
-                return false;
-            }
+            if (selectedBrands.length > 0 && !selectedBrands.includes('NEW ERA')) return false;
 
-            // Identificar cliente para filtros
             const clientMatch = resolveClientForItem(item, clientsMap);
             const itemCombined = getClientCombinedName(item, clientsMap);
 
-            // 1. Filtro Razão Social / Nome Fantasia (Multi-Select)
-            if (selectedClients.length > 0 && !selectedClients.includes(itemCombined)) {
-                return false;
-            }
+            if (selectedClients.length > 0 && !selectedClients.includes(itemCombined)) return false;
 
-            // 2. Filtro Grupo (Multi-Select)
             const itemGrupo = (clientMatch && clientMatch['GRUPO']) ? clientMatch['GRUPO'].trim() : (item.g || item.r || 'Outros');
-            if (selectedGroups.length > 0 && !selectedGroups.includes(itemGrupo)) {
-                return false;
-            }
+            if (selectedGroups.length > 0 && !selectedGroups.includes(itemGrupo)) return false;
 
-            // 3. Filtro Grupo Real (Multi-Select)
             const itemGrupoReal = (clientMatch && (clientMatch['GRUPO REAL'] || clientMatch['GRUPO'])) 
                 ? (clientMatch['GRUPO REAL'] || clientMatch['GRUPO']).trim() 
                 : (item.gr || item.g || item.r || 'Outros');
-            if (selectedGroupReals.length > 0 && !selectedGroupReals.includes(itemGrupoReal)) {
-                return false;
-            }
+            if (selectedGroupReals.length > 0 && !selectedGroupReals.includes(itemGrupoReal)) return false;
 
-            // 4. Filtro Divisão / Classe (Multi-Select)
             const itemClass = (item.cl || 'Outros').trim();
-            if (selectedClasses.length > 0 && !selectedClasses.includes(itemClass)) {
-                return false;
-            }
+            if (selectedClasses.length > 0 && !selectedClasses.includes(itemClass)) return false;
 
-            // 5. Filtro Nota Fiscal (Multi-Select)
             const itemNf = (item.nf || '').trim();
-            if (selectedNFs.length > 0 && !selectedNFs.includes(itemNf)) {
-                return false;
-            }
+            if (selectedNFs.length > 0 && !selectedNFs.includes(itemNf)) return false;
 
             return true;
-        });
+        }
+
+        const subtitleEl = document.getElementById('indicators-subtitle');
+        const metricLabel = metricVal === 'net' ? 'Valor Líquido (Net)' : 'Valor Bruto (Gross)';
+
+        if (currentDatasetType === 'comparison') {
+            const rawBilling = getBillingData();
+            const rawExtrato = getExtratoData();
+            const bFiltered = rawBilling.filter(runItemFilter);
+            const eFiltered = rawExtrato.filter(runItemFilter);
+
+            lastCompFilteredBilling = bFiltered;
+            lastCompFilteredExtrato = eFiltered;
+            billingFilteredData = [...bFiltered, ...eFiltered];
+
+            if (subtitleEl) {
+                subtitleEl.innerHTML = `Confronto Comercial: Pedidos a Entregar vs Faturamento Realizado (${metricLabel}) — NEW ERA &nbsp;•&nbsp; Base: CNPJ, Data e Mês &nbsp;•&nbsp; Atualizado em: ${latestReportDate}`;
+            }
+
+            updateComparisonKpis(bFiltered, eFiltered, clientsMap, metricVal);
+            renderComparisonCharts(bFiltered, eFiltered, clientsMap);
+            renderComparisonConfrontation(bFiltered, eFiltered, clientsMap);
+            window.applyKpiCardsOrder();
+            setupKpiCardsDragAndDrop();
+            return;
+        }
+
+        billingFilteredData = billingMasterData.filter(runItemFilter);
 
         // Atualizar subtítulo com indicação da métrica e data do último relatório atualizado
-        const subtitleEl = document.getElementById('indicators-subtitle');
         if (subtitleEl) {
-            const metricLabel = metricVal === 'net' ? 'Faturamento Líquido (Net)' : 'Faturamento Bruto (Gross)';
-            subtitleEl.textContent = `Análise estratégica de vendas (${metricLabel}) — NEW ERA • Atualizado em: ${latestReportDate}`;
+            if (currentDatasetType === 'extrato') {
+                subtitleEl.innerHTML = `Extrato de Pedidos a Entregar (${metricLabel}) — NEW ERA &nbsp;•&nbsp; Base: <strong>Data Entrega</strong> &nbsp;•&nbsp; Atualizado em: ${latestReportDate}`;
+            } else {
+                subtitleEl.innerHTML = `Análise estratégica de vendas (${metricLabel}) — NEW ERA &nbsp;•&nbsp; Atualizado em: ${latestReportDate}`;
+            }
         }
 
         // Atualizar todas as seções do dashboard
@@ -791,6 +1177,8 @@
         renderCharts(billingFilteredData, clientsMap);
         renderRankings(billingFilteredData, clientsMap);
         renderAuditSection(billingFilteredData, clientsMap);
+        window.applyKpiCardsOrder();
+        setupKpiCardsDragAndDrop();
     };
 
     // --------------------------------------------------------------------------
@@ -839,17 +1227,40 @@
             }
         });
 
+        const isExtrato = (currentDatasetType === 'extrato');
         const isPiecesOnly = (currentKpiDisplayMode === 'pieces');
         const isBoth = (currentKpiDisplayMode === 'both');
 
-        // KPI 1: Faturamento Total / Quantidade Total
+        // Contagem de pedidos únicos (número de pedidos na carteira)
+        const uniqueOrdersSet = new Set();
+        data.forEach(item => {
+            if (item.nf) uniqueOrdersSet.add(item.nf);
+        });
+        const uniqueOrdersCount = uniqueOrdersSet.size || totalOrders;
+
+        // Alternar visibilidade dos cards conforme o modo (Extrato/Booking vs Faturamento)
+        const cardMonth = document.getElementById('kpi-card-month');
+        const cardDay = document.getElementById('kpi-card-day');
+        const cardPieces = document.getElementById('kpi-card-pieces');
+        const cardOrders = document.getElementById('kpi-card-orders');
+
+        if (cardMonth) cardMonth.style.display = isExtrato ? 'none' : '';
+        if (cardDay) cardDay.style.display = isExtrato ? 'none' : '';
+        if (cardPieces) cardPieces.style.display = isExtrato ? '' : 'none';
+        if (cardOrders) cardOrders.style.display = isExtrato ? '' : 'none';
+
+        // KPI 1: Booking Total / Faturamento Total
         const elTotalTitle = document.getElementById('kpi-total-title');
         const elTotalRev = document.getElementById('kpi-total-revenue');
         const elTotalSub = document.getElementById('kpi-total-sub');
         const elTotalOrders = document.getElementById('kpi-total-orders');
 
         if (elTotalTitle) {
-            elTotalTitle.textContent = isPiecesOnly ? 'Peças Faturadas' : 'Faturamento Total';
+            if (isExtrato) {
+                elTotalTitle.textContent = isPiecesOnly ? 'Peças em Booking' : 'Booking Total';
+            } else {
+                elTotalTitle.textContent = isPiecesOnly ? 'Peças Faturadas' : 'Faturamento Total';
+            }
         }
         if (elTotalRev) {
             elTotalRev.textContent = isPiecesOnly 
@@ -865,97 +1276,116 @@
             }
         }
         if (elTotalOrders) {
-            elTotalOrders.textContent = `${numberFormatter.format(totalOrders)} lançamentos / notas`;
+            elTotalOrders.textContent = isExtrato
+                ? `${numberFormatter.format(totalOrders)} itens em carteira`
+                : `${numberFormatter.format(totalOrders)} lançamentos / notas`;
         }
 
-        // KPI 2: Mês Atual / Último Mês
-        const now = new Date();
-        const currentMonthKey = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}`;
-        let monthRevenue = monthlyRevenueMap[currentMonthKey] || 0;
-        let monthPieces = monthlyPiecesMap[currentMonthKey] || 0;
-        let monthTitle = isPiecesOnly ? 'Peças no Mês' : 'Faturamento no Mês';
-        let monthCaption = 'Mês atual';
+        // Cards de Booking: Peças a Entregar e Pedidos em Carteira
+        const elPiecesVal = document.getElementById('kpi-total-pieces-val');
+        if (elPiecesVal) elPiecesVal.textContent = `${numberFormatter.format(totalPieces)} pçs`;
+        const elOrdersVal = document.getElementById('kpi-unique-orders-val');
+        if (elOrdersVal) elOrdersVal.textContent = numberFormatter.format(uniqueOrdersCount);
 
-        if (monthRevenue === 0 && Object.keys(monthlyRevenueMap).length > 0) {
-            const sortedMonths = Object.keys(monthlyRevenueMap).sort().reverse();
-            const lastMKey = sortedMonths[0];
-            monthRevenue = monthlyRevenueMap[lastMKey] || 0;
-            monthPieces = monthlyPiecesMap[lastMKey] || 0;
-            const [y, m] = lastMKey.split('-');
-            const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-            const prefix = isPiecesOnly ? 'Peças' : 'Faturamento';
-            monthTitle = `${prefix} (${monthNames[parseInt(m, 10)-1]}/${y})`;
-            monthCaption = 'Último mês com faturamento';
-        }
+        // Se estiver em modo Faturamento, atualiza os KPIs mensais e diários
+        if (!isExtrato) {
+            // KPI 2: Mês Atual / Último Mês
+            const now = new Date();
+            const currentMonthKey = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}`;
+            let monthRevenue = monthlyRevenueMap[currentMonthKey] || 0;
+            let monthPieces = monthlyPiecesMap[currentMonthKey] || 0;
+            let monthTitle = isPiecesOnly ? 'Peças no Mês' : 'Faturamento no Mês';
+            let monthCaption = 'Mês atual';
 
-        const elMonthTitle = document.getElementById('kpi-month-title');
-        const elMonthRev = document.getElementById('kpi-month-revenue');
-        const elMonthSub = document.getElementById('kpi-month-sub');
-        const elMonthCap = document.getElementById('kpi-month-caption');
-
-        if (elMonthTitle) elMonthTitle.textContent = monthTitle;
-        if (elMonthRev) {
-            elMonthRev.textContent = isPiecesOnly 
-                ? `${numberFormatter.format(monthPieces)} pçs` 
-                : formatBRL(monthRevenue);
-        }
-        if (elMonthSub) {
-            if (isBoth) {
-                elMonthSub.innerHTML = `<i class='bx bx-package'></i> ${numberFormatter.format(monthPieces)} pçs`;
-                elMonthSub.style.display = 'inline-flex';
-            } else {
-                elMonthSub.style.display = 'none';
+            if (monthRevenue === 0 && Object.keys(monthlyRevenueMap).length > 0) {
+                const sortedMonths = Object.keys(monthlyRevenueMap).sort().reverse();
+                const lastMKey = sortedMonths[0];
+                monthRevenue = monthlyRevenueMap[lastMKey] || 0;
+                monthPieces = monthlyPiecesMap[lastMKey] || 0;
+                const [y, m] = lastMKey.split('-');
+                const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                const prefix = isPiecesOnly ? 'Peças' : 'Faturamento';
+                monthTitle = `${prefix} (${monthNames[parseInt(m, 10)-1]}/${y})`;
+                monthCaption = 'Último mês com faturamento';
             }
-        }
-        if (elMonthCap) elMonthCap.textContent = monthCaption;
 
-        // KPI 3: Dia Atual / Último Dia
-        const todayKey = formatDateISO(now);
-        let dayRevenue = dailyRevenueMap[todayKey] || 0;
-        let dayPieces = dailyPiecesMap[todayKey] || 0;
-        let dayTitle = isPiecesOnly ? 'Peças do Dia' : 'Faturamento do Dia';
-        let dayDateStr = 'Hoje';
+            const elMonthTitle = document.getElementById('kpi-month-title');
+            const elMonthRev = document.getElementById('kpi-month-revenue');
+            const elMonthSub = document.getElementById('kpi-month-sub');
+            const elMonthCap = document.getElementById('kpi-month-caption');
 
-        if (dayRevenue === 0 && Object.keys(dailyRevenueMap).length > 0) {
-            const sortedDays = Object.keys(dailyRevenueMap).sort().reverse();
-            const lastDayKey = sortedDays[0];
-            dayRevenue = dailyRevenueMap[lastDayKey] || 0;
-            dayPieces = dailyPiecesMap[lastDayKey] || 0;
-            const parts = lastDayKey.split('-');
-            dayTitle = isPiecesOnly ? 'Último Dia (Peças)' : 'Último Dia Faturado';
-            dayDateStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
-        }
-
-        const elDayTitle = document.getElementById('kpi-day-title');
-        const elDayRev = document.getElementById('kpi-day-revenue');
-        const elDaySub = document.getElementById('kpi-day-sub');
-        const elDayDate = document.getElementById('kpi-day-date');
-
-        if (elDayTitle) elDayTitle.textContent = dayTitle;
-        if (elDayRev) {
-            elDayRev.textContent = isPiecesOnly 
-                ? `${numberFormatter.format(dayPieces)} pçs` 
-                : formatBRL(dayRevenue);
-        }
-        if (elDaySub) {
-            if (isBoth) {
-                elDaySub.innerHTML = `<i class='bx bx-package'></i> ${numberFormatter.format(dayPieces)} pçs`;
-                elDaySub.style.display = 'inline-flex';
-            } else {
-                elDaySub.style.display = 'none';
+            if (elMonthTitle) elMonthTitle.textContent = monthTitle;
+            if (elMonthRev) {
+                elMonthRev.textContent = isPiecesOnly 
+                    ? `${numberFormatter.format(monthPieces)} pçs` 
+                    : formatBRL(monthRevenue);
             }
-        }
-        if (elDayDate) elDayDate.textContent = dayDateStr;
+            if (elMonthSub) {
+                if (isBoth) {
+                    elMonthSub.innerHTML = `<i class='bx bx-package'></i> ${numberFormatter.format(monthPieces)} pçs`;
+                    elMonthSub.style.display = 'inline-flex';
+                } else {
+                    elMonthSub.style.display = 'none';
+                }
+            }
+            if (elMonthCap) elMonthCap.textContent = monthCaption;
 
-        // KPI 4: Clientes Faturados
+            // KPI 3: Dia Atual / Último Dia
+            const todayKey = formatDateISO(now);
+            let dayRevenue = dailyRevenueMap[todayKey] || 0;
+            let dayPieces = dailyPiecesMap[todayKey] || 0;
+            let dayTitle = isPiecesOnly ? 'Peças do Dia' : 'Faturamento do Dia';
+            let dayDateStr = 'Hoje';
+
+            if (dayRevenue === 0 && Object.keys(dailyRevenueMap).length > 0) {
+                const sortedDays = Object.keys(dailyRevenueMap).sort().reverse();
+                const lastDayKey = sortedDays[0];
+                dayRevenue = dailyRevenueMap[lastDayKey] || 0;
+                dayPieces = dailyPiecesMap[lastDayKey] || 0;
+                const parts = lastDayKey.split('-');
+                dayTitle = isPiecesOnly ? 'Último Dia (Peças)' : 'Último Dia Faturado';
+                dayDateStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+
+            const elDayTitle = document.getElementById('kpi-day-title');
+            const elDayRev = document.getElementById('kpi-day-revenue');
+            const elDaySub = document.getElementById('kpi-day-sub');
+            const elDayDate = document.getElementById('kpi-day-date');
+
+            if (elDayTitle) elDayTitle.textContent = dayTitle;
+            if (elDayRev) {
+                elDayRev.textContent = isPiecesOnly 
+                    ? `${numberFormatter.format(dayPieces)} pçs` 
+                    : formatBRL(dayRevenue);
+            }
+            if (elDaySub) {
+                if (isBoth) {
+                    elDaySub.innerHTML = `<i class='bx bx-package'></i> ${numberFormatter.format(dayPieces)} pçs`;
+                    elDaySub.style.display = 'inline-flex';
+                } else {
+                    elDaySub.style.display = 'none';
+                }
+            }
+            if (elDayDate) elDayDate.textContent = dayDateStr;
+        }
+
+        // KPI 4: Clientes Booking / Faturados
         const totalClients = activeClientsSet.size;
+        const elClientsTitle = document.getElementById('kpi-clients-title');
         const elActiveClients = document.getElementById('kpi-active-clients');
+        const elClientsCoverage = document.getElementById('kpi-clients-coverage');
+        if (elClientsTitle) elClientsTitle.textContent = isExtrato ? 'Clientes Booking' : 'Clientes Faturados';
         if (elActiveClients) elActiveClients.textContent = numberFormatter.format(totalClients);
+        if (elClientsCoverage) elClientsCoverage.textContent = isExtrato ? 'lojas com pedidos em carteira' : 'lojas com compras ativas';
 
         // KPI 5: Redes / Grupos
         const totalGroups = activeGroupsSet.size;
+        const elGroupsTitle = document.getElementById('kpi-groups-title');
         const elActiveGroups = document.getElementById('kpi-active-groups');
+        const elGroupsCoverage = document.getElementById('kpi-groups-coverage');
+        if (elGroupsTitle) elGroupsTitle.textContent = 'Redes / Grupos';
         if (elActiveGroups) elActiveGroups.textContent = numberFormatter.format(totalGroups);
+        if (elGroupsCoverage) elGroupsCoverage.textContent = isExtrato ? 'redes com pedidos programados' : 'redes corporativas';
 
         // KPI 6: Ticket Médio / Média de Peças
         const avgTicket = totalClients > 0 ? (totalRevenue / totalClients) : 0;
@@ -966,7 +1396,11 @@
         const elTicketFooter = document.getElementById('kpi-ticket-footer');
 
         if (elTicketTitle) {
-            elTicketTitle.textContent = isPiecesOnly ? 'Média Peças / Cli' : 'Ticket Médio';
+            if (isExtrato) {
+                elTicketTitle.textContent = isPiecesOnly ? 'Média Peças / Cli' : 'Ticket Médio Booking';
+            } else {
+                elTicketTitle.textContent = isPiecesOnly ? 'Média Peças / Cli' : 'Ticket Médio';
+            }
         }
         if (elAvgTicket) {
             elAvgTicket.textContent = isPiecesOnly 
@@ -982,7 +1416,11 @@
             }
         }
         if (elTicketFooter) {
-            elTicketFooter.textContent = isPiecesOnly ? 'peças por cliente faturado' : 'por cliente faturado';
+            if (isExtrato) {
+                elTicketFooter.textContent = isPiecesOnly ? 'peças por cliente booking' : 'por cliente booking';
+            } else {
+                elTicketFooter.textContent = isPiecesOnly ? 'peças por cliente faturado' : 'por cliente faturado';
+            }
         }
     }
 
@@ -1238,6 +1676,51 @@
         }
 
         const selectedYears = getIndCMSSelectedValues('year');
+        const isExtrato = (currentDatasetType === 'extrato');
+
+        // Atualizar títulos dos gráficos e seções conforme o modo (Extrato/Booking vs Faturamento)
+        const elDailyTitle = document.getElementById('chart-daily-title-text');
+        const elDailySub = document.getElementById('chart-daily-subtitle');
+        if (elDailyTitle) elDailyTitle.textContent = isExtrato ? 'Planejamento Diário de Booking' : 'Evolução Diária do Faturamento';
+        if (elDailySub) elDailySub.textContent = isExtrato ? 'Entregas programadas por dia com curva de tendência e pontos interativos' : 'Faturamento por dia com curva de tendência e pontos interativos';
+
+        const elMonthlyTitle = document.getElementById('chart-monthly-title-text');
+        const elMonthlySub = document.getElementById('chart-monthly-subtitle');
+        if (elMonthlyTitle) elMonthlyTitle.textContent = isExtrato ? 'Planejamento Mensal' : 'Faturamento Mensal';
+        if (elMonthlySub) elMonthlySub.textContent = isExtrato ? 'Previsão e comparativo de entregas programadas por mês (Booking)' : 'Comparativo de vendas por mês';
+
+        const elGroupTitle = document.getElementById('chart-group-title-text');
+        const elGroupSub = document.getElementById('chart-group-subtitle');
+        if (elGroupTitle) elGroupTitle.textContent = isExtrato ? 'Planejamento por Grupo Real' : 'Faturamento por Grupo Real';
+        if (elGroupSub) elGroupSub.textContent = isExtrato ? 'Distribuição do booking entre os principais grupos econômicos' : 'Distribuição entre os principais grupos econômicos';
+
+        const elCommercialGroupTitle = document.getElementById('chart-commercial-group-title-text');
+        const elCommercialGroupSub = document.getElementById('chart-commercial-group-subtitle');
+        if (elCommercialGroupTitle) elCommercialGroupTitle.textContent = isExtrato ? 'Planejamento por Grupo' : 'Faturamento por Grupo';
+        if (elCommercialGroupSub) elCommercialGroupSub.textContent = isExtrato ? 'Distribuição do booking por grupo comercial e bandeira' : 'Distribuição entre os grupos comerciais e bandeiras';
+
+        const elCompMonthly = document.getElementById('comp-label-monthly');
+        const elCompGroupReal = document.getElementById('comp-label-group-real');
+        if (elCompMonthly) elCompMonthly.textContent = isExtrato ? 'Planejamento Mensal' : 'Faturamento Mensal';
+        if (elCompGroupReal) elCompGroupReal.textContent = isExtrato ? 'Planejamento Grupo Real' : 'Grupo Real';
+
+        const elRankingGeneralSub = document.getElementById('ranking-general-subtitle');
+        if (elRankingGeneralSub) {
+            elRankingGeneralSub.textContent = isExtrato 
+                ? 'Maiores desempenhos em pedidos e planejamento de vendas no período' 
+                : 'Maiores desempenhos em vendas no período selecionado';
+        }
+        const elRankingProductsSub = document.getElementById('ranking-products-subtitle');
+        if (elRankingProductsSub) {
+            elRankingProductsSub.textContent = isExtrato 
+                ? 'Referências programadas, modelos, divisões e pedidos em carteira' 
+                : 'Referências mais vendidas, modelos, divisões e maiores notas fiscais emitidas';
+        }
+
+        const elNfCardTitle = document.getElementById('ranking-nf-title-label');
+        if (elNfCardTitle) elNfCardTitle.textContent = isExtrato ? 'Pedidos / Carteira' : 'Notas Fiscais';
+        const elNfCardBadge = document.getElementById('ranking-nf-badge-label');
+        if (elNfCardBadge) elNfCardBadge.textContent = isExtrato ? 'Booking' : 'Faturamento';
 
         // Se mais de 1 ano estiver selecionado, renderiza o gráfico comparativo
         if (selectedYears && selectedYears.length > 1) {
@@ -1259,6 +1742,9 @@
 
         // Gráfico 3: Faturamento por Grupo Real
         renderGroupChart(data, clientsMap);
+
+        // Gráfico 4: Faturamento por Grupo Comercial
+        renderCommercialGroupChart(data, clientsMap);
     }
 
     function renderDailyChart(data) {
@@ -1286,8 +1772,11 @@
         });
         const values = sortedDays.map(dStr => isPiecesMode ? dailyPieces[dStr] : dailyVal[dStr]);
 
+        const isExtrato = (currentDatasetType === 'extrato');
         const countBadge = document.getElementById('chart-daily-count');
-        if (countBadge) countBadge.textContent = `${sortedDays.length} dias faturados`;
+        if (countBadge) {
+            countBadge.textContent = isExtrato ? `${sortedDays.length} datas programadas` : `${sortedDays.length} dias faturados`;
+        }
 
         if (chartDailyInstance) {
             chartDailyInstance.destroy();
@@ -1303,7 +1792,7 @@
             data: {
                 labels: labels,
                 datasets: [{
-                    label: isPiecesMode ? 'Volume (Peças)' : 'Faturamento (R$)',
+                    label: isPiecesMode ? (isExtrato ? 'Volume Programado (Peças)' : 'Volume (Peças)') : (isExtrato ? 'Booking Programado (R$)' : 'Faturamento (R$)'),
                     data: values,
                     borderColor: '#6366f1',
                     borderWidth: 2.5,
@@ -1333,13 +1822,14 @@
                         callbacks: {
                             label: function(context) {
                                 const dayKey = sortedDays[context.dataIndex];
+                                const prefix = isExtrato ? 'Booking: ' : 'Faturamento: ';
                                 if (isPiecesMode) {
                                     return `Volume: ${numberFormatter.format(context.parsed.y)} pçs`;
                                 } else if (isBoth) {
                                     const p = dailyPieces[dayKey] || 0;
-                                    return `Faturamento: ${formatBRL(context.parsed.y)} (${numberFormatter.format(p)} pçs)`;
+                                    return `${prefix}${formatBRL(context.parsed.y)} (${numberFormatter.format(p)} pçs)`;
                                 }
-                                return `Faturamento: ${formatBRL(context.parsed.y)}`;
+                                return `${prefix}${formatBRL(context.parsed.y)}`;
                             }
                         }
                     }
@@ -1388,6 +1878,7 @@
             }
         });
 
+        const isExtrato = (currentDatasetType === 'extrato');
         const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
         const sortedMonths = Object.keys(monthlyVal).sort();
         const labels = sortedMonths.map(mStr => {
@@ -1406,7 +1897,7 @@
             data: {
                 labels: labels,
                 datasets: [{
-                    label: isPiecesMode ? 'Volume Mensal (Peças)' : 'Faturamento Mensal (R$)',
+                    label: isPiecesMode ? (isExtrato ? 'Volume Mensal (Peças)' : 'Volume Mensal (Peças)') : (isExtrato ? 'Planejamento Mensal (R$)' : 'Faturamento Mensal (R$)'),
                     data: values,
                     backgroundColor: 'rgba(16, 185, 129, 0.8)',
                     hoverBackgroundColor: '#10b981',
@@ -1427,13 +1918,14 @@
                         callbacks: {
                             label: function(context) {
                                 const mKey = sortedMonths[context.dataIndex];
+                                const prefix = isExtrato ? 'Booking: ' : 'Faturamento: ';
                                 if (isPiecesMode) {
                                     return `Volume: ${numberFormatter.format(context.parsed.y)} pçs`;
                                 } else if (isBoth) {
                                     const p = monthlyPieces[mKey] || 0;
-                                    return `Faturamento: ${formatBRL(context.parsed.y)} (${numberFormatter.format(p)} pçs)`;
+                                    return `${prefix}${formatBRL(context.parsed.y)} (${numberFormatter.format(p)} pçs)`;
                                 }
-                                return `Faturamento: ${formatBRL(context.parsed.y)}`;
+                                return `${prefix}${formatBRL(context.parsed.y)}`;
                             }
                         }
                     }
@@ -1507,13 +1999,14 @@
             '#8b5cf6', '#06b6d4', '#3b82f6', '#64748b'
         ];
 
+        const isExtrato = (currentDatasetType === 'extrato');
         const ctx = canvas.getContext('2d');
         chartGroupInstance = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: labels,
                 datasets: [{
-                    label: isPiecesMode ? 'Volume por Grupo (Peças)' : 'Faturamento por Grupo (R$)',
+                    label: isPiecesMode ? 'Volume por Grupo (Peças)' : (isExtrato ? 'Planejamento por Grupo (R$)' : 'Faturamento por Grupo (R$)'),
                     data: values,
                     backgroundColor: colors.slice(0, labels.length),
                     borderRadius: 6
@@ -1533,12 +2026,120 @@
                         callbacks: {
                             label: function(context) {
                                 const gName = labels[context.dataIndex];
+                                const prefix = isExtrato ? 'Booking: ' : 'Faturamento: ';
                                 if (isPiecesMode) {
                                     return `Volume: ${numberFormatter.format(context.parsed.x)} pçs`;
                                 } else if (isBoth && groupPieces[gName] !== undefined) {
-                                    return `Faturamento: ${formatBRL(context.parsed.x)} (${numberFormatter.format(groupPieces[gName])} pçs)`;
+                                    return `${prefix}${formatBRL(context.parsed.x)} (${numberFormatter.format(groupPieces[gName])} pçs)`;
                                 }
-                                return `Faturamento: ${formatBRL(context.parsed.x)}`;
+                                return `${prefix}${formatBRL(context.parsed.x)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255, 255, 255, 0.06)' },
+                        ticks: {
+                            color: '#94a3b8',
+                            font: { size: 10 },
+                            callback: function(val) {
+                                if (isPiecesMode) {
+                                    if (val >= 1000) return `${(val/1000).toFixed(0)}k pçs`;
+                                    return `${val} pçs`;
+                                }
+                                if (val >= 1000) return `R$ ${(val/1000).toFixed(0)}k`;
+                                return `R$ ${val}`;
+                            }
+                        }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#f8fafc', font: { size: 11, weight: '500' } }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderCommercialGroupChart(data, clientsMap) {
+        const canvas = document.getElementById('chart-commercial-group-revenue');
+        if (!canvas) return;
+
+        const isPiecesMode = (currentKpiDisplayMode === 'pieces');
+        const isBoth = (currentKpiDisplayMode === 'both');
+        const groupVal = {};
+        const groupPieces = {};
+
+        data.forEach(item => {
+            const clientMatch = resolveClientForItem(item, clientsMap);
+            let grupo = (clientMatch && clientMatch['GRUPO']) 
+                ? clientMatch['GRUPO'].trim() 
+                : (item.g || item.r || 'Não Vinculado');
+
+            if (!grupo) grupo = 'Não Vinculado';
+            groupVal[grupo] = (groupVal[grupo] || 0) + (item.v || 0);
+            groupPieces[grupo] = (groupPieces[grupo] || 0) + (item.q || 0);
+        });
+
+        // Top 7 grupos + "Outros"
+        const sortedGroups = Object.entries(isPiecesMode ? groupPieces : groupVal).sort((a, b) => b[1] - a[1]);
+        const topCount = 7;
+        const topGroups = sortedGroups.slice(0, topCount);
+        const otherGroups = sortedGroups.slice(topCount);
+
+        const labels = topGroups.map(g => g[0]);
+        const values = topGroups.map(g => g[1]);
+
+        if (otherGroups.length > 0) {
+            const otherSum = otherGroups.reduce((acc, curr) => acc + curr[1], 0);
+            labels.push('Outros Grupos');
+            values.push(otherSum);
+        }
+
+        if (chartCommercialGroupInstance) {
+            chartCommercialGroupInstance.destroy();
+        }
+
+        const colors = [
+            '#8b5cf6', '#ec4899', '#3b82f6', '#10b981', 
+            '#f59e0b', '#06b6d4', '#6366f1', '#64748b'
+        ];
+
+        const isExtrato = (currentDatasetType === 'extrato');
+        const ctx = canvas.getContext('2d');
+        chartCommercialGroupInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: isPiecesMode ? 'Volume por Grupo (Peças)' : (isExtrato ? 'Planejamento por Grupo (R$)' : 'Faturamento por Grupo (R$)'),
+                    data: values,
+                    backgroundColor: colors.slice(0, labels.length),
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                        borderWidth: 1,
+                        padding: 10,
+                        callbacks: {
+                            label: function(context) {
+                                const gName = labels[context.dataIndex];
+                                const prefix = isExtrato ? 'Booking: ' : 'Faturamento: ';
+                                if (isPiecesMode) {
+                                    return `Volume: ${numberFormatter.format(context.parsed.x)} pçs`;
+                                } else if (isBoth && groupPieces[gName] !== undefined) {
+                                    return `${prefix}${formatBRL(context.parsed.x)} (${numberFormatter.format(groupPieces[gName])} pçs)`;
+                                }
+                                return `${prefix}${formatBRL(context.parsed.x)}`;
                             }
                         }
                     }
@@ -1888,12 +2489,16 @@
         container.innerHTML = renderRankingListHTML(sorted, totalRevenue, 'Classe Produto', totalPieces);
     }
 
-    // TOP NOTAS FISCAIS: maiores notas emitidas (número da NF, valor, emissão e cliente)
+    // TOP NOTAS FISCAIS / PEDIDOS EM CARTEIRA
     function renderTopNFs(data, clientsMap, totalRevenue, totalPieces = 0) {
         const container = document.getElementById('ranking-nfs-container');
         if (!container) return;
 
+        const isExtrato = (currentDatasetType === 'extrato');
+        const defaultName = isExtrato ? 'Sem Número de Pedido' : 'Sem Número de NF';
+        const prefixName = isExtrato ? 'Pedido ' : 'NF ';
         const nfTotals = {};
+
         data.forEach(item => {
             const nfNum = (item.nf || '').trim();
             const key = nfNum || `S_NF_${item.d}_${item.c || item.cli || Math.random()}`;
@@ -1905,7 +2510,7 @@
                     : (item.f || item.z || 'Cliente');
 
                 nfTotals[key] = {
-                    name: nfNum ? `NF ${nfNum}` : 'Sem Número de NF',
+                    name: nfNum ? `${prefixName}${nfNum}` : defaultName,
                     date: item.d || '-',
                     fantasia: fantasia,
                     q: 0,
@@ -1924,11 +2529,13 @@
         }).map(it => {
             const parts = [];
             if (it.date && it.date !== '-') parts.push(it.date);
+            if (it.fantasia && it.fantasia !== 'Cliente' && it.fantasia !== 'Cliente s/ Cadastro') parts.push(it.fantasia);
             it.sub = parts.join(' • ');
             return it;
         });
 
-        container.innerHTML = renderRankingListHTML(sorted, totalRevenue, 'Nota Fiscal', totalPieces);
+        const rankNameLabel = isExtrato ? 'Pedido' : 'Nota Fiscal';
+        container.innerHTML = renderRankingListHTML(sorted, totalRevenue, rankNameLabel, totalPieces);
     }
 
     // --------------------------------------------------------------------------
@@ -1939,6 +2546,14 @@
         const countBadge = document.getElementById('audit-count-badge');
         const tableContainer = document.getElementById('audit-table-container');
         if (!sectionEl || !tableContainer) return;
+
+        const isExtrato = (currentDatasetType === 'extrato');
+        const captionEl = document.getElementById('audit-summary-caption');
+        if (captionEl) {
+            captionEl.textContent = isExtrato
+                ? 'Alguns pedidos em booking foram identificados mas seus CNPJs ainda não constam na lista central de clientes.'
+                : 'Alguns faturamentos foram contabilizados mas seus CNPJs ainda não constam na lista central de clientes.';
+        }
 
         const unlinkedMap = {};
         data.forEach(item => {
@@ -1969,6 +2584,7 @@
         sectionEl.style.display = 'block';
         if (countBadge) countBadge.textContent = `${unlinkedList.length} clientes pendentes`;
 
+        const columnTitle = isExtrato ? 'Total em Booking' : 'Total Faturado';
         let tableHtml = `
             <table class="audit-table">
                 <thead>
@@ -1977,7 +2593,7 @@
                         <th style="width: 100px;">Cód. New Era</th>
                         <th>Nome Fantasia (Relatório)</th>
                         <th>Razão Social</th>
-                        <th style="text-align: right;">Total Faturado</th>
+                        <th style="text-align: right;">${columnTitle}</th>
                         <th style="text-align: center; width: 130px;">Ação</th>
                     </tr>
                 </thead>
@@ -2078,27 +2694,40 @@
                     return;
                 }
 
-                // Mapeamento dinâmico das colunas
+                // Mapeamento dinâmico e inteligente das colunas
                 const firstRow = rawJson[0];
                 const keys = Object.keys(firstRow);
                 const findKey = (name) => keys.find(k => k.toLowerCase().includes(name.toLowerCase()));
 
-                const kCnpj = findKey('cnpj');
-                const kClifor = findKey('clifor') || findKey('código') || findKey('codigo');
+                const kCnpj = findKey('cnpj/cpf') || findKey('cnpj') || findKey('cpf');
+                const kClifor = findKey('código (clifor)') || findKey('clifor') || findKey('código') || findKey('codigo');
                 const kFantasia = findKey('nome fantasia') || findKey('fantasia') || findKey('cliente');
                 const kRede = findKey('nome da rede') || findKey('rede');
-                const kRazao = findKey('raz');
-                const kCidade = findKey('cidade');
-                const kEmissao = findKey('emiss');
-                const kQtde = findKey('qtde');
-                const kGross = findKey('gross') || findKey('valor');
-                const kNet = findKey('net');
-                const kNota = findKey('nota') || findKey('nf') || findKey('pedido');
+                const kRazao = findKey('razão social') || findKey('razao social') || findKey('raz');
+                const kCidade = findKey('cidade') || findKey('munic');
+                
+                // Prioridade: Data Entrega (Extrato de Pedidos) ou Emissão (Faturamento)
+                const kData = findKey('data entrega') || findKey('entrega') || findKey('emiss') || findKey('data');
+                
+                // Prioridade: Qtde Entregar sobre Qtde genérica
+                const kQtde = findKey('qtde entregar') || findKey('qtd entregar') || findKey('qtde') || findKey('qtd') || findKey('quantidade');
+                
+                // Prioridade: Valor Entregar sobre Valor / Gross genérico
+                const kGross = findKey('valor entregar') || findKey('gross') || findKey('valor bruto') || findKey('valor');
+                const kNet = findKey('net') || findKey('valor líquido') || findKey('valor liquido');
+                
+                // Pedido ou Nota Fiscal
+                const kNota = findKey('pedido') || findKey('nota') || findKey('nf') || findKey('pedido cliente');
+                
                 const kAno = findKey('ano');
                 const kMes = findKey('mês') || findKey('mes');
-                const kProd = findKey('produto');
+                
+                // Prioriza o nome exato 'Produto' antes de 'Grupo Produto' ou 'Classe Produto'
+                const kProd = keys.find(k => k.trim().toLowerCase() === 'produto') || findKey('referência') || findKey('referencia') || findKey('código produto') || findKey('produto');
                 const kDesc = findKey('descri');
-                const kSub = findKey('sub-grupo') || findKey('subgrupo') || findKey('sub grupo');
+                
+                // Sub-grupo: aceita 'grupo produto' ou 'sub-grupo'
+                const kSub = findKey('grupo produto') || findKey('grupo de produto') || findKey('sub-grupo') || findKey('subgrupo') || findKey('sub grupo');
                 const kClasse = findKey('classe produto') || findKey('classe') || findKey('divis');
 
                 const parsed = [];
@@ -2131,16 +2760,55 @@
 
                     const cleanC = kCnpj ? cleanDigits(row[kCnpj]).padStart(14, '0') : '';
 
-                    // Data emissão
+                    // Data normalizada e extração automática de ano e mês
                     let emissStr = '';
-                    const rawEmiss = kEmissao ? row[kEmissao] : null;
-                    if (rawEmiss) {
-                        if (typeof rawEmiss === 'number') {
-                            const dObj = new Date(Math.round((rawEmiss - 25569) * 86400 * 1000));
+                    let anoVal = 0;
+                    let mesVal = 0;
+                    const rawDate = kData ? row[kData] : null;
+                    if (rawDate) {
+                        if (typeof rawDate === 'number') {
+                            const dObj = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
                             emissStr = `${dObj.getDate().toString().padStart(2,'0')}/${(dObj.getMonth()+1).toString().padStart(2,'0')}/${dObj.getFullYear()}`;
+                            anoVal = dObj.getFullYear();
+                            mesVal = dObj.getMonth() + 1;
                         } else {
-                            emissStr = rawEmiss.toString().slice(0, 10);
+                            const str = rawDate.toString().trim();
+                            const datePart = str.split(' ')[0];
+                            if (datePart.includes('/')) {
+                                const p = datePart.split('/');
+                                if (p.length === 3) {
+                                    if (p[0].length === 4) {
+                                        anoVal = parseInt(p[0], 10);
+                                        mesVal = parseInt(p[1], 10);
+                                        emissStr = `${p[2].padStart(2,'0')}/${p[1].padStart(2,'0')}/${p[0]}`;
+                                    } else {
+                                        anoVal = parseInt(p[2], 10);
+                                        mesVal = parseInt(p[1], 10);
+                                        emissStr = `${p[0].padStart(2,'0')}/${p[1].padStart(2,'0')}/${p[2]}`;
+                                    }
+                                }
+                            } else if (datePart.includes('-')) {
+                                const p = datePart.split('-');
+                                if (p.length === 3) {
+                                    if (p[0].length === 4) {
+                                        anoVal = parseInt(p[0], 10);
+                                        mesVal = parseInt(p[1], 10);
+                                        emissStr = `${p[2].padStart(2,'0')}/${p[1].padStart(2,'0')}/${p[0]}`;
+                                    }
+                                }
+                            } else {
+                                emissStr = str.slice(0, 10);
+                            }
                         }
+                    }
+
+                    if (kAno && row[kAno]) {
+                        const pAno = parseInt(row[kAno], 10);
+                        if (!isNaN(pAno) && pAno > 2000) anoVal = pAno;
+                    }
+                    if (kMes && row[kMes]) {
+                        const pMes = parseInt(row[kMes], 10);
+                        if (!isNaN(pMes) && pMes >= 1 && pMes <= 12) mesVal = pMes;
                     }
 
                     parsed.push({
@@ -2151,8 +2819,8 @@
                         z: (kRazao && row[kRazao]) ? String(row[kRazao]).trim() : '',
                         cid: (kCidade && row[kCidade]) ? String(row[kCidade]).trim() : '',
                         d: emissStr,
-                        a: kAno && row[kAno] ? parseInt(row[kAno], 10) : 0,
-                        m: kMes && row[kMes] ? parseInt(row[kMes], 10) : 0,
+                        a: anoVal,
+                        m: mesVal,
                         p: (kProd && row[kProd]) ? String(row[kProd]).trim() : '',
                         desc: (kDesc && row[kDesc]) ? String(row[kDesc]).trim() : '',
                         sub: (kSub && row[kSub]) ? String(row[kSub]).trim() : '',
@@ -2166,18 +2834,44 @@
                 });
 
                 if (parsed.length === 0) {
-                    window.showNotification('Nenhum registro de faturamento válido encontrado.', 'error');
+                    window.showNotification('Nenhum registro de faturamento ou pedido válido encontrado.', 'error');
                     return;
                 }
 
+                const isExtrato = !!(findKey('data entrega') || findKey('valor entregar') || findKey('qtde entregar'));
+                currentDatasetType = isExtrato ? 'extrato' : 'billing';
+                localStorage.setItem('empresa_indicators_dataset_type', currentDatasetType);
+
+                // Capturar data do arquivo enviado (lastModified) formatada em DD/MM/AAAA
+                const fileDateObj = file.lastModified ? new Date(file.lastModified) : new Date();
+                const formattedFileDate = `${fileDateObj.getDate().toString().padStart(2, '0')}/${(fileDateObj.getMonth() + 1).toString().padStart(2, '0')}/${fileDateObj.getFullYear()}`;
+
                 billingMasterData = parsed;
-                localStorage.setItem('empresa_billing_new_era_custom', JSON.stringify(parsed));
+                if (isExtrato) {
+                    localStorage.setItem('empresa_extrato_last_updated', formattedFileDate);
+                    localStorage.setItem('empresa_extrato_new_era_custom', JSON.stringify(parsed));
+                } else {
+                    localStorage.setItem('empresa_billing_last_updated', formattedFileDate);
+                    localStorage.setItem('empresa_billing_new_era_custom', JSON.stringify(parsed));
+                }
+
+                // Atualizar botões visuais
+                const btnExtrato = document.getElementById('btn-dataset-extrato');
+                const btnBilling = document.getElementById('btn-dataset-billing');
+                if (btnExtrato && btnBilling) {
+                    btnExtrato.style.background = isExtrato ? 'var(--accent-color, #3b82f6)' : 'transparent';
+                    btnExtrato.style.color = isExtrato ? '#ffffff' : 'var(--text-secondary)';
+                    btnBilling.style.background = !isExtrato ? 'var(--accent-color, #3b82f6)' : 'transparent';
+                    btnBilling.style.color = !isExtrato ? '#ffffff' : 'var(--text-secondary)';
+                }
 
                 // Sincronizar Firestore se disponível
                 if (window.db) {
                     try {
-                        await window.db.collection('settings').doc('billing_new_era').set({
+                        const docId = isExtrato ? 'extrato_new_era' : 'billing_new_era';
+                        await window.db.collection('settings').doc(docId).set({
                             list: parsed,
+                            lastUpdated: formattedFileDate,
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                             updatedBy: localStorage.getItem('empresa_auth_user') || 'Usuário'
                         });
@@ -2186,11 +2880,23 @@
                     }
                 }
 
+                computeLatestReportDate();
+                const def = getDefaultPeriod();
+                const startInput = document.getElementById('filter-ind-start-date');
+                const endInput = document.getElementById('filter-ind-end-date');
+                if (startInput) startInput.value = def.start;
+                if (endInput) endInput.value = def.end;
+
                 populateAllIndCMS(false);
                 applyIndicatorsFilter();
 
-                window.showNotification(`Sucesso! ${parsed.length} faturamentos carregados!`, 'success');
-                if (window.logUserAction) window.logUserAction(`importou nova planilha de faturamento (${parsed.length} itens)`);
+                const successMsg = isExtrato
+                    ? `Sucesso! Extrato de Pedidos carregado com ${parsed.length.toLocaleString('pt-BR')} itens a entregar!`
+                    : `Sucesso! Planilha de Faturamento carregada com ${parsed.length.toLocaleString('pt-BR')} lançamentos!`;
+                window.showNotification(successMsg, 'success');
+                if (window.logUserAction) {
+                    window.logUserAction(isExtrato ? `importou extrato de pedidos NEW ERA (${parsed.length} itens)` : `importou planilha de faturamento (${parsed.length} lançamentos)`);
+                }
 
                 event.target.value = '';
             } catch (err) {
@@ -2209,12 +2915,37 @@
         }
 
         try {
+            const isExtrato = (currentDatasetType === 'extrato');
             const clientsMap = buildClientsMap();
             const metricVal = document.getElementById('filter-ind-metric')?.value || 'gross';
-            const metricHeader = metricVal === 'net' ? 'Valor Considerado (Líquido)' : 'Valor Considerado (Bruto)';
+            const metricHeader = metricVal === 'net' 
+                ? (isExtrato ? 'Valor Booking Líquido (R$)' : 'Valor Considerado (Líquido)')
+                : (isExtrato ? 'Valor Booking Bruto (R$)' : 'Valor Considerado (Bruto)');
+
             const exportRows = billingFilteredData.map(item => {
                 const clientMatch = resolveClientForItem(item, clientsMap);
                 const cnpj = item.c || (clientMatch && clientMatch['CNPJ']) || '';
+                if (isExtrato) {
+                    return {
+                        'Código CLIFOR': item.cli || '',
+                        'CNPJ': cnpj ? formatCNPJMask(cnpj) : '',
+                        'Nome Fantasia': (clientMatch && (clientMatch['FANTASIA'] || clientMatch['NOME FANTASIA'])) || item.f || '',
+                        'Razão Social': (clientMatch && (clientMatch['RAZAO SOCIAL'] || clientMatch['RAZÃO SOCIAL'])) || item.z || '',
+                        'Grupo Real': (clientMatch && (clientMatch['GRUPO REAL'] || clientMatch['GRUPO'])) || item.gr || '',
+                        'Grupo': (clientMatch && clientMatch['GRUPO']) || item.g || '',
+                        'Rede': item.r || '',
+                        'Data Entrega': item.d || '',
+                        'Pedido': item.nf || '',
+                        'Referência Produto': item.p || '',
+                        'Descrição': item.desc || '',
+                        'Sub-Grupo': item.sub || '',
+                        'Classe Produto': item.cl || '',
+                        [metricHeader]: item.v || 0,
+                        'Valor Entregar (Bruto R$)': item.vg !== undefined ? item.vg : item.v,
+                        'Valor Entregar (Líquido R$)': item.vn !== undefined ? item.vn : item.v,
+                        'Qtde Entregar (Peças)': item.q || 0
+                    };
+                }
                 return {
                     'Código CLIFOR': item.cli || '',
                     'CNPJ': cnpj ? formatCNPJMask(cnpj) : '',
@@ -2238,14 +2969,16 @@
 
             const ws = XLSX.utils.json_to_sheet(exportRows);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'FATURAMENTO');
+            const sheetTitle = isExtrato ? 'EXTRATO_PEDIDOS' : 'FATURAMENTO';
+            XLSX.utils.book_append_sheet(wb, ws, sheetTitle);
 
             const now = new Date();
             const dateStr = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}`;
-            XLSX.writeFile(wb, `INDICADORES_NEW_ERA_${dateStr}.xlsx`);
+            const fileName = isExtrato ? `BOOKING_NEW_ERA_${dateStr}.xlsx` : `INDICADORES_NEW_ERA_${dateStr}.xlsx`;
+            XLSX.writeFile(wb, fileName);
 
             window.showNotification('Relatório exportado com sucesso!', 'success');
-            if (window.logUserAction) window.logUserAction('exportou relatório de indicadores para Excel');
+            if (window.logUserAction) window.logUserAction(isExtrato ? 'exportou extrato de pedidos para Excel' : 'exportou relatório de indicadores para Excel');
         } catch (err) {
             console.error('Erro na exportação:', err);
             window.showNotification('Erro ao exportar relatório.', 'error');
@@ -2261,5 +2994,1320 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
     }
+
+
+
+    // ==========================================================================
+    // MÓDULO COMPARATIVO: A ENTREGAR (BOOKING) X FATURAMENTO REALIZADO
+    // Confrontação das Informações por CNPJ, Data de Entrega/Emissão e Mês
+    // ==========================================================================
+
+    function updateComparisonKpis(bData, eData, clientsMap, metricVal) {
+        let fatTotal = 0;
+        let fatPieces = 0;
+        let extTotal = 0;
+        let extPieces = 0;
+        const cnpjsFat = new Set();
+        const cnpjsExt = new Set();
+
+        bData.forEach(item => {
+            fatTotal += item.v || 0;
+            fatPieces += item.q || 0;
+            const cMatch = resolveClientForItem(item, clientsMap);
+            const cnpj = item.c || (cMatch && cMatch['CNPJ']) || (item.cli ? `CLI_${item.cli}` : item.f);
+            if (cnpj) cnpjsFat.add(cnpj);
+        });
+
+        eData.forEach(item => {
+            extTotal += item.v || 0;
+            extPieces += item.q || 0;
+            const cMatch = resolveClientForItem(item, clientsMap);
+            const cnpj = item.c || (cMatch && cMatch['CNPJ']) || (item.cli ? `CLI_${item.cli}` : item.f);
+            if (cnpj) cnpjsExt.add(cnpj);
+        });
+
+        const grandTotal = fatTotal + extTotal;
+        const grandPieces = fatPieces + extPieces;
+        const pctFat = grandTotal > 0 ? (fatTotal / grandTotal * 100) : 0;
+        const pctExt = grandTotal > 0 ? (extTotal / grandTotal * 100) : 0;
+
+        // KPI 1: Faturamento Realizado
+        const cardTotal = document.getElementById('kpi-card-total');
+        if (cardTotal) {
+            cardTotal.style.display = 'block';
+            const titleEl = document.getElementById('kpi-total-title');
+            const revEl = document.getElementById('kpi-total-revenue');
+            const subEl = document.getElementById('kpi-total-sub');
+            const footEl = document.getElementById('kpi-total-footer');
+            if (titleEl) titleEl.textContent = 'Faturamento Realizado';
+            if (revEl) revEl.textContent = formatBRL(fatTotal);
+            if (subEl) {
+                subEl.style.display = 'inline-block';
+                subEl.textContent = `${fatPieces.toLocaleString('pt-BR')} peças`;
+            }
+            if (footEl) footEl.textContent = 'vendas faturadas no período';
+        }
+
+        // KPI 2: A Entregar (Carteira)
+        const cardPieces = document.getElementById('kpi-card-pieces');
+        if (cardPieces) {
+            cardPieces.style.display = 'block';
+            const titleEl = document.getElementById('kpi-pieces-title');
+            const valEl = document.getElementById('kpi-total-pieces-val');
+            const footEl = document.getElementById('kpi-pieces-footer');
+            if (titleEl) titleEl.textContent = 'A Entregar (Carteira)';
+            if (valEl) valEl.textContent = formatBRL(extTotal);
+            if (footEl) footEl.textContent = `${extPieces.toLocaleString('pt-BR')} peças programadas`;
+        }
+
+        // KPI 3: Total Geral Previsto
+        const cardOrders = document.getElementById('kpi-card-orders');
+        if (cardOrders) {
+            cardOrders.style.display = 'block';
+            const titleEl = document.getElementById('kpi-orders-title');
+            const valEl = document.getElementById('kpi-unique-orders-val');
+            const footEl = document.getElementById('kpi-orders-footer');
+            if (titleEl) titleEl.textContent = 'Total Geral Previsto';
+            if (valEl) valEl.textContent = formatBRL(grandTotal);
+            if (footEl) footEl.textContent = `${grandPieces.toLocaleString('pt-BR')} peças consolidadas`;
+        }
+
+        // KPI 4: % Realizado vs Carteira
+        const cardTicket = document.getElementById('kpi-card-ticket');
+        if (cardTicket) {
+            cardTicket.style.display = 'block';
+            const titleEl = document.getElementById('kpi-ticket-title');
+            const valEl = document.getElementById('kpi-avg-ticket');
+            const subEl = document.getElementById('kpi-ticket-sub');
+            const footEl = document.getElementById('kpi-ticket-footer');
+            if (titleEl) titleEl.textContent = '% Realizado vs Carteira';
+            if (valEl) valEl.textContent = `${pctFat.toFixed(1)}% faturado`;
+            if (subEl) {
+                subEl.style.display = 'inline-block';
+                subEl.textContent = `${pctExt.toFixed(1)}% em carteira`;
+            }
+            if (footEl) footEl.textContent = 'conversão geral de vendas';
+        }
+
+        // KPI 5: Lojas Faturadas
+        const cardClients = document.getElementById('kpi-card-clients');
+        if (cardClients) {
+            cardClients.style.display = 'block';
+            const titleEl = document.getElementById('kpi-clients-title');
+            const valEl = document.getElementById('kpi-active-clients');
+            const footEl = document.getElementById('kpi-clients-coverage');
+            if (titleEl) titleEl.textContent = 'Lojas Faturadas';
+            if (valEl) valEl.textContent = cnpjsFat.size.toString();
+            if (footEl) footEl.textContent = 'clientes com faturamento emitido';
+        }
+
+        // KPI 6: Lojas em Carteira
+        const cardGroups = document.getElementById('kpi-card-groups');
+        if (cardGroups) {
+            cardGroups.style.display = 'block';
+            const titleEl = document.getElementById('kpi-groups-title');
+            const valEl = document.getElementById('kpi-active-groups');
+            const footEl = document.getElementById('kpi-groups-coverage');
+            if (titleEl) titleEl.textContent = 'Lojas em Carteira';
+            if (valEl) valEl.textContent = cnpjsExt.size.toString();
+            if (footEl) footEl.textContent = 'clientes com pedidos a entregar';
+        }
+
+        const cardMonth = document.getElementById('kpi-card-month');
+        if (cardMonth) cardMonth.style.display = 'none';
+        const cardDay = document.getElementById('kpi-card-day');
+        if (cardDay) cardDay.style.display = 'none';
+    }
+
+    window.setComparisonChartDisplayMode = function(mode) {
+        compChartDisplayMode = mode;
+        const btnVal = document.getElementById('btn-comp-chart-mode-val');
+        const btnQty = document.getElementById('btn-comp-chart-mode-qty');
+        if (btnVal) btnVal.classList.toggle('active', mode === 'values');
+        if (btnQty) btnQty.classList.toggle('active', mode === 'pieces');
+
+        const clientsMap = buildClientsMap();
+        renderComparisonCharts(lastCompFilteredBilling, lastCompFilteredExtrato, clientsMap);
+    };
+
+    function renderComparisonCharts(bData, eData, clientsMap) {
+        if (!window.Chart) return;
+
+        // 1. Confronto Mensal (Faturamento vs A Entregar)
+        const ctxMonthly = document.getElementById('chart-comp-monthly')?.getContext('2d');
+        if (ctxMonthly) {
+            if (chartCompMonthlyInstance) chartCompMonthlyInstance.destroy();
+
+            const monthMap = {};
+            const parseMonthKey = (item) => {
+                const dObj = parseDateBR(item.d);
+                if (dObj) {
+                    const y = dObj.getFullYear();
+                    const m = (dObj.getMonth() + 1).toString().padStart(2, '0');
+                    return `${y}-${m}`;
+                }
+                return null;
+            };
+
+            bData.forEach(item => {
+                const k = parseMonthKey(item);
+                if (!k) return;
+                if (!monthMap[k]) monthMap[k] = { fatV: 0, fatQ: 0, extV: 0, extQ: 0 };
+                monthMap[k].fatV += item.v || 0;
+                monthMap[k].fatQ += item.q || 0;
+            });
+
+            eData.forEach(item => {
+                const k = parseMonthKey(item);
+                if (!k) return;
+                if (!monthMap[k]) monthMap[k] = { fatV: 0, fatQ: 0, extV: 0, extQ: 0 };
+                monthMap[k].extV += item.v || 0;
+                monthMap[k].extQ += item.q || 0;
+            });
+
+            const sortedKeys = Object.keys(monthMap).sort();
+            const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+            const labels = sortedKeys.map(k => {
+                const [y, m] = k.split('-');
+                return `${monthNames[parseInt(m, 10) - 1]}/${y.substring(2)}`;
+            });
+
+            const isPieces = (compChartDisplayMode === 'pieces');
+            const fatData = sortedKeys.map(k => isPieces ? monthMap[k].fatQ : monthMap[k].fatV);
+            const extData = sortedKeys.map(k => isPieces ? monthMap[k].extQ : monthMap[k].extV);
+            const totalData = sortedKeys.map(k => (isPieces ? monthMap[k].fatQ : monthMap[k].fatV) + (isPieces ? monthMap[k].extQ : monthMap[k].extV));
+
+            chartCompMonthlyInstance = new Chart(ctxMonthly, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Faturamento Realizado',
+                            data: fatData,
+                            backgroundColor: 'rgba(59, 130, 246, 0.85)',
+                            borderColor: '#3b82f6',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            order: 2
+                        },
+                        {
+                            label: 'A Entregar (Carteira)',
+                            data: extData,
+                            backgroundColor: 'rgba(16, 185, 129, 0.85)',
+                            borderColor: '#10b981',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            order: 3
+                        },
+                        {
+                            label: 'Total Consolidado',
+                            data: totalData,
+                            type: 'line',
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#f59e0b',
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: '#94a3b8', font: { size: 11, family: 'Inter' } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const val = ctx.parsed.y || 0;
+                                    const formatted = isPieces ? `${val.toLocaleString('pt-BR')} pçs` : formatBRL(val);
+                                    return ` ${ctx.dataset.label}: ${formatted}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8', font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: { size: 10 },
+                                callback: val => isPieces ? val.toLocaleString('pt-BR') : 'R$ ' + (val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 2. Evolução Diária do Confronto
+        const ctxDaily = document.getElementById('chart-comp-daily')?.getContext('2d');
+        if (ctxDaily) {
+            if (chartCompDailyInstance) chartCompDailyInstance.destroy();
+
+            const dateMap = {};
+            bData.forEach(item => {
+                if (!item.d) return;
+                const dObj = parseDateBR(item.d);
+                if (!dObj) return;
+                const iso = dObj.toISOString().split('T')[0];
+                if (!dateMap[iso]) dateMap[iso] = { label: item.d.split(' ')[0], fat: 0, ext: 0 };
+                dateMap[iso].fat += item.v || 0;
+            });
+            eData.forEach(item => {
+                if (!item.d) return;
+                const dObj = parseDateBR(item.d);
+                if (!dObj) return;
+                const iso = dObj.toISOString().split('T')[0];
+                if (!dateMap[iso]) dateMap[iso] = { label: item.d.split(' ')[0], fat: 0, ext: 0 };
+                dateMap[iso].ext += item.v || 0;
+            });
+
+            const sortedDates = Object.keys(dateMap).sort();
+            const labels = sortedDates.map(k => dateMap[k].label);
+            const fatData = sortedDates.map(k => dateMap[k].fat);
+            const extData = sortedDates.map(k => dateMap[k].ext);
+
+            chartCompDailyInstance = new Chart(ctxDaily, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Faturamento do Dia',
+                            data: fatData,
+                            backgroundColor: 'rgba(59, 130, 246, 0.75)',
+                            borderColor: '#3b82f6',
+                            borderWidth: 1,
+                            borderRadius: 3
+                        },
+                        {
+                            label: 'A Entregar no Dia',
+                            data: extData,
+                            backgroundColor: 'rgba(16, 185, 129, 0.75)',
+                            borderColor: '#10b981',
+                            borderWidth: 1,
+                            borderRadius: 3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: { size: 10 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ` ${ctx.dataset.label}: ${formatBRL(ctx.parsed.y || 0)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: { size: 9 },
+                                maxTicksLimit: 14
+                            }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: { size: 9 },
+                                callback: val => 'R$ ' + (val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 3. Confronto por Divisão / Classe
+        const ctxClasses = document.getElementById('chart-comp-classes')?.getContext('2d');
+        if (ctxClasses) {
+            if (chartCompClassesInstance) chartCompClassesInstance.destroy();
+
+            const classMap = {};
+            bData.forEach(item => {
+                const cl = (item.cl || 'Outros').trim().toUpperCase();
+                if (!classMap[cl]) classMap[cl] = { fat: 0, ext: 0 };
+                classMap[cl].fat += item.v || 0;
+            });
+            eData.forEach(item => {
+                const cl = (item.cl || 'Outros').trim().toUpperCase();
+                if (!classMap[cl]) classMap[cl] = { fat: 0, ext: 0 };
+                classMap[cl].ext += item.v || 0;
+            });
+
+            const labels = Object.keys(classMap).sort();
+            const fatData = labels.map(cl => classMap[cl].fat);
+            const extData = labels.map(cl => classMap[cl].ext);
+
+            chartCompClassesInstance = new Chart(ctxClasses, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Faturamento Realizado',
+                            data: fatData,
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                            borderColor: '#3b82f6',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'A Entregar (Carteira)',
+                            data: extData,
+                            backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                            borderColor: '#f59e0b',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: { size: 10 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ` ${ctx.dataset.label}: ${formatBRL(ctx.parsed.y || 0)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8', font: { size: 10 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: { size: 9 },
+                                callback: val => 'R$ ' + (val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // --------------------------------------------------------------------------
+    // CONFRONTAÇÃO ANALÍTICA (TABELAS DE CNPJ, MÊS E DATA)
+    // --------------------------------------------------------------------------
+    function renderComparisonConfrontation(bData, eData, clientsMap) {
+        // 1. Agrupar por CNPJ
+        const cnpjGroupMap = new Map();
+
+        const processItemCnpj = (item, isBilling) => {
+            const clientMatch = resolveClientForItem(item, clientsMap);
+            const rawCnpj = item.c || (clientMatch && clientMatch['CNPJ']) || '';
+            const cleanC = cleanDigits(rawCnpj);
+            const key = cleanC || (item.cli ? `CLI_${item.cli}` : (item.f || 'DESCONHECIDO'));
+
+            if (!cnpjGroupMap.has(key)) {
+                const fant = (clientMatch && (clientMatch['FANTASIA'] || clientMatch['NOME FANTASIA'])) || item.f || '';
+                const raz = (clientMatch && (clientMatch['RAZAO SOCIAL'] || clientMatch['RAZÃO SOCIAL'])) || item.z || '';
+                const cid = (clientMatch && (clientMatch['CIDADE'] || clientMatch['MUNICÍPIO'])) || item.cid || '';
+                const rede = (clientMatch && clientMatch['GRUPO']) || item.r || item.g || '';
+
+                cnpjGroupMap.set(key, {
+                    key,
+                    cnpjClean: cleanC,
+                    cnpjFormatted: cleanC ? formatCNPJMask(cleanC.padStart(14, '0')) : (item.cli ? `Cód ${item.cli}` : '-'),
+                    fantasia: fant,
+                    razao: raz,
+                    cidade: cid,
+                    rede: rede,
+                    fatV: 0,
+                    fatQ: 0,
+                    extV: 0,
+                    extQ: 0,
+                    fatOrders: new Set(),
+                    extOrders: new Set(),
+                    fatItemsList: [],
+                    extItemsList: []
+                });
+            }
+
+            const rec = cnpjGroupMap.get(key);
+            const v = item.v || 0;
+            const q = item.q || 0;
+
+            if (isBilling) {
+                rec.fatV += v;
+                rec.fatQ += q;
+                if (item.nf) rec.fatOrders.add(item.nf);
+                if (rec.fatItemsList.length < 50) rec.fatItemsList.push(item);
+            } else {
+                rec.extV += v;
+                rec.extQ += q;
+                if (item.nf) rec.extOrders.add(item.nf);
+                if (rec.extItemsList.length < 50) rec.extItemsList.push(item);
+            }
+        };
+
+        bData.forEach(it => processItemCnpj(it, true));
+        eData.forEach(it => processItemCnpj(it, false));
+
+        currentCompCnpjList = Array.from(cnpjGroupMap.values()).map(rec => {
+            const totalV = rec.fatV + rec.extV;
+            const totalQ = rec.fatQ + rec.extQ;
+            const pctFat = totalV > 0 ? (rec.fatV / totalV * 100) : 0;
+            const pctExt = totalV > 0 ? (rec.extV / totalV * 100) : 0;
+            return {
+                ...rec,
+                totalV,
+                totalQ,
+                pctFat,
+                pctExt
+            };
+        });
+
+        // 2. Agrupar por Mês / Ano
+        const monthGroupMap = new Map();
+        const monthNamesFull = ['Janeiro', 'Fevereiro', 'MarÃ§o', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+        const processMonthItem = (item, isBilling) => {
+            const dObj = parseDateBR(item.d);
+            if (!dObj) return;
+            const y = dObj.getFullYear();
+            const m = dObj.getMonth() + 1;
+            const k = `${y}-${m.toString().padStart(2, '0')}`;
+
+            if (!monthGroupMap.has(k)) {
+                monthGroupMap.set(k, {
+                    key: k,
+                    year: y,
+                    monthNum: m,
+                    label: `${monthNamesFull[m - 1]} / ${y}`,
+                    fatV: 0,
+                    fatQ: 0,
+                    extV: 0,
+                    extQ: 0,
+                    fatClients: new Set(),
+                    extClients: new Set()
+                });
+            }
+
+            const rec = monthGroupMap.get(k);
+            const v = item.v || 0;
+            const q = item.q || 0;
+            const clientMatch = resolveClientForItem(item, clientsMap);
+            const clientKey = item.c || (clientMatch && clientMatch['CNPJ']) || item.cli || item.f;
+
+            if (isBilling) {
+                rec.fatV += v;
+                rec.fatQ += q;
+                if (clientKey) rec.fatClients.add(clientKey);
+            } else {
+                rec.extV += v;
+                rec.extQ += q;
+                if (clientKey) rec.extClients.add(clientKey);
+            }
+        };
+
+        bData.forEach(it => processMonthItem(it, true));
+        eData.forEach(it => processMonthItem(it, false));
+
+        currentCompMonthList = Array.from(monthGroupMap.values()).map(rec => {
+            const totalV = rec.fatV + rec.extV;
+            const totalQ = rec.fatQ + rec.extQ;
+            const pctFat = totalV > 0 ? (rec.fatV / totalV * 100) : 0;
+            const pctExt = totalV > 0 ? (rec.extV / totalV * 100) : 0;
+            return {
+                ...rec,
+                totalV,
+                totalQ,
+                pctFat,
+                pctExt,
+                fatStoresCount: rec.fatClients.size,
+                extStoresCount: rec.extClients.size
+            };
+        }).sort((a, b) => a.key.localeCompare(b.key));
+
+        // 3. Agrupar por Data
+        const dateGroupMap = new Map();
+        const weekDays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+
+        const processDateItem = (item, isBilling) => {
+            if (!item.d) return;
+            const dObj = parseDateBR(item.d);
+            if (!dObj) return;
+            const iso = dObj.toISOString().split('T')[0];
+
+            if (!dateGroupMap.has(iso)) {
+                const y = dObj.getFullYear();
+                const m = dObj.getMonth() + 1;
+                const mKey = `${y}-${m.toString().padStart(2, '0')}`;
+                const mLabel = `${monthNamesFull[m - 1]} / ${y}`;
+
+                dateGroupMap.set(iso, {
+                    iso,
+                    dateStr: item.d.split(' ')[0],
+                    weekDay: weekDays[dObj.getDay()],
+                    timestamp: dObj.getTime(),
+                    monthKey: mKey,
+                    monthLabel: mLabel,
+                    monthNum: m,
+                    year: y,
+                    fatV: 0,
+                    fatQ: 0,
+                    extV: 0,
+                    extQ: 0
+                });
+            }
+
+            const rec = dateGroupMap.get(iso);
+            if (isBilling) {
+                rec.fatV += item.v || 0;
+                rec.fatQ += item.q || 0;
+            } else {
+                rec.extV += item.v || 0;
+                rec.extQ += item.q || 0;
+            }
+        };
+
+        bData.forEach(it => processDateItem(it, true));
+        eData.forEach(it => processDateItem(it, false));
+
+        currentCompDateList = Array.from(dateGroupMap.values()).map(rec => {
+            const totalV = rec.fatV + rec.extV;
+            const totalQ = rec.fatQ + rec.extQ;
+            let status = 'Faturado e Programado';
+            if (rec.fatV > 0 && rec.extV === 0) status = 'Somente Faturado';
+            else if (rec.extV > 0 && rec.fatV === 0) status = 'Somente Programado';
+            return {
+                ...rec,
+                totalV,
+                totalQ,
+                status
+            };
+        }).sort((a, b) => b.timestamp - a.timestamp);
+
+        // Atualizar badge de contagem
+        const totalBadge = document.getElementById('comp-table-total-badge');
+        if (totalBadge) {
+            totalBadge.textContent = `${currentCompCnpjList.length} Lojas / CNPJs`;
+        }
+
+        renderCompCnpjTable();
+        renderCompMonthTable();
+        renderCompDateTable();
+    }
+
+    window.sortCompCnpjTable = function(col) {
+        if (compCnpjSortCol === col) {
+            compCnpjSortDir = (compCnpjSortDir === 'desc') ? 'asc' : 'desc';
+        } else {
+            compCnpjSortCol = col;
+            compCnpjSortDir = ['cnpj', 'fantasia', 'rede'].includes(col) ? 'asc' : 'desc';
+        }
+        renderCompCnpjTable();
+    };
+
+    function renderCompCnpjTable() {
+        const tbody = document.getElementById('comp-tbody-cnpj');
+        if (!tbody) return;
+
+        // Atualizar classes e Ã­cones dos cabeÃ§alhos
+        const cnpjCols = ['cnpj', 'fantasia', 'rede', 'fatV', 'fatQ', 'extV', 'extQ', 'totalV', 'pctFat'];
+        cnpjCols.forEach(c => {
+            const th = document.getElementById(`th-cnpj-${c}`);
+            if (th) {
+                const icon = th.querySelector('.th-sort-icon i');
+                if (c === compCnpjSortCol) {
+                    th.classList.add('active-sort');
+                    if (icon) icon.className = (compCnpjSortDir === 'desc') ? 'bx bx-sort-down' : 'bx bx-sort-up';
+                } else {
+                    th.classList.remove('active-sort');
+                    if (icon) icon.className = 'bx bx-sort';
+                }
+            }
+        });
+
+        let filtered = [...currentCompCnpjList];
+
+        // Filtro de busca de CNPJ e Nome
+        if (currentCompSearch) {
+            const qClean = cleanDigits(currentCompSearch);
+            const qText = currentCompSearch.trim().toLowerCase();
+            filtered = filtered.filter(row => {
+                if (qClean && row.cnpjClean && row.cnpjClean.includes(qClean)) return true;
+                if (row.fantasia && row.fantasia.toLowerCase().includes(qText)) return true;
+                if (row.razao && row.razao.toLowerCase().includes(qText)) return true;
+                if (row.cidade && row.cidade.toLowerCase().includes(qText)) return true;
+                if (row.rede && row.rede.toLowerCase().includes(qText)) return true;
+                return false;
+            });
+        }
+
+        // OrdenaÃ§Ã£o dinÃ¢mica por cabeÃ§alho
+        filtered.sort((a, b) => {
+            let res = 0;
+            if (compCnpjSortCol === 'cnpj') {
+                res = (a.cnpjClean || '').localeCompare(b.cnpjClean || '');
+            } else if (compCnpjSortCol === 'fantasia') {
+                res = (a.fantasia || a.razao || '').localeCompare(b.fantasia || b.razao || '');
+            } else if (compCnpjSortCol === 'rede') {
+                res = (a.rede || a.cidade || '').localeCompare(b.rede || b.cidade || '');
+            } else if (['fatV', 'fatQ', 'extV', 'extQ', 'totalV', 'pctFat'].includes(compCnpjSortCol)) {
+                res = (b[compCnpjSortCol] || 0) - (a[compCnpjSortCol] || 0);
+            } else {
+                res = (b.totalV || 0) - (a.totalV || 0);
+            }
+            return (compCnpjSortDir === 'desc') ? res : -res;
+        });
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                        <i class='bx bx-search-alt' style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                        Nenhum CNPJ ou loja encontrado com os critÃ©rios de busca selecionados.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        filtered.forEach(row => {
+            const isExpanded = compExpandedCnpjs.has(row.key);
+            const clientTitle = row.fantasia || row.razao || 'Cliente sem nome';
+            const clientSub = (row.razao && row.fantasia && row.razao.toUpperCase() !== row.fantasia.toUpperCase()) ? row.razao : '';
+            const locationText = [escapeHTML(row.cidade), escapeHTML(row.rede)].filter(Boolean).join(' <span style="opacity:0.4;">&bull;</span> ') || '-';
+
+            html += `
+                <tr class="comp-row" id="comp-row-${row.key}">
+                    <td class="font-mono text-accent" style="font-weight: 600; font-size: 0.78rem;">${escapeHTML(row.cnpjFormatted)}</td>
+                    <td>
+                        <div style="font-weight: 600; color: var(--text-primary);">${escapeHTML(clientTitle)}</div>
+                        ${clientSub ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">${escapeHTML(clientSub)}</div>` : ''}
+                    </td>
+                    <td style="font-size: 0.78rem; color: var(--text-secondary);">${locationText}</td>
+                    <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(row.fatV)}</td>
+                    <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.fatQ.toLocaleString('pt-BR')}</td>
+                    <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(row.extV)}</td>
+                    <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.extQ.toLocaleString('pt-BR')}</td>
+                    <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(row.totalV)}</td>
+                    <td>
+                        <div class="comp-progress-wrap">
+                            <div class="comp-progress-bar">
+                                <div class="comp-bar-fat" style="width: ${row.pctFat.toFixed(1)}%;" title="Faturado: ${row.pctFat.toFixed(1)}%"></div>
+                                <div class="comp-bar-ext" style="width: ${row.pctExt.toFixed(1)}%;" title="A Entregar: ${row.pctExt.toFixed(1)}%"></div>
+                            </div>
+                            <div class="comp-progress-labels">
+                                <span style="color: #60a5fa;">${row.pctFat.toFixed(0)}% Fat</span>
+                                <span style="color: #34d399;">${row.pctExt.toFixed(0)}% Entr</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn-comp-detail" onclick="toggleCompDetail('${row.key}')" title="Ver entregas e notas fiscais">
+                            <i class='bx ${isExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}'></i> ${isExpanded ? 'Ocultar' : 'Detalhar'}
+                        </button>
+                    </td>
+                </tr>
+            `;
+
+            if (isExpanded) {
+                html += `
+                    <tr class="comp-detail-row" id="comp-detail-${row.key}">
+                        <td colspan="10" style="padding: 0.75rem 1rem; background: rgba(15, 23, 42, 0.45);">
+                            <div class="comp-detail-box">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                    <!-- Coluna 1: Pedidos a Entregar -->
+                                    <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; padding: 0.75rem;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                            <span style="font-weight: 600; color: #10b981; font-size: 0.8rem;">
+                                                <i class='bx bx-package'></i> Pedidos em Carteira (${row.extItemsList.length} itens)
+                                            </span>
+                                            <span style="font-size: 0.75rem; color: #34d399;" class="font-mono">${formatBRL(row.extV)} | ${row.extQ} pÃ§s</span>
+                                        </div>
+                                        <div style="max-height: 180px; overflow-y: auto;" class="custom-scrollbar">
+                                            ${renderDetailItemsTable(row.extItemsList, 'Data Entrega', 'Pedido')}
+                                        </div>
+                                    </div>
+
+                                    <!-- Coluna 2: Notas Faturadas -->
+                                    <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 6px; padding: 0.75rem;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                            <span style="font-weight: 600; color: #3b82f6; font-size: 0.8rem;">
+                                                <i class='bx bx-receipt'></i> Notas Faturadas (${row.fatItemsList.length} itens)
+                                            </span>
+                                            <span style="font-size: 0.75rem; color: #60a5fa;" class="font-mono">${formatBRL(row.fatV)} | ${row.fatQ} pÃ§s</span>
+                                        </div>
+                                        <div style="max-height: 180px; overflow-y: auto;" class="custom-scrollbar">
+                                            ${renderDetailItemsTable(row.fatItemsList, 'Data EmissÃ£o', 'NF')}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function renderDetailItemsTable(items, dateHeader, docHeader) {
+        if (!items || items.length === 0) {
+            return `<div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; padding: 1rem;">Nenhum registro para este cliente.</div>`;
+        }
+        let out = `
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.72rem; text-align: left;">
+                <thead>
+                    <tr style="color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.08);">
+                        <th style="padding: 3px 6px;">${docHeader}</th>
+                        <th style="padding: 3px 6px;">${dateHeader}</th>
+                        <th style="padding: 3px 6px;">Produto</th>
+                        <th style="padding: 3px 6px; text-align: right;">Qtd</th>
+                        <th style="padding: 3px 6px; text-align: right;">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        items.forEach(it => {
+            const v = it.v || it.vg || 0;
+            const q = it.q || 0;
+            out += `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                    <td style="padding: 3px 6px;" class="font-mono">${escapeHTML(it.nf || '-')}</td>
+                    <td style="padding: 3px 6px;" class="font-mono">${escapeHTML(it.d ? it.d.split(' ')[0] : '-')}</td>
+                    <td style="padding: 3px 6px; max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(it.desc || '')}">${escapeHTML(it.p || it.desc || '-')}</td>
+                    <td style="padding: 3px 6px; text-align: right;" class="font-mono">${q}</td>
+                    <td style="padding: 3px 6px; text-align: right; font-weight: 600;" class="font-mono">${formatBRL(v)}</td>
+                </tr>
+            `;
+        });
+        out += `</tbody></table>`;
+        return out;
+    }
+
+    window.sortCompMonthTable = function(col) {
+        if (compMonthSortCol === col) {
+            compMonthSortDir = (compMonthSortDir === 'desc') ? 'asc' : 'desc';
+        } else {
+            compMonthSortCol = col;
+            compMonthSortDir = (col === 'key') ? 'desc' : 'desc';
+        }
+        renderCompMonthTable();
+    };
+
+    function renderCompMonthTable() {
+        const tbody = document.getElementById('comp-tbody-month');
+        if (!tbody) return;
+
+        // Atualizar classes e Ã­cones dos cabeÃ§alhos
+        const monthCols = ['key', 'fatV', 'fatQ', 'extV', 'extQ', 'totalV', 'totalQ', 'fatStoresCount', 'extStoresCount'];
+        monthCols.forEach(c => {
+            const th = document.getElementById(`th-month-${c}`);
+            if (th) {
+                const icon = th.querySelector('.th-sort-icon i');
+                if (c === compMonthSortCol) {
+                    th.classList.add('active-sort');
+                    if (icon) icon.className = (compMonthSortDir === 'desc') ? 'bx bx-sort-down' : 'bx bx-sort-up';
+                } else {
+                    th.classList.remove('active-sort');
+                    if (icon) icon.className = 'bx bx-sort';
+                }
+            }
+        });
+
+        if (currentCompMonthList.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Nenhum dado mensal no perÃ­odo selecionado.</td></tr>`;
+            return;
+        }
+
+        const sortedMonths = [...currentCompMonthList].sort((a, b) => {
+            let res = 0;
+            if (compMonthSortCol === 'key') {
+                res = b.key.localeCompare(a.key);
+            } else if (['fatV', 'fatQ', 'extV', 'extQ', 'totalV', 'totalQ', 'fatStoresCount', 'extStoresCount'].includes(compMonthSortCol)) {
+                res = (b[compMonthSortCol] || 0) - (a[compMonthSortCol] || 0);
+            } else {
+                res = b.key.localeCompare(a.key);
+            }
+            return (compMonthSortDir === 'desc') ? res : -res;
+        });
+
+        let totFatV = 0, totFatQ = 0, totExtV = 0, totExtQ = 0, totGrandV = 0, totGrandQ = 0;
+        let html = '';
+
+        sortedMonths.forEach(m => {
+            totFatV += m.fatV;
+            totFatQ += m.fatQ;
+            totExtV += m.extV;
+            totExtQ += m.extQ;
+            totGrandV += m.totalV;
+            totGrandQ += m.totalQ;
+
+            html += `
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-primary);">${escapeHTML(m.label)}</td>
+                    <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(m.fatV)}</td>
+                    <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${m.fatQ.toLocaleString('pt-BR')}</td>
+                    <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(m.extV)}</td>
+                    <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${m.extQ.toLocaleString('pt-BR')}</td>
+                    <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(m.totalV)}</td>
+                    <td style="text-align: right; font-size: 0.78rem; font-weight: 600; color: #f8fafc;" class="font-mono">${m.totalQ.toLocaleString('pt-BR')}</td>
+                    <td>
+                        <div class="comp-progress-wrap">
+                            <div class="comp-progress-bar">
+                                <div class="comp-bar-fat" style="width: ${m.pctFat.toFixed(1)}%;"></div>
+                                <div class="comp-bar-ext" style="width: ${m.pctExt.toFixed(1)}%;"></div>
+                            </div>
+                            <div class="comp-progress-labels">
+                                <span style="color: #60a5fa;">${m.pctFat.toFixed(0)}% Fat</span>
+                                <span style="color: #34d399;">${m.pctExt.toFixed(0)}% Entr</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="text-align: right; font-size: 0.78rem;" class="font-mono">${m.fatStoresCount} lojas</td>
+                    <td style="text-align: right; font-size: 0.78rem;" class="font-mono">${m.extStoresCount} lojas</td>
+                </tr>
+            `;
+        });
+
+        const totalPctFat = totGrandV > 0 ? (totFatV / totGrandV * 100) : 0;
+        const totalPctExt = totGrandV > 0 ? (totExtV / totGrandV * 100) : 0;
+
+        html += `
+            <tr style="background: rgba(30, 41, 59, 0.85); font-weight: 700; border-top: 2px solid rgba(255,255,255,0.15);">
+                <td style="color: var(--accent-color, #3b82f6); text-transform: uppercase;">Total Consolidado</td>
+                <td style="text-align: right; color: #60a5fa;" class="font-mono">${formatBRL(totFatV)}</td>
+                <td style="text-align: right; color: #94a3b8;" class="font-mono">${totFatQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; color: #34d399;" class="font-mono">${formatBRL(totExtV)}</td>
+                <td style="text-align: right; color: #94a3b8;" class="font-mono">${totExtQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; color: #fbbf24;" class="font-mono">${formatBRL(totGrandV)}</td>
+                <td style="text-align: right; color: #ffffff;" class="font-mono">${totGrandQ.toLocaleString('pt-BR')}</td>
+                <td>
+                    <div class="comp-progress-wrap">
+                        <div class="comp-progress-bar">
+                            <div class="comp-bar-fat" style="width: ${totalPctFat.toFixed(1)}%;"></div>
+                            <div class="comp-bar-ext" style="width: ${totalPctExt.toFixed(1)}%;"></div>
+                        </div>
+                        <div class="comp-progress-labels">
+                            <span style="color: #60a5fa;">${totalPctFat.toFixed(0)}%</span>
+                            <span style="color: #34d399;">${totalPctExt.toFixed(0)}%</span>
+                        </div>
+                    </div>
+                </td>
+                <td colspan="2" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary);">-</td>
+            </tr>
+        `;
+
+        tbody.innerHTML = html;
+    }
+
+    // OrdenaÃ§Ã£o e Agrupamento da Tabela por Data
+    window.sortCompDateTable = function(col) {
+        if (compDateSortCol === col) {
+            compDateSortDir = (compDateSortDir === 'desc') ? 'asc' : 'desc';
+        } else {
+            compDateSortCol = col;
+            compDateSortDir = (col === 'weekday' || col === 'status') ? 'asc' : 'desc';
+        }
+        renderCompDateTable();
+    };
+
+    window.toggleCompDateGrouping = function() {
+        compDateGroupByMonth = !compDateGroupByMonth;
+        const btn = document.getElementById('btn-comp-date-group-toggle');
+        if (btn) {
+            btn.classList.toggle('active', compDateGroupByMonth);
+            btn.innerHTML = `<i class='bx ${compDateGroupByMonth ? 'bx-folder' : 'bx-list-ul'}'></i> ${compDateGroupByMonth ? 'Agrupado por MÃªs' : 'Lista Corrida (Dias)'}`;
+        }
+        const btnExp = document.getElementById('btn-comp-date-expand-all');
+        if (btnExp) {
+            btnExp.style.display = compDateGroupByMonth ? 'inline-flex' : 'none';
+        }
+        renderCompDateTable();
+    };
+
+    window.toggleCompDateMonth = function(monthKey, event) {
+        if (event) event.stopPropagation();
+        if (compDateCollapsedMonths.has(monthKey)) {
+            compDateCollapsedMonths.delete(monthKey);
+        } else {
+            compDateCollapsedMonths.add(monthKey);
+        }
+        renderCompDateTable();
+    };
+
+    window.toggleAllCompDateMonths = function() {
+        const allMonthKeys = new Set();
+        currentCompDateList.forEach(d => {
+            if (d.monthKey) allMonthKeys.add(d.monthKey);
+        });
+
+        if (compDateCollapsedMonths.size === allMonthKeys.size) {
+            compDateCollapsedMonths.clear();
+        } else {
+            allMonthKeys.forEach(k => compDateCollapsedMonths.add(k));
+        }
+
+        const label = document.getElementById('label-comp-date-expand-all');
+        const icon = document.getElementById('icon-comp-date-expand-all');
+        const isAllCollapsed = (allMonthKeys.size > 0 && compDateCollapsedMonths.size === allMonthKeys.size);
+        if (label) label.textContent = isAllCollapsed ? 'Expandir Todos' : 'Recolher Todos';
+        if (icon) icon.className = isAllCollapsed ? 'bx bx-expand-vertical' : 'bx bx-collapse-vertical';
+
+        renderCompDateTable();
+    };
+
+    function renderCompDateTable() {
+        const tbody = document.getElementById('comp-tbody-date');
+        if (!tbody) return;
+
+        // Atualizar classes e Ã­cones dos cabeÃ§alhos da tabela de datas
+        const dateCols = ['date', 'weekday', 'fatV', 'fatQ', 'extV', 'extQ', 'totalV', 'status'];
+        dateCols.forEach(col => {
+            const th = document.getElementById(`th-date-${col}`);
+            if (th) {
+                const icon = th.querySelector('.th-sort-icon i');
+                if (col === compDateSortCol) {
+                    th.classList.add('active-sort');
+                    if (icon) icon.className = (compDateSortDir === 'desc') ? 'bx bx-sort-down' : 'bx bx-sort-up';
+                } else {
+                    th.classList.remove('active-sort');
+                    if (icon) icon.className = 'bx bx-sort';
+                }
+            }
+        });
+
+        if (currentCompDateList.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2.5rem; color: var(--text-secondary);"><i class='bx bx-calendar-x' style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Nenhum lanÃ§amento no perÃ­odo selecionado.</td></tr>`;
+            const summaryBadge = document.getElementById('comp-date-summary-badge');
+            if (summaryBadge) summaryBadge.innerHTML = '0 meses &bull; 0 datas';
+            return;
+        }
+
+        // 1. Agrupar os itens por mÃªs
+        const monthGroupsMap = new Map();
+        const monthNamesFull = ['Janeiro', 'Fevereiro', 'MarÃ§o', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+        currentCompDateList.forEach(d => {
+            let mKey = d.monthKey;
+            let mLabel = d.monthLabel;
+            if (!mKey) {
+                const dObj = parseDateBR(d.dateStr);
+                if (dObj) {
+                    mKey = `${dObj.getFullYear()}-${(dObj.getMonth() + 1).toString().padStart(2, '0')}`;
+                    mLabel = `${monthNamesFull[dObj.getMonth()]} / ${dObj.getFullYear()}`;
+                    d.monthKey = mKey;
+                    d.monthLabel = mLabel;
+                } else {
+                    mKey = 'OUTROS';
+                    mLabel = 'Outras Datas';
+                }
+            }
+
+            if (!monthGroupsMap.has(mKey)) {
+                monthGroupsMap.set(mKey, {
+                    monthKey: mKey,
+                    monthLabel: mLabel,
+                    days: [],
+                    fatV: 0,
+                    fatQ: 0,
+                    extV: 0,
+                    extQ: 0,
+                    totalV: 0,
+                    totalQ: 0,
+                    latestTimestamp: 0
+                });
+            }
+
+            const g = monthGroupsMap.get(mKey);
+            g.days.push(d);
+            g.fatV += d.fatV || 0;
+            g.fatQ += d.fatQ || 0;
+            g.extV += d.extV || 0;
+            g.extQ += d.extQ || 0;
+            g.totalV += d.totalV || 0;
+            g.totalQ += d.totalQ || 0;
+            if ((d.timestamp || 0) > g.latestTimestamp) {
+                g.latestTimestamp = d.timestamp || 0;
+            }
+        });
+
+        const monthGroups = Array.from(monthGroupsMap.values());
+
+        // Atualizar contador do topo
+        const summaryBadge = document.getElementById('comp-date-summary-badge');
+        if (summaryBadge) {
+            summaryBadge.innerHTML = `<span style="color: var(--accent-color, #3b82f6); font-weight: 600;">${monthGroups.length}</span> ${monthGroups.length === 1 ? "mês" : "meses"} &nbsp;&bull;&nbsp; <span style="color: #fbbf24; font-weight: 600;">${currentCompDateList.length}</span> ${currentCompDateList.length === 1 ? "data" : "datas"}`;
+        }
+
+        // FunÃ§Ã£o comparadora para ordenar dias individuais
+        const sortDaysFn = (a, b) => {
+            let res = 0;
+            if (compDateSortCol === 'date') {
+                res = (b.timestamp || 0) - (a.timestamp || 0);
+            } else if (compDateSortCol === 'weekday') {
+                res = (a.weekDay || '').localeCompare(b.weekDay || '');
+            } else if (compDateSortCol === 'fatV') {
+                res = (b.fatV || 0) - (a.fatV || 0);
+            } else if (compDateSortCol === 'fatQ') {
+                res = (b.fatQ || 0) - (a.fatQ || 0);
+            } else if (compDateSortCol === 'extV') {
+                res = (b.extV || 0) - (a.extV || 0);
+            } else if (compDateSortCol === 'extQ') {
+                res = (b.extQ || 0) - (a.extQ || 0);
+            } else if (compDateSortCol === 'totalV') {
+                res = (b.totalV || 0) - (a.totalV || 0);
+            } else if (compDateSortCol === 'status') {
+                res = (a.status || '').localeCompare(b.status || '');
+            }
+            return (compDateSortDir === 'desc') ? res : -res;
+        };
+
+        let html = '';
+
+        if (compDateGroupByMonth) {
+            // Ordenar os grupos mensais
+            monthGroups.sort((a, b) => {
+                let res = 0;
+                if (compDateSortCol === 'date') {
+                    res = b.monthKey.localeCompare(a.monthKey);
+                } else if (['fatV', 'fatQ', 'extV', 'extQ', 'totalV'].includes(compDateSortCol)) {
+                    res = (b[compDateSortCol] || 0) - (a[compDateSortCol] || 0);
+                } else {
+                    res = b.monthKey.localeCompare(a.monthKey);
+                }
+                return (compDateSortDir === 'desc') ? res : -res;
+            });
+
+            // Para cada mÃªs, ordena seus dias internos
+            monthGroups.forEach(m => {
+                m.days.sort(sortDaysFn);
+                const isCollapsed = compDateCollapsedMonths.has(m.monthKey);
+
+                // Determinar badge de status do mÃªs
+                let monthStatusBadge = '';
+                if (m.fatV > 0 && m.extV > 0) {
+                    monthStatusBadge = `<span class="badge" style="background: rgba(99, 102, 241, 0.2); color: #a5b4fc; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">Faturado & Programado</span>`;
+                } else if (m.fatV > 0) {
+                    monthStatusBadge = `<span class="badge" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">Somente Faturado</span>`;
+                } else {
+                    monthStatusBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">Somente Programado</span>`;
+                }
+
+                // Linha de CabeÃ§alho do MÃªs
+                html += `
+                    <tr class="comp-month-group-row" onclick="toggleCompDateMonth('${m.monthKey}')" title="Clique para expandir ou recolher os dias deste mÃªs">
+                        <td style="font-weight: 700; color: #ffffff; font-size: 0.85rem;">
+                            <div style="display: flex; align-items: center; gap: 0.45rem;">
+                                <i class='bx ${isCollapsed ? 'bx-chevron-right' : 'bx-chevron-down'}' style="font-size: 1.15rem; color: var(--accent-color, #3b82f6);"></i>
+                                <i class='bx bx-calendar' style="color: #94a3b8; font-size: 0.95rem;"></i>
+                                <span>${escapeHTML(m.monthLabel)}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge" style="background: rgba(255,255,255,0.08); color: #cbd5e1; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px; font-weight: 500;">
+                                ${m.days.length} ${m.days.length === 1 ? 'dia' : 'dias'}
+                            </span>
+                        </td>
+                        <td style="text-align: right; font-weight: 700; color: #60a5fa;" class="font-mono">${formatBRL(m.fatV)}</td>
+                        <td style="text-align: right; font-weight: 600; color: #94a3b8;" class="font-mono">${m.fatQ.toLocaleString('pt-BR')}</td>
+                        <td style="text-align: right; font-weight: 700; color: #34d399;" class="font-mono">${formatBRL(m.extV)}</td>
+                        <td style="text-align: right; font-weight: 600; color: #94a3b8;" class="font-mono">${m.extQ.toLocaleString('pt-BR')}</td>
+                        <td style="text-align: right; font-weight: 800; color: #fbbf24; font-size: 0.88rem;" class="font-mono">${formatBRL(m.totalV)}</td>
+                        <td style="text-align: center;">${monthStatusBadge}</td>
+                    </tr>
+                `;
+
+                // Linhas de cada dia do mÃªs (se nÃ£o estiver recolhido)
+                if (!isCollapsed) {
+                    m.days.forEach(d => {
+                        let statusBadge = '';
+                        if (d.status === 'Faturado e Programado') {
+                            statusBadge = `<span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; font-size: 0.68rem; padding: 2px 6px; border-radius: 4px;">Faturado & Programado</span>`;
+                        } else if (d.status === 'Somente Faturado') {
+                            statusBadge = `<span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; font-size: 0.68rem; padding: 2px 6px; border-radius: 4px;">Somente Faturado</span>`;
+                        } else {
+                            statusBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.68rem; padding: 2px 6px; border-radius: 4px;">Somente Programado</span>`;
+                        }
+
+                        html += `
+                            <tr class="comp-date-day-row">
+                                <td style="padding-left: 1.8rem;">
+                                    <i class='bx bx-subdirectory-right' style="color: #64748b; margin-right: 5px; font-size: 0.95rem; vertical-align: middle;"></i>
+                                    <span class="font-mono text-accent" style="font-weight: 600; font-size: 0.8rem;">${escapeHTML(d.dateStr)}</span>
+                                </td>
+                                <td style="font-size: 0.78rem; color: var(--text-secondary);">${escapeHTML(d.weekDay)}</td>
+                                <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(d.fatV)}</td>
+                                <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${d.fatQ.toLocaleString('pt-BR')}</td>
+                                <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(d.extV)}</td>
+                                <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${d.extQ.toLocaleString('pt-BR')}</td>
+                                <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(d.totalV)}</td>
+                                <td style="text-align: center;">${statusBadge}</td>
+                            </tr>
+                        `;
+                    });
+                }
+            });
+        } else {
+            // ExibiÃ§Ã£o em lista corrida contÃ­nua
+            const sortedDays = [...currentCompDateList].sort(sortDaysFn);
+            sortedDays.forEach(d => {
+                let statusBadge = '';
+                if (d.status === 'Faturado e Programado') {
+                    statusBadge = `<span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; font-size: 0.68rem; padding: 2px 6px; border-radius: 4px;">Faturado & Programado</span>`;
+                } else if (d.status === 'Somente Faturado') {
+                    statusBadge = `<span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; font-size: 0.68rem; padding: 2px 6px; border-radius: 4px;">Somente Faturado</span>`;
+                } else {
+                    statusBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.68rem; padding: 2px 6px; border-radius: 4px;">Somente Programado</span>`;
+                }
+
+                html += `
+                    <tr>
+                        <td class="font-mono text-accent" style="font-weight: 600;">${escapeHTML(d.dateStr)}</td>
+                        <td style="font-size: 0.78rem; color: var(--text-secondary);">${escapeHTML(d.weekDay)}</td>
+                        <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(d.fatV)}</td>
+                        <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${d.fatQ.toLocaleString('pt-BR')}</td>
+                        <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(d.extV)}</td>
+                        <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${d.extQ.toLocaleString('pt-BR')}</td>
+                        <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(d.totalV)}</td>
+                        <td style="text-align: center;">${statusBadge}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        tbody.innerHTML = html;
+    }
+
+    window.switchComparisonSubTab = function(tabName) {
+        currentCompSubTab = tabName;
+        const btnCnpj = document.getElementById('btn-subtab-cnpj');
+        const btnMonth = document.getElementById('btn-subtab-month');
+        const btnDate = document.getElementById('btn-subtab-date');
+
+        if (btnCnpj) btnCnpj.classList.toggle('active', tabName === 'cnpj');
+        if (btnMonth) btnMonth.classList.toggle('active', tabName === 'month');
+        if (btnDate) btnDate.classList.toggle('active', tabName === 'date');
+
+        const tabCnpj = document.getElementById('comp-tab-content-cnpj');
+        const tabMonth = document.getElementById('comp-tab-content-month');
+        const tabDate = document.getElementById('comp-tab-content-date');
+        const controlsBar = document.getElementById('comp-controls-bar');
+
+        if (tabCnpj) tabCnpj.style.display = (tabName === 'cnpj') ? 'block' : 'none';
+        if (tabMonth) tabMonth.style.display = (tabName === 'month') ? 'block' : 'none';
+        if (tabDate) tabDate.style.display = (tabName === 'date') ? 'block' : 'none';
+        if (controlsBar) controlsBar.style.display = (tabName === 'cnpj') ? 'flex' : 'none';
+    };
+
+    window.onComparisonSearchInput = function(val) {
+        currentCompSearch = val || '';
+        renderCompCnpjTable();
+    };
+
+    window.onComparisonSortChange = function(sortVal) {
+        currentCompSort = sortVal || 'total_desc';
+        renderCompCnpjTable();
+    };
+
+    window.toggleCompDetail = function(cnpjKey) {
+        if (compExpandedCnpjs.has(cnpjKey)) {
+            compExpandedCnpjs.delete(cnpjKey);
+        } else {
+            compExpandedCnpjs.add(cnpjKey);
+        }
+        renderCompCnpjTable();
+    };
+
+    window.exportComparisonToExcel = function() {
+        if (!window.XLSX) {
+            window.showNotification('Biblioteca Excel não disponível.', 'error');
+            return;
+        }
+
+        try {
+            const wb = XLSX.utils.book_new();
+
+            // 1. Aba Por CNPJ
+            const cnpjExportRows = currentCompCnpjList.map(c => ({
+                'CNPJ': c.cnpjFormatted,
+                'Nome Fantasia': c.fantasia,
+                'Razão Social': c.razao,
+                'Cidade': c.cidade,
+                'Rede / Grupo': c.rede,
+                'Faturamento Realizado (R$)': c.fatV,
+                'Peças Faturadas': c.fatQ,
+                'A Entregar / Carteira (R$)': c.extV,
+                'Peças A Entregar': c.extQ,
+                'Total Geral Previsto (R$)': c.totalV,
+                'Total Peças': c.totalQ,
+                '% Faturado': +(c.pctFat.toFixed(2)),
+                '% A Entregar': +(c.pctExt.toFixed(2))
+            }));
+            const wsCnpj = XLSX.utils.json_to_sheet(cnpjExportRows);
+            XLSX.utils.book_append_sheet(wb, wsCnpj, 'Confronto por CNPJ');
+
+            // 2. Aba Por Mês
+            const monthExportRows = currentCompMonthList.map(m => ({
+                'Mês / Ano': m.label,
+                'Faturamento Realizado (R$)': m.fatV,
+                'Peças Faturadas': m.fatQ,
+                'A Entregar (R$)': m.extV,
+                'Peças A Entregar': m.extQ,
+                'Total Consolidado (R$)': m.totalV,
+                'Total Peças': m.totalQ,
+                '% Faturado': +(m.pctFat.toFixed(2)),
+                '% A Entregar': +(m.pctExt.toFixed(2)),
+                'Lojas Faturadas': m.fatStoresCount,
+                'Lojas em Carteira': m.extStoresCount
+            }));
+            const wsMonth = XLSX.utils.json_to_sheet(monthExportRows);
+            XLSX.utils.book_append_sheet(wb, wsMonth, 'Confronto Mensal');
+
+            // 3. Aba Por Data
+            const dateExportRows = currentCompDateList.map(d => ({
+                'Data': d.dateStr,
+                'Dia da Semana': d.weekDay,
+                'Mês / Ano': d.monthLabel || '',
+                'Faturamento no Dia (R$)': d.fatV,
+                'Peças Faturadas': d.fatQ,
+                'A Entregar no Dia (R$)': d.extV,
+                'Peças A Entregar': d.extQ,
+                'Total do Dia (R$)': d.totalV,
+                'Status': d.status
+            }));
+            const wsDate = XLSX.utils.json_to_sheet(dateExportRows);
+            XLSX.utils.book_append_sheet(wb, wsDate, 'Confronto Diário');
+
+            const now = new Date();
+            const dateSuffix = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}`;
+            XLSX.writeFile(wb, `NEW_ERA_CONFRONTO_A_ENTREGAR_X_FATURAMENTO_${dateSuffix}.xlsx`);
+            window.showNotification('Confronto exportado com sucesso para Excel!', 'success');
+        } catch (err) {
+            console.error('Erro ao exportar confronto para Excel:', err);
+            window.showNotification('Erro ao exportar: ' + err.message, 'error');
+        }
+    };
 
 })();
