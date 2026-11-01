@@ -3686,6 +3686,30 @@ window.initClientsModule = function() {
         const savedCustom = localStorage.getItem('empresa_clients_custom_data');
         if (savedCustom) {
             clientsMasterData = JSON.parse(savedCustom);
+            // Sincroniza/Mescla com INITIAL_CLIENTS_DATA para carregar novos clientes e códigos inseridos
+            if (window.INITIAL_CLIENTS_DATA && Array.isArray(window.INITIAL_CLIENTS_DATA)) {
+                const mapByCnpj = new Map();
+                clientsMasterData.forEach(c => {
+                    const cleanC = cleanDigits(c['CNPJ']);
+                    if (cleanC) mapByCnpj.set(cleanC, c);
+                });
+                window.INITIAL_CLIENTS_DATA.forEach(initC => {
+                    const cleanC = cleanDigits(initC['CNPJ']);
+                    if (cleanC && mapByCnpj.has(cleanC)) {
+                        const existing = mapByCnpj.get(cleanC);
+                        if (!existing['CODIGO NEW ERA'] && initC['CODIGO NEW ERA']) {
+                            existing['CODIGO NEW ERA'] = initC['CODIGO NEW ERA'];
+                            existing['NEW ERA'] = 1;
+                        }
+                        if (!existing['CODIGO AREZZO'] && initC['CODIGO AREZZO']) {
+                            existing['CODIGO AREZZO'] = initC['CODIGO AREZZO'];
+                        }
+                    } else if (cleanC) {
+                        clientsMasterData.push(initC);
+                        mapByCnpj.set(cleanC, initC);
+                    }
+                });
+            }
         } else if (window.INITIAL_CLIENTS_DATA && Array.isArray(window.INITIAL_CLIENTS_DATA)) {
             clientsMasterData = [...window.INITIAL_CLIENTS_DATA];
         } else {
@@ -4521,21 +4545,147 @@ window.openNewClientModal = function() {
     if (modal) modal.classList.remove('hidden');
 };
 
-window.openEditCurrentClientModal = function() {
-    if (!currentModalClient) return;
+window.openClientFormForEdit = function(client, masterIndex) {
+    if (!client) return;
 
-    let idx = clientsMasterData.findIndex(c => c === currentModalClient);
-    if (idx === -1 && currentModalClient['CNPJ']) {
-        idx = clientsMasterData.findIndex(c => cleanDigits(c['CNPJ']) === cleanDigits(currentModalClient['CNPJ']));
+    try {
+        hideCnpjFeedback();
+        const badge = document.getElementById('cfm-cnpj-badge');
+        if (badge) badge.style.display = 'none';
+
+        const safeStr = (v) => (v !== null && v !== undefined) ? String(v).trim() : '';
+        const safeUpper = (v) => safeStr(v).toUpperCase();
+
+        const titleEl = document.getElementById('cfm-modal-title');
+        if (titleEl) titleEl.textContent = 'Editar Cliente';
+
+        const subEl = document.getElementById('cfm-modal-subtitle');
+        if (subEl) subEl.textContent = safeStr(client['FANTASIA']) || safeStr(client['RAZAO SOCIAL']) || 'Atualizar dados da loja';
+
+        const iconEl = document.getElementById('cfm-header-icon');
+        if (iconEl) iconEl.innerHTML = "<i class='bx bx-edit'></i>";
+
+        const indexInput = document.getElementById('cfm-client-index');
+        if (indexInput) indexInput.value = (masterIndex !== -1 && masterIndex !== undefined && masterIndex !== null) ? masterIndex : '';
+
+        const statusEl = document.getElementById('cfm-status');
+        if (statusEl) statusEl.value = safeUpper(client['CLIENTE ATIVO?']) === 'NAO' ? 'NAO' : 'SIM';
+
+        const cnpjEl = document.getElementById('cfm-cnpj');
+        if (cnpjEl) cnpjEl.value = (typeof window.formatCNPJ === 'function') ? window.formatCNPJ(safeStr(client['CNPJ'])) : safeStr(client['CNPJ']);
+
+        const fantasiaEl = document.getElementById('cfm-fantasia');
+        if (fantasiaEl) fantasiaEl.value = safeUpper(client['FANTASIA']);
+
+        const razaoEl = document.getElementById('cfm-razao');
+        if (razaoEl) razaoEl.value = safeUpper(client['RAZAO SOCIAL']);
+
+        const grupoEl = document.getElementById('cfm-grupo');
+        if (grupoEl) grupoEl.value = safeUpper(client['GRUPO']);
+
+        const grupoRealEl = document.getElementById('cfm-grupo-real');
+        if (grupoRealEl) grupoRealEl.value = safeUpper(client['GRUPO REAL']);
+
+        const codArezzoEl = document.getElementById('cfm-cod-arezzo');
+        if (codArezzoEl) codArezzoEl.value = safeUpper(client['CODIGO AREZZO']);
+
+        const codNewEraEl = document.getElementById('cfm-cod-new-era');
+        if (codNewEraEl) codNewEraEl.value = safeUpper(client['CODIGO NEW ERA']);
+
+        const cepEl = document.getElementById('cfm-cep');
+        if (cepEl) cepEl.value = safeStr(client['CEP']);
+
+        const ruaEl = document.getElementById('cfm-rua');
+        if (ruaEl) ruaEl.value = safeUpper(client['RUA']);
+
+        const numEl = document.getElementById('cfm-numero');
+        if (numEl) numEl.value = safeStr(client['NUMERO']);
+
+        const compEl = document.getElementById('cfm-complemento');
+        if (compEl) compEl.value = safeStr(client['COMPLEMENTO']);
+
+        const bairroEl = document.getElementById('cfm-bairro');
+        if (bairroEl) bairroEl.value = safeStr(client['BAIRRO']);
+
+        const cidadeEl = document.getElementById('cfm-cidade');
+        if (cidadeEl) cidadeEl.value = safeStr(client['CIDADE']);
+
+        const estadoEl = document.getElementById('cfm-estado');
+        if (estadoEl) estadoEl.value = safeUpper(client['ESTADO']);
+
+        // Se o ENDERECO COMPLETO salvo estiver vazio ou for apenas cidade/UF mas tivermos dados estruturados, compor o endereço completo!
+        let endSaved = safeStr(client['ENDERECO COMPLETO']);
+        const ruaS = safeStr(client['RUA']);
+        const numS = safeStr(client['NUMERO']) ? `nº ${safeStr(client['NUMERO'])}` : '';
+        const compS = safeStr(client['COMPLEMENTO']);
+        const bS = safeStr(client['BAIRRO']);
+        const cS = safeStr(client['CIDADE']);
+        const uS = safeUpper(client['ESTADO']);
+        const cepS = safeStr(client['CEP']) ? `CEP: ${safeStr(client['CEP'])}` : '';
+
+        const logrS = [ruaS, numS, compS].filter(Boolean).join(', ');
+        const structS = [logrS, bS, cS ? (uS ? `${cS}/${uS}` : cS) : uS, cepS].filter(Boolean).join(' - ');
+
+        const isOnlyCityS = !endSaved || 
+            (cS && endSaved.toUpperCase() === cS.toUpperCase()) || 
+            (cS && uS && (endSaved.toUpperCase() === `${cS}/${uS}`.toUpperCase() || endSaved.toUpperCase() === `${cS} / ${uS}`.toUpperCase()));
+
+        if ((isOnlyCityS && structS) || (ruaS && !endSaved.toUpperCase().includes(ruaS.toUpperCase()) && structS)) {
+            endSaved = structS;
+        }
+        const endCompEl = document.getElementById('cfm-endereco-completo');
+        if (endCompEl) endCompEl.value = endSaved;
+
+        const endStatusEl = document.getElementById('cfm-endereco-status');
+        if (endStatusEl) endStatusEl.value = safeStr(client['ENDERECO?']) || 'REVISADO';
+
+        const propEl = document.getElementById('cfm-proprietario');
+        if (propEl) propEl.value = safeStr(client['PROPRIETARIO']);
+
+        const telEl = document.getElementById('cfm-telefone');
+        if (telEl) telEl.value = (typeof window.formatTelefone === 'function') ? window.formatTelefone(safeStr(client['TELEFONE'])) : safeStr(client['TELEFONE']);
+
+        const niverEl = document.getElementById('cfm-aniversario');
+        if (niverEl) niverEl.value = (typeof window.formatAniversario === 'function') ? window.formatAniversario(safeStr(client['ANIVERSARIO'])) : safeStr(client['ANIVERSARIO']);
+
+        renderFormBrandToggles(client);
+
+        const deleteBtn = document.getElementById('cfm-delete-btn');
+        if (deleteBtn) deleteBtn.style.display = 'inline-flex';
+
+        const modal = document.getElementById('client-form-modal');
+        if (modal) modal.classList.remove('hidden');
+    } catch (err) {
+        console.error('Erro ao preparar formulário de edição de cliente:', err);
+        const modal = document.getElementById('client-form-modal');
+        if (modal) modal.classList.remove('hidden');
     }
-    if (idx === -1 && currentModalClient['FANTASIA']) {
-        idx = clientsMasterData.findIndex(c => c['FANTASIA'] === currentModalClient['FANTASIA']);
+};
+
+window.openEditCurrentClientModal = function() {
+    const clientToEdit = currentModalClient;
+    if (!clientToEdit) {
+        console.warn('openEditCurrentClientModal: nenhum cliente selecionado no modal de detalhes');
+        return;
+    }
+
+    let masterIndex = clientsMasterData.indexOf(clientToEdit);
+    if (masterIndex === -1 && clientToEdit['CNPJ']) {
+        const cleanC = cleanDigits(clientToEdit['CNPJ']);
+        masterIndex = clientsMasterData.findIndex(c => cleanDigits(c['CNPJ']) === cleanC);
+    }
+    if (masterIndex === -1 && clientToEdit['FANTASIA']) {
+        const fUpper = String(clientToEdit['FANTASIA'] || '').trim().toUpperCase();
+        masterIndex = clientsMasterData.findIndex(c => String(c['FANTASIA'] || '').trim().toUpperCase() === fUpper);
+    }
+
+    if (masterIndex === -1) {
+        masterIndex = clientsMasterData.length;
+        clientsMasterData.push(clientToEdit);
     }
 
     closeClientDetailModal();
-    if (idx !== -1) {
-        openEditClientByIndex(idx);
-    }
+    window.openClientFormForEdit(clientToEdit, masterIndex);
 };
 
 window.openEditClientByIndex = function(index) {
@@ -4551,68 +4701,12 @@ window.openEditClientByIndex = function(index) {
         masterIndex = index;
     }
 
-    if (!client) return;
-
-    hideCnpjFeedback();
-    const badge = document.getElementById('cfm-cnpj-badge');
-    if (badge) badge.style.display = 'none';
-
-    document.getElementById('cfm-modal-title').textContent = 'Editar Cliente';
-    document.getElementById('cfm-modal-subtitle').textContent = client['FANTASIA'] || client['RAZAO SOCIAL'] || 'Atualizar dados da loja';
-    document.getElementById('cfm-header-icon').innerHTML = "<i class='bx bx-edit'></i>";
-    document.getElementById('cfm-client-index').value = masterIndex !== -1 ? masterIndex : index;
-
-    document.getElementById('cfm-status').value = (client['CLIENTE ATIVO?'] || '').toString().trim().toUpperCase() === 'NAO' ? 'NAO' : 'SIM';
-    document.getElementById('cfm-cnpj').value = window.formatCNPJ(client['CNPJ'] || '');
-    document.getElementById('cfm-fantasia').value = (client['FANTASIA'] || '').toUpperCase();
-    document.getElementById('cfm-razao').value = (client['RAZAO SOCIAL'] || '').toUpperCase();
-    document.getElementById('cfm-grupo').value = (client['GRUPO'] || '').toUpperCase();
-    document.getElementById('cfm-grupo-real').value = (client['GRUPO REAL'] || '').toUpperCase();
-    document.getElementById('cfm-cod-arezzo').value = (client['CODIGO AREZZO'] || '').toUpperCase();
-    document.getElementById('cfm-cod-new-era').value = (client['CODIGO NEW ERA'] || '').toUpperCase();
-
-    document.getElementById('cfm-cep').value = client['CEP'] || '';
-    document.getElementById('cfm-rua').value = (client['RUA'] || '').toUpperCase();
-    document.getElementById('cfm-numero').value = client['NUMERO'] || '';
-    document.getElementById('cfm-complemento').value = client['COMPLEMENTO'] || '';
-    document.getElementById('cfm-bairro').value = client['BAIRRO'] || '';
-    document.getElementById('cfm-cidade').value = client['CIDADE'] || '';
-    document.getElementById('cfm-estado').value = client['ESTADO'] || '';
-
-    // Se o ENDERECO COMPLETO salvo estiver vazio ou for apenas cidade/UF mas tivermos dados estruturados, compor o endereço completo!
-    let endSaved = (client['ENDERECO COMPLETO'] || '').trim();
-    const ruaS = client['RUA'] || '';
-    const numS = client['NUMERO'] ? `nº ${client['NUMERO']}` : '';
-    const compS = client['COMPLEMENTO'] || '';
-    const bS = client['BAIRRO'] || '';
-    const cS = client['CIDADE'] || '';
-    const uS = client['ESTADO'] || '';
-    const cepS = client['CEP'] ? `CEP: ${client['CEP']}` : '';
-
-    const logrS = [ruaS, numS, compS].filter(Boolean).join(', ');
-    const structS = [logrS, bS, cS ? (uS ? `${cS}/${uS}` : cS) : uS, cepS].filter(Boolean).join(' - ');
-
-    const isOnlyCityS = !endSaved || 
-        (cS && endSaved.toUpperCase() === cS.toUpperCase()) || 
-        (cS && uS && (endSaved.toUpperCase() === `${cS}/${uS}`.toUpperCase() || endSaved.toUpperCase() === `${cS} / ${uS}`.toUpperCase()));
-
-    if ((isOnlyCityS && structS) || (ruaS && !endSaved.toUpperCase().includes(ruaS.toUpperCase()) && structS)) {
-        endSaved = structS;
+    if (!client) {
+        console.warn('openEditClientByIndex: cliente não encontrado no índice', index);
+        return;
     }
-    document.getElementById('cfm-endereco-completo').value = endSaved;
-    document.getElementById('cfm-endereco-status').value = client['ENDERECO?'] || 'REVISADO';
 
-    document.getElementById('cfm-proprietario').value = client['PROPRIETARIO'] || '';
-    document.getElementById('cfm-telefone').value = window.formatTelefone(client['TELEFONE'] || '');
-    document.getElementById('cfm-aniversario').value = window.formatAniversario(client['ANIVERSARIO'] || '');
-
-    renderFormBrandToggles(client);
-
-    const deleteBtn = document.getElementById('cfm-delete-btn');
-    if (deleteBtn) deleteBtn.style.display = 'inline-flex';
-
-    const modal = document.getElementById('client-form-modal');
-    if (modal) modal.classList.remove('hidden');
+    window.openClientFormForEdit(client, masterIndex !== -1 ? masterIndex : index);
 };
 
 function renderFormBrandToggles(clientData = {}) {
