@@ -680,7 +680,10 @@ function setupGlobalListeners() {
                             const existing = mapByCnpj.get(cleanC);
                             if (!existing['CODIGO NEW ERA'] && initC['CODIGO NEW ERA']) {
                                 existing['CODIGO NEW ERA'] = initC['CODIGO NEW ERA'];
-                                existing['NEW ERA'] = 1;
+                                existing['NEW ERA'] = initC['NEW ERA'] || initC['CODIGO NEW ERA'];
+                                needsSyncBack = true;
+                            } else if (initC['NEW ERA'] && existing['NEW ERA'] !== initC['NEW ERA']) {
+                                existing['NEW ERA'] = initC['NEW ERA'];
                                 needsSyncBack = true;
                             }
                             if (!existing['CODIGO AREZZO'] && initC['CODIGO AREZZO']) {
@@ -3714,6 +3717,26 @@ function escapeHTML(str) {
 
 const CLIENT_BRAND_COLS = ['BAW', 'EVOKE', 'NEW ERA', 'LOST', 'MCD', 'MORMAII', 'STANCE', 'STEP DEFEND', 'VANS'];
 
+window.isClientBrandActive = function(client, brand) {
+    if (!client) return false;
+    const val = client[brand];
+    if (val !== null && val !== undefined && val !== '' && val !== '0' && val !== 0 && val !== false) {
+        const sVal = String(val).trim().toUpperCase();
+        if (sVal !== 'NAO' && sVal !== 'NÃO' && sVal !== 'NULL' && sVal !== 'UNDEFINED') {
+            return true; // Contém 'SIM', '1' ou o código do cliente (ex: '10311')
+        }
+    }
+    // Caso especial: para NEW ERA, se houver 'CODIGO NEW ERA' preenchido, o cliente fica ativo na marca
+    if (brand === 'NEW ERA' && client['CODIGO NEW ERA']) {
+        const ne = String(client['CODIGO NEW ERA']).trim();
+        if (ne && ne !== '0' && ne.toLowerCase() !== 'null' && ne.toLowerCase() !== 'undefined') {
+            return true;
+        }
+    }
+    return false;
+};
+const isClientBrandActive = window.isClientBrandActive;
+
 let clientsMasterData = [];
 window.clientsMasterData = clientsMasterData;
 let clientsFilteredData = [];
@@ -3741,7 +3764,9 @@ window.initClientsModule = function() {
                         const existing = mapByCnpj.get(cleanC);
                         if (!existing['CODIGO NEW ERA'] && initC['CODIGO NEW ERA']) {
                             existing['CODIGO NEW ERA'] = initC['CODIGO NEW ERA'];
-                            existing['NEW ERA'] = 1;
+                            existing['NEW ERA'] = initC['NEW ERA'] || initC['CODIGO NEW ERA'];
+                        } else if (initC['NEW ERA'] && existing['NEW ERA'] !== initC['NEW ERA']) {
+                            existing['NEW ERA'] = initC['NEW ERA'];
                         }
                         if (!existing['CODIGO AREZZO'] && initC['CODIGO AREZZO']) {
                             existing['CODIGO AREZZO'] = initC['CODIGO AREZZO'];
@@ -3906,8 +3931,7 @@ window.applyClientsFilter = function() {
 
         // Filtro de Marca
         if (clientsActiveBrand !== 'all') {
-            const brandFlag = client[clientsActiveBrand];
-            if (!brandFlag || brandFlag === '0' || brandFlag === false) {
+            if (!isClientBrandActive(client, clientsActiveBrand)) {
                 return false;
             }
         }
@@ -4034,7 +4058,7 @@ function renderClientsTable() {
         // Marcas que o cliente possui
         const clientBrands = [];
         CLIENT_BRAND_COLS.forEach(brand => {
-            if (client[brand] && client[brand] !== '0' && client[brand] !== 0) {
+            if (isClientBrandActive(client, brand)) {
                 clientBrands.push(brand);
             }
         });
@@ -4248,7 +4272,7 @@ window.openClientDetailModal = function(clientIndex) {
     if (brandsListContainer) {
         const activeBrands = [];
         CLIENT_BRAND_COLS.forEach(b => {
-            if (client[b] && client[b] !== '0' && client[b] !== 0) {
+            if (isClientBrandActive(client, b)) {
                 activeBrands.push(b);
             }
         });
@@ -4308,7 +4332,7 @@ window.createTaskForClient = function(clientIndex) {
     }
 
     // Identificar se o cliente trabalha com uma marca específica
-    const activeBrands = CLIENT_BRAND_COLS.filter(b => client[b] && client[b] !== '0' && client[b] !== 0);
+    const activeBrands = CLIENT_BRAND_COLS.filter(b => isClientBrandActive(client, b));
     if (activeBrands.length === 1) {
         const brandSelect = document.getElementById('task-brand');
         if (brandSelect) {
@@ -4322,7 +4346,7 @@ window.createTaskForClient = function(clientIndex) {
 window.copyClientSummary = function() {
     if (!currentModalClient) return;
     const c = currentModalClient;
-    const activeBrands = CLIENT_BRAND_COLS.filter(b => c[b] && c[b] !== '0' && c[b] !== 0).join(', ') || 'Nenhuma';
+    const activeBrands = CLIENT_BRAND_COLS.filter(b => isClientBrandActive(c, b)).join(', ') || 'Nenhuma';
     const text = [
         `*CLIENTE: ${c['FANTASIA'] || c['RAZAO SOCIAL'] || '-'}*`,
         `Razão Social: ${c['RAZAO SOCIAL'] || '-'}`,
@@ -4406,7 +4430,11 @@ window.exportClientsToExcel = function() {
             };
 
             CLIENT_BRAND_COLS.forEach(brand => {
-                row[brand] = (c[brand] && c[brand] !== '0' && c[brand] !== 0) ? 'SIM' : '';
+                if (brand === 'NEW ERA') {
+                    row[brand] = c['NEW ERA'] || c['CODIGO NEW ERA'] || (isClientBrandActive(c, brand) ? 'SIM' : '');
+                } else {
+                    row[brand] = isClientBrandActive(c, brand) ? 'SIM' : '';
+                }
             });
 
             return row;
@@ -4758,8 +4786,7 @@ function renderFormBrandToggles(clientData = {}) {
 
     let html = '';
     CLIENT_BRAND_COLS.forEach(brand => {
-        const val = clientData[brand];
-        const isActive = (val && val !== '0' && val !== 0);
+        const isActive = isClientBrandActive(clientData, brand);
         html += `
             <button type="button" class="cfm-brand-toggle-btn ${isActive ? 'active' : ''}" data-brand="${escapeHTML(brand)}" onclick="toggleFormBrandBtn(this)">
                 <i class='bx ${isActive ? 'bx-check-square' : 'bx-square'} toggle-icon'></i>
@@ -4906,7 +4933,11 @@ window.saveClientFormData = async function() {
     CLIENT_BRAND_COLS.forEach(brand => {
         const toggleBtn = document.querySelector(`.cfm-brand-toggle-btn[data-brand="${brand}"]`);
         const isActive = toggleBtn && toggleBtn.classList.contains('active');
-        clientBrandsObj[brand] = isActive ? 1 : null;
+        if (brand === 'NEW ERA') {
+            clientBrandsObj[brand] = isActive ? (newEraVal || 'SIM') : null;
+        } else {
+            clientBrandsObj[brand] = isActive ? 'SIM' : null;
+        }
     });
 
     const clientData = {
