@@ -664,11 +664,53 @@ function setupGlobalListeners() {
 
     window.db.collection('settings').doc('clients').onSnapshot((doc) => {
         if (doc.exists && doc.data().list && Array.isArray(doc.data().list)) {
-            const remoteList = doc.data().list;
+            let remoteList = doc.data().list;
             if (remoteList.length > 0) {
+                // Mesclagem com INITIAL_CLIENTS_DATA para preservar códigos NEW ERA e novos clientes cadastrados
+                let needsSyncBack = false;
+                if (window.INITIAL_CLIENTS_DATA && Array.isArray(window.INITIAL_CLIENTS_DATA)) {
+                    const mapByCnpj = new Map();
+                    remoteList.forEach(c => {
+                        const cleanC = cleanDigits(c['CNPJ']);
+                        if (cleanC) mapByCnpj.set(cleanC, c);
+                    });
+                    window.INITIAL_CLIENTS_DATA.forEach(initC => {
+                        const cleanC = cleanDigits(initC['CNPJ']);
+                        if (cleanC && mapByCnpj.has(cleanC)) {
+                            const existing = mapByCnpj.get(cleanC);
+                            if (!existing['CODIGO NEW ERA'] && initC['CODIGO NEW ERA']) {
+                                existing['CODIGO NEW ERA'] = initC['CODIGO NEW ERA'];
+                                existing['NEW ERA'] = 1;
+                                needsSyncBack = true;
+                            }
+                            if (!existing['CODIGO AREZZO'] && initC['CODIGO AREZZO']) {
+                                existing['CODIGO AREZZO'] = initC['CODIGO AREZZO'];
+                                needsSyncBack = true;
+                            }
+                        } else if (cleanC) {
+                            remoteList.push(initC);
+                            mapByCnpj.set(cleanC, initC);
+                            needsSyncBack = true;
+                        }
+                    });
+                }
+
                 clientsMasterData = remoteList;
                 window.clientsMasterData = clientsMasterData;
                 localStorage.setItem('empresa_clients_custom_data', JSON.stringify(clientsMasterData));
+
+                // Se houve mesclagem de novos dados da base mestre, atualizar o Firestore para que todos os usuários recebam
+                if (needsSyncBack && window.db) {
+                    try {
+                        window.db.collection('settings').doc('clients').set({
+                            list: clientsMasterData,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true }).catch(err => console.warn('Erro ao sincronizar clientes mestre no Firestore:', err));
+                    } catch (e) {
+                        console.warn('Erro ao atualizar Firestore de clientes:', e);
+                    }
+                }
+
                 const sidebarBadge = document.getElementById('sidebar-clients-count');
                 if (sidebarBadge) sidebarBadge.textContent = clientsMasterData.length;
                 populateClientsDatalists();
@@ -3709,6 +3751,7 @@ window.initClientsModule = function() {
                         mapByCnpj.set(cleanC, initC);
                     }
                 });
+                localStorage.setItem('empresa_clients_custom_data', JSON.stringify(clientsMasterData));
             }
         } else if (window.INITIAL_CLIENTS_DATA && Array.isArray(window.INITIAL_CLIENTS_DATA)) {
             clientsMasterData = [...window.INITIAL_CLIENTS_DATA];
