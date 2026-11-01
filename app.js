@@ -3672,12 +3672,12 @@ window.saveSystemFavicon = async function() {
             statusEl.style.color = 'var(--text-secondary)';
             await window.db.collection('settings').doc('general').set({ faviconBase64: base64Str }, { merge: true });
             applyFavicon(base64Str);
-            statusEl.textContent = '�cone salvo com sucesso!';
+            statusEl.textContent = ' cone salvo com sucesso!';
             statusEl.style.color = 'var(--accent-color)';
-            if(window.logUserAction) window.logUserAction('alterou o �cone do sistema (favicon)');
+            if(window.logUserAction) window.logUserAction('alterou o  cone do sistema (favicon)');
         } catch(err) {
             console.error('Erro ao salvar favicon', err);
-            statusEl.textContent = 'Erro ao salvar �cone.';
+            statusEl.textContent = 'Erro ao salvar  cone.';
             statusEl.style.color = 'var(--danger-color)';
         }
     };
@@ -4791,7 +4791,7 @@ function renderFormBrandToggles(clientData = {}) {
 
         let codeVal = '';
         let inputId = '';
-        let inputPlaceholder = 'Ex: Código ou SIM';
+        let inputPlaceholder = 'Ex: Código do cliente na Marca';
         let helperLabel = 'Código:';
 
         if (brand === 'NEW ERA') {
@@ -4810,7 +4810,7 @@ function renderFormBrandToggles(clientData = {}) {
             const rawVal = clientData[brand];
             codeVal = (rawVal && rawVal !== 'SIM' && rawVal !== 'sim' && rawVal !== 1 && rawVal !== '1' && rawVal !== 'null') ? String(rawVal) : '';
             inputId = `cfm-brand-code-${brand.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-            inputPlaceholder = 'Ex: Código ou SIM';
+            inputPlaceholder = 'Ex: Código do cliente na Marca';
             helperLabel = `Código ${brand}:`;
         }
 
