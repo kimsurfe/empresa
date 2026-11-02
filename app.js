@@ -3863,8 +3863,6 @@ let clientsFilteredData = [];
 let clientsCurrentPage = 1;
 let clientsPageSize = 25;
 let clientsActiveStatus = 'all';
-    clientsSortCol = null;
-    clientsSortDir = 'asc';
 let clientsActiveBrand = 'all';
 let currentModalClient = null;
 let clientsSortCol = null;
@@ -4089,6 +4087,8 @@ window.applyClientsFilter = function() {
 };
 
 window.clearClientsFilter = function() {
+    clientsSortCol = null;
+    clientsSortDir = 'asc';
     const fields = [
         'filter-client-cnpj',
         'filter-client-razao',
@@ -4102,8 +4102,6 @@ window.clearClientsFilter = function() {
     });
 
     clientsActiveStatus = 'all';
-    clientsSortCol = null;
-    clientsSortDir = 'asc';
     document.querySelectorAll('.client-pill-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-status-val') === 'all');
     });
