@@ -21,7 +21,7 @@
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     
     <!-- CSS Customizado -->
-    <link rel="stylesheet" href="style.css?v=60">
+    <link rel="stylesheet" href="style.css?v=64">
 </head>
 <body>
     <div class="app-container">
@@ -1931,7 +1931,7 @@
                         <div class="cdm-section-title"><i class='bx bx-id-card'></i> Identificação & Grupos</div>
                         <div class="cdm-field-row">
                             <span class="cdm-label">CNPJ:</span>
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; white-space: nowrap;">
                                 <span class="cdm-value font-mono" id="cdm-cnpj">-</span>
                                 <button class="btn-copy-mini" onclick="copyToClipboard(document.getElementById('cdm-cnpj').textContent, 'CNPJ copiado!')" title="Copiar CNPJ"><i class='bx bx-copy'></i></button>
                             </div>
@@ -1943,14 +1943,6 @@
                         <div class="cdm-field-row">
                             <span class="cdm-label">Grupo Real:</span>
                             <span class="cdm-value" id="cdm-grupo-real">-</span>
-                        </div>
-                        <div class="cdm-field-row">
-                            <span class="cdm-label">Cód. Arezzo:</span>
-                            <span class="cdm-value font-mono" id="cdm-cod-arezzo">-</span>
-                        </div>
-                        <div class="cdm-field-row">
-                            <span class="cdm-label">Cód. New Era:</span>
-                            <span class="cdm-value font-mono" id="cdm-cod-new-era">-</span>
                         </div>
                     </div>
 
@@ -1999,7 +1991,7 @@
                         </div>
                         <div class="cdm-field-row">
                             <span class="cdm-label">Telefone:</span>
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; white-space: nowrap;">
                                 <span class="cdm-value font-mono" id="cdm-telefone">-</span>
                                 <a id="cdm-whatsapp-link" href="#" target="_blank" class="btn-copy-mini" title="Chamar no WhatsApp" style="display: none; background: #25D366; color: white;">
                                     <i class='bx bxl-whatsapp'></i> WhatsApp
@@ -2063,7 +2055,7 @@
                         </div>
                         <div class="form-group col-span-2">
                             <label for="cfm-status">Status do Cliente *</label>
-                            <select id="cfm-status" class="cfm-input" onchange="onClientFormStatusChange(this.value)" required>
+                            <select id="cfm-status" class="cfm-input" required>
                                 <option value="ATIVO">🟢 ATIVA</option>
                                 <option value="INATIVO">🔴 INATIVA</option>
                             </select>
@@ -2277,7 +2269,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js?v=28"></script>
-    <script src="app.js?v=60"></script>
+    <script src="app.js?v=64"></script>
     <script src="indicators.js?v=53" charset="UTF-8"></script>
 </body>
 </html>
