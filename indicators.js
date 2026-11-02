@@ -384,6 +384,8 @@
         'kpi-card-ticket',
         'kpi-card-clients',
         'kpi-card-groups',
+        'kpi-card-days-no-billing',
+        'kpi-card-coverage',
         'kpi-card-month',
         'kpi-card-day'
     ];
@@ -398,7 +400,12 @@
             if (raw) savedOrder = JSON.parse(raw);
         } catch(e) {}
 
-        const order = (Array.isArray(savedOrder) && savedOrder.length > 0) ? savedOrder : DEFAULT_KPI_ORDER;
+        const order = (Array.isArray(savedOrder) && savedOrder.length > 0) ? [...savedOrder] : [...DEFAULT_KPI_ORDER];
+        DEFAULT_KPI_ORDER.forEach(cardId => {
+            if (!order.includes(cardId)) {
+                order.push(cardId);
+            }
+        });
 
         order.forEach(cardId => {
             const card = document.getElementById(cardId);
@@ -1540,6 +1547,171 @@
         const elTicketTitle = document.getElementById('kpi-ticket-title');
         const elAvgTicket = document.getElementById('kpi-avg-ticket');
         const elTicketSub = document.getElementById('kpi-ticket-sub');
+        // KPI 7: Dias sem Faturamento / Próxima Entrega
+        const cardDays = document.getElementById('kpi-card-days-no-billing');
+        if (cardDays) {
+            cardDays.style.display = 'block';
+            cardDays.classList.remove('highlight-emerald', 'highlight-amber', 'highlight-red', 'highlight-blue');
+            const titleEl = document.getElementById('kpi-days-no-billing-title');
+            const valEl = document.getElementById('kpi-days-no-billing-val');
+            const subEl = document.getElementById('kpi-days-no-billing-sub');
+            const footEl = document.getElementById('kpi-days-no-billing-footer');
+            const iconBadge = document.getElementById('kpi-days-no-billing-icon');
+
+            const now = new Date();
+            const t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+            if (isExtrato) {
+                if (titleEl) titleEl.textContent = 'Próxima Entrega';
+                if (iconBadge) iconBadge.innerHTML = "<i class='bx bx-calendar-event'></i>";
+                let nextDeliveryDate = null;
+                let minFutureDiff = Infinity;
+                let pastLatestDate = null;
+
+                data.forEach(item => {
+                    if (!item.d) return;
+                    const d = parseDateBR(item.d);
+                    if (!d) return;
+                    const tD = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                    const diff = Math.round((tD.getTime() - t0.getTime()) / (1000 * 60 * 60 * 24));
+                    if (diff >= 0 && diff < minFutureDiff) {
+                        minFutureDiff = diff;
+                        nextDeliveryDate = d;
+                    }
+                    if (!pastLatestDate || d > pastLatestDate) {
+                        pastLatestDate = d;
+                    }
+                });
+
+                if (nextDeliveryDate) {
+                    const dateFormatted = `${String(nextDeliveryDate.getDate()).padStart(2, '0')}/${String(nextDeliveryDate.getMonth() + 1).padStart(2, '0')}/${nextDeliveryDate.getFullYear()}`;
+                    if (minFutureDiff === 0) {
+                        if (valEl) valEl.textContent = 'Hoje';
+                        if (subEl) { subEl.textContent = 'Programado'; subEl.style.display = 'inline-flex'; }
+                        cardDays.classList.add('highlight-emerald');
+                        if (footEl) footEl.textContent = 'remessa prevista para hoje';
+                    } else if (minFutureDiff === 1) {
+                        if (valEl) valEl.textContent = 'Em 1 dia';
+                        if (subEl) { subEl.textContent = 'Iminente'; subEl.style.display = 'inline-flex'; }
+                        cardDays.classList.add('highlight-amber');
+                        if (footEl) footEl.textContent = 'remessa prevista para amanhã';
+                    } else {
+                        if (valEl) valEl.textContent = `Em ${minFutureDiff} dias`;
+                        if (subEl) { subEl.textContent = 'Programado'; subEl.style.display = 'inline-flex'; }
+                        cardDays.classList.add('highlight-blue');
+                        if (footEl) footEl.textContent = `próxima remessa em ${dateFormatted}`;
+                    }
+                } else if (pastLatestDate) {
+                    const dateFormatted = `${String(pastLatestDate.getDate()).padStart(2, '0')}/${String(pastLatestDate.getMonth() + 1).padStart(2, '0')}/${pastLatestDate.getFullYear()}`;
+                    if (valEl) valEl.textContent = 'Em aberto';
+                    if (subEl) { subEl.textContent = 'Carteira'; subEl.style.display = 'inline-flex'; }
+                    cardDays.classList.add('highlight-blue');
+                    if (footEl) footEl.textContent = `última data em ${dateFormatted}`;
+                } else {
+                    if (valEl) valEl.textContent = '-';
+                    if (subEl) subEl.style.display = 'none';
+                    if (footEl) footEl.textContent = 'nenhuma entrega programada';
+                }
+            } else {
+                if (titleEl) titleEl.textContent = 'Dias sem Faturamento';
+                if (iconBadge) iconBadge.innerHTML = "<i class='bx bx-time-five'></i>";
+                let latestDate = null;
+
+                data.forEach(item => {
+                    if (!item.d) return;
+                    const d = parseDateBR(item.d);
+                    if (d && (!latestDate || d > latestDate)) {
+                        latestDate = d;
+                    }
+                });
+
+                if (latestDate) {
+                    const t1 = new Date(latestDate.getFullYear(), latestDate.getMonth(), latestDate.getDate());
+                    const diffDays = Math.max(0, Math.floor((t0.getTime() - t1.getTime()) / (1000 * 60 * 60 * 24)));
+                    const dateFormatted = `${String(latestDate.getDate()).padStart(2, '0')}/${String(latestDate.getMonth() + 1).padStart(2, '0')}/${latestDate.getFullYear()}`;
+
+                    if (diffDays === 0) {
+                        if (valEl) valEl.textContent = '0 dias';
+                        if (subEl) { subEl.textContent = 'Hoje'; subEl.style.display = 'inline-flex'; }
+                        cardDays.classList.add('highlight-emerald');
+                    } else if (diffDays === 1) {
+                        if (valEl) valEl.textContent = '1 dia';
+                        if (subEl) { subEl.textContent = 'Recente'; subEl.style.display = 'inline-flex'; }
+                        cardDays.classList.add('highlight-emerald');
+                    } else if (diffDays === 2) {
+                        if (valEl) valEl.textContent = '2 dias';
+                        if (subEl) { subEl.textContent = 'Recente'; subEl.style.display = 'inline-flex'; }
+                        cardDays.classList.add('highlight-emerald');
+                    } else if (diffDays <= 5) {
+                        if (valEl) valEl.textContent = `${diffDays} dias`;
+                        if (subEl) { subEl.textContent = 'Atenção'; subEl.style.display = 'inline-flex'; }
+                        cardDays.classList.add('highlight-amber');
+                    } else {
+                        if (valEl) valEl.textContent = `${diffDays} dias`;
+                        if (subEl) { subEl.textContent = 'Sem emissão'; subEl.style.display = 'inline-flex'; }
+                        cardDays.classList.add('highlight-red');
+                    }
+                    if (footEl) footEl.textContent = `última NF emitida em ${dateFormatted}`;
+                } else {
+                    if (valEl) valEl.textContent = '-';
+                    if (subEl) { subEl.textContent = 'Sem dados'; subEl.style.display = 'inline-flex'; }
+                    if (footEl) footEl.textContent = 'nenhuma NF encontrada';
+                }
+            }
+        }
+
+        // KPI 8: Cobertura de Carteira
+        const cardCoverage = document.getElementById('kpi-card-coverage');
+        if (cardCoverage) {
+            cardCoverage.style.display = 'block';
+            cardCoverage.classList.remove('highlight-emerald', 'highlight-amber', 'highlight-blue');
+            const titleEl = document.getElementById('kpi-coverage-title');
+            const valEl = document.getElementById('kpi-coverage-val');
+            const subEl = document.getElementById('kpi-coverage-sub');
+            const footEl = document.getElementById('kpi-coverage-footer');
+            const iconBadge = document.getElementById('kpi-coverage-icon');
+
+            if (titleEl) titleEl.textContent = 'Cobertura de Carteira';
+            if (iconBadge) iconBadge.innerHTML = "<i class='bx bx-pie-chart-alt-2'></i>";
+
+            const baseClients = getActiveClientsList();
+            const activeBaseSet = new Set();
+            baseClients.forEach(c => {
+                const status = (c['CLIENTE ATIVO?'] || c['STATUS'] || '').toString().trim().toUpperCase();
+                const cnpj = cleanDigits(c['CNPJ'] || '');
+                if (status === 'ATIVO' || !status) {
+                    if (cnpj) activeBaseSet.add(cnpj);
+                }
+            });
+            const totalBase = Math.max(activeBaseSet.size || 0, activeClientsSet.size || 0, 63);
+            const positiveClients = activeClientsSet.size;
+            const pctCoverage = totalBase > 0 ? (positiveClients / totalBase * 100) : 0;
+
+            if (valEl) valEl.textContent = `${pctCoverage.toFixed(1).replace('.', ',')}%`;
+
+            if (subEl) {
+                subEl.style.display = 'inline-flex';
+                if (pctCoverage >= 75) {
+                    subEl.textContent = 'Alta';
+                    cardCoverage.classList.add('highlight-emerald');
+                } else if (pctCoverage >= 50) {
+                    subEl.textContent = 'Média';
+                    cardCoverage.classList.add('highlight-amber');
+                } else {
+                    subEl.textContent = 'Oportunidade';
+                    cardCoverage.classList.add('highlight-blue');
+                }
+            }
+
+            if (footEl) {
+                if (isExtrato) {
+                    footEl.textContent = `${positiveClients} de ${totalBase} lojas com pedidos`;
+                } else {
+                    footEl.textContent = `${positiveClients} de ${totalBase} lojas positivadas`;
+                }
+            }
+        }
+
         const elTicketFooter = document.getElementById('kpi-ticket-footer');
 
         if (elTicketTitle) {
@@ -3676,6 +3848,106 @@
         const cardDay = document.getElementById('kpi-card-day');
         if (cardDay) cardDay.style.display = 'none';
 
+        // KPI 7: Dias sem Faturamento (Confronto)
+        const cardDays = document.getElementById('kpi-card-days-no-billing');
+        if (cardDays) {
+            cardDays.style.display = 'block';
+            cardDays.classList.remove('highlight-emerald', 'highlight-amber', 'highlight-red', 'highlight-blue');
+            const titleEl = document.getElementById('kpi-days-no-billing-title');
+            const valEl = document.getElementById('kpi-days-no-billing-val');
+            const subEl = document.getElementById('kpi-days-no-billing-sub');
+            const footEl = document.getElementById('kpi-days-no-billing-footer');
+            const iconBadge = document.getElementById('kpi-days-no-billing-icon');
+
+            if (titleEl) titleEl.textContent = 'Dias sem Faturamento';
+            if (iconBadge) iconBadge.innerHTML = "<i class='bx bx-time-five'></i>";
+
+            let latestFatDate = null;
+            bData.forEach(item => {
+                if (!item.d) return;
+                const d = parseDateBR(item.d);
+                if (d && (!latestFatDate || d > latestFatDate)) {
+                    latestFatDate = d;
+                }
+            });
+
+            if (latestFatDate) {
+                const now = new Date();
+                const t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const t1 = new Date(latestFatDate.getFullYear(), latestFatDate.getMonth(), latestFatDate.getDate());
+                const diffDays = Math.max(0, Math.floor((t0.getTime() - t1.getTime()) / (1000 * 60 * 60 * 24)));
+                const dateFormatted = `${String(latestFatDate.getDate()).padStart(2, '0')}/${String(latestFatDate.getMonth() + 1).padStart(2, '0')}/${latestFatDate.getFullYear()}`;
+
+                if (diffDays === 0) {
+                    if (valEl) valEl.textContent = '0 dias';
+                    if (subEl) { subEl.textContent = 'Hoje'; subEl.style.display = 'inline-flex'; }
+                    cardDays.classList.add('highlight-emerald');
+                } else if (diffDays === 1) {
+                    if (valEl) valEl.textContent = '1 dia';
+                    if (subEl) { subEl.textContent = 'Recente'; subEl.style.display = 'inline-flex'; }
+                    cardDays.classList.add('highlight-emerald');
+                } else if (diffDays === 2) {
+                    if (valEl) valEl.textContent = '2 dias';
+                    if (subEl) { subEl.textContent = 'Recente'; subEl.style.display = 'inline-flex'; }
+                    cardDays.classList.add('highlight-emerald');
+                } else if (diffDays <= 5) {
+                    if (valEl) valEl.textContent = `${diffDays} dias`;
+                    if (subEl) { subEl.textContent = 'Atenção'; subEl.style.display = 'inline-flex'; }
+                    cardDays.classList.add('highlight-amber');
+                } else {
+                    if (valEl) valEl.textContent = `${diffDays} dias`;
+                    if (subEl) { subEl.textContent = 'Sem emissão'; subEl.style.display = 'inline-flex'; }
+                    cardDays.classList.add('highlight-red');
+                }
+                if (footEl) footEl.textContent = `última NF emitida em ${dateFormatted}`;
+            } else {
+                if (valEl) valEl.textContent = '-';
+                if (subEl) { subEl.textContent = 'Sem dados'; subEl.style.display = 'inline-flex'; }
+                if (footEl) footEl.textContent = 'nenhuma NF encontrada';
+            }
+        }
+
+        // KPI 8: Cobertura de Carteira (Confronto)
+        const cardCoverage = document.getElementById('kpi-card-coverage');
+        if (cardCoverage) {
+            cardCoverage.style.display = 'block';
+            cardCoverage.classList.remove('highlight-emerald', 'highlight-amber', 'highlight-blue');
+            const titleEl = document.getElementById('kpi-coverage-title');
+            const valEl = document.getElementById('kpi-coverage-val');
+            const subEl = document.getElementById('kpi-coverage-sub');
+            const footEl = document.getElementById('kpi-coverage-footer');
+            const iconBadge = document.getElementById('kpi-coverage-icon');
+
+            if (titleEl) titleEl.textContent = 'Cobertura de Carteira';
+            if (iconBadge) iconBadge.innerHTML = "<i class='bx bx-pie-chart-alt-2'></i>";
+
+            // Total de clientes ativos no confronto (união dos clientes faturados + carteira)
+            const allCompClients = new Set([...cnpjsFat, ...cnpjsExt]);
+            const totalBase = Math.max(allCompClients.size || 0, 63);
+            const billedClients = cnpjsFat.size;
+            const pctCoverage = totalBase > 0 ? (billedClients / totalBase * 100) : 0;
+
+            if (valEl) valEl.textContent = `${pctCoverage.toFixed(1).replace('.', ',')}%`;
+
+            if (subEl) {
+                subEl.style.display = 'inline-flex';
+                if (pctCoverage >= 75) {
+                    subEl.textContent = 'Alta positivação';
+                    cardCoverage.classList.add('highlight-emerald');
+                } else if (pctCoverage >= 50) {
+                    subEl.textContent = 'Média';
+                    cardCoverage.classList.add('highlight-amber');
+                } else {
+                    subEl.textContent = 'Oportunidade';
+                    cardCoverage.classList.add('highlight-blue');
+                }
+            }
+
+            if (footEl) {
+                footEl.textContent = `${billedClients} de ${totalBase} lojas positivadas`;
+            }
+        }
+
         adjustKpiTextFit();
     }
 
@@ -5716,7 +5988,7 @@
                                 </div>
                                 <div class="ranking-item-right comp-rank-split-val">
                                     <span class="val-tot">${formatBRL(item.totalV)}</span>
-                                    <div style="font-size: 0.72rem; display: flex; gap: 0.5rem;">
+                                    <div class="comp-rank-split-sub">
                                         <span class="val-fat">Fat: ${formatBRL(item.fatV)}</span>
                                         <span class="val-ext">Entr: ${formatBRL(item.extV)}</span>
                                     </div>
@@ -5779,7 +6051,7 @@
                             </div>
                             <div class="ranking-item-right comp-rank-split-val">
                                 <span class="val-tot">${formatBRL(item.totalV)}</span>
-                                <div style="font-size: 0.72rem; display: flex; gap: 0.5rem;">
+                                <div class="comp-rank-split-sub">
                                     <span class="val-fat">Fat: ${formatBRL(item.fatV)}</span>
                                     <span class="val-ext">Entr: ${formatBRL(item.extV)}</span>
                                 </div>
@@ -5841,7 +6113,7 @@
                             </div>
                             <div class="ranking-item-right comp-rank-split-val">
                                 <span class="val-tot">${formatBRL(item.totalV)}</span>
-                                <div style="font-size: 0.72rem; display: flex; gap: 0.5rem;">
+                                <div class="comp-rank-split-sub">
                                     <span class="val-fat">Fat: ${formatBRL(item.fatV)}</span>
                                     <span class="val-ext">Entr: ${formatBRL(item.extV)}</span>
                                 </div>

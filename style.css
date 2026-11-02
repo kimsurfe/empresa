@@ -1523,7 +1523,9 @@ body:not(.is-admin) .admin-only {
 
 @media (max-width: 768px) {
     .db-stats-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+    width: 100%;
     }
 }
 
@@ -4114,6 +4116,21 @@ select.cfm-input option {
     border-color: rgba(59, 130, 246, 0.25);
 }
 
+.highlight-red .kpi-sub-badge {
+    background: rgba(239, 68, 68, 0.16);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.25);
+}
+
+.kpi-card.highlight-red {
+    border-left: 4px solid #ef4444;
+}
+
+.highlight-red .kpi-icon-badge {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
 /* Grid de Cards de Indicadores (KPIs) */
 .indicators-kpis-grid {
     display: grid;
@@ -4465,7 +4482,9 @@ select.cfm-input option {
 
 .rankings-grid-4 {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+    width: 100%;
     gap: 1.25rem;
 }
 
@@ -5283,4 +5302,401 @@ select.cfm-input option {
     justify-content: center !important;
     font-size: 1.15rem !important;
     border-radius: 6px !important;
+}
+
+/* ==========================================================================
+   HEADER DE INDICADORES COMERCIAIS & DATASET PILLS
+   ========================================================================== */
+.ind-view-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    width: 100%;
+    margin-bottom: 1.25rem;
+}
+
+.ind-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+}
+
+.ind-header-top .view-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.ind-main-title {
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    white-space: nowrap;
+}
+
+.ind-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    white-space: normal;
+    line-height: 1.35;
+}
+
+.ind-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-shrink: 0;
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.ind-dataset-pills-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.ind-dataset-pills {
+    display: inline-flex;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    gap: 4px;
+}
+
+.btn-dataset-pill {
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    padding: 0.45rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-dataset-pill.active {
+    background: var(--accent-color, #3b82f6);
+    color: #ffffff;
+}
+
+/* ==========================================================================
+   CONFRONTO: AJUSTES ESTRUTURAIS DE RANKINGS E PRODUTOS
+   ========================================================================== */
+.ranking-panel-card {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
+
+.ranking-table-wrapper,
+.ranking-items-list {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+}
+
+.ranking-row-item {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.ranking-row-top {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ranking-item-left {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    overflow: hidden !important;
+}
+
+.ranking-item-info {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    overflow: hidden !important;
+}
+
+.ranking-item-name {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
+    display: block !important;
+}
+
+.ranking-item-sub {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
+    display: block !important;
+}
+
+.ranking-item-right {
+    min-width: 0 !important;
+    flex-shrink: 0 !important;
+}
+
+.comp-rank-split-val {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 0.76rem;
+    line-height: 1.25;
+    flex-shrink: 0 !important;
+}
+
+.comp-rank-split-sub {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    white-space: nowrap;
+}
+
+/* ==========================================================================
+   RESPONSIVIDADE MOBILE: INDICADORES COMERCIAIS & CONFRONTO
+   ========================================================================== */
+@media (max-width: 900px) {
+    .rankings-grid-4 {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .ind-header-top {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+    }
+
+    .ind-header-top .view-title-group {
+        width: 100% !important;
+    }
+
+    .ind-main-title {
+        font-size: 1.35rem !important;
+        white-space: normal !important;
+    }
+
+    .ind-subtitle {
+        font-size: 0.78rem !important;
+        width: 100% !important;
+        display: block !important;
+        line-height: 1.4 !important;
+    }
+
+    .ind-header-actions {
+        width: 100% !important;
+        margin-left: 0 !important;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.5rem !important;
+        white-space: normal !important;
+    }
+
+    .btn-indicators-secondary,
+    .btn-indicators-export {
+        width: 100% !important;
+        padding: 0.48rem 0.5rem !important;
+        font-size: 0.74rem !important;
+        justify-content: center !important;
+        text-align: center !important;
+        white-space: normal !important;
+        line-height: 1.2 !important;
+        box-sizing: border-box !important;
+    }
+
+    .ind-dataset-pills-bar {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 2px !important;
+        width: 100% !important;
+    }
+
+    .ind-dataset-pills {
+        display: flex !important;
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .btn-dataset-pill {
+        flex: 1 1 0 !important;
+        padding: 0.45rem 0.35rem !important;
+        font-size: 0.75rem !important;
+        justify-content: center !important;
+        text-align: center !important;
+    }
+
+    #comparison-products-section .ranking-header-title {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+    }
+
+    #comparison-products-section .ranking-header-title > div:last-child {
+        width: 100% !important;
+        justify-content: space-between !important;
+    }
+}
+
+@media (max-width: 600px) {
+    /* Filtros Power BI em 2 colunas equilibradas no celular */
+    .indicators-filter-card {
+        padding: 0.85rem 0.75rem !important;
+        margin-bottom: 1rem !important;
+    }
+
+    .indicators-filter-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.6rem !important;
+    }
+
+    /* Marca ocupa a linha inteira no mobile */
+    .indicators-filter-grid .ind-input-group:first-child {
+        grid-column: span 2 !important;
+    }
+
+    .ind-input-group label {
+        font-size: 0.68rem !important;
+        gap: 0.25rem !important;
+    }
+
+    .ind-cms-btn {
+        padding: 0.45rem 0.65rem !important;
+        font-size: 0.82rem !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        box-sizing: border-box !important;
+    }
+
+    .ind-input {
+        padding: 0.45rem 0.65rem !important;
+        font-size: 0.82rem !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        -webkit-appearance: none;
+        appearance: none;
+        box-sizing: border-box !important;
+    }
+
+    input[type="date"].ind-input {
+        min-height: 38px !important;
+        height: 38px !important;
+        display: flex !important;
+        align-items: center !important;
+        text-align: center !important;
+        font-size: 0.82rem !important;
+        padding: 0.4rem 0.5rem !important;
+    }
+
+    /* Grid de KPIs no topo em 2 colunas harmônicas no mobile */
+    .indicators-kpis-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 0.55rem !important;
+        margin-bottom: 1rem !important;
+    }
+
+    .kpi-card {
+        padding: 0.75rem 0.65rem !important;
+        border-radius: 10px !important;
+    }
+
+    .kpi-title {
+        font-size: 0.66rem !important;
+        letter-spacing: 0.3px !important;
+    }
+
+    .kpi-value {
+        font-size: 1.15rem !important;
+    }
+
+    .kpi-value.kpi-val-long {
+        font-size: 0.98rem !important;
+    }
+
+    .kpi-value.kpi-val-extra-long {
+        font-size: 0.86rem !important;
+    }
+
+    .kpi-footer {
+        font-size: 0.66rem !important;
+    }
+
+    /* Seção de Rankings de Produtos no Confronto: valores empilhados */
+    .comp-rank-split-sub {
+        flex-direction: column !important;
+        align-items: flex-end !important;
+        gap: 1px !important;
+        line-height: 1.15 !important;
+    }
+
+    .comp-rank-split-val .val-tot {
+        font-size: 0.78rem !important;
+    }
+
+    .comp-rank-split-val .val-fat,
+    .comp-rank-split-val .val-ext {
+        font-size: 0.65rem !important;
+    }
+
+    .comp-progress-labels {
+        font-size: 0.64rem !important;
+    }
+
+    .comp-progress-labels span {
+        white-space: nowrap !important;
+        font-size: 0.62rem !important;
+    }
+
+    .ranking-panel-card {
+        padding: 0.85rem 0.75rem !important;
+    }
+
+    .ranking-card-header {
+        padding-bottom: 0.5rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    .ranking-row-item {
+        padding: 0.35rem 0.35rem !important;
+    }
+
+    .ranking-product-thumb-container {
+        width: 32px !important;
+        height: 32px !important;
+        min-width: 32px !important;
+    }
+
+    .ranking-item-name {
+        font-size: 0.78rem !important;
+    }
+
+    .ranking-item-sub {
+        font-size: 0.68rem !important;
+    }
+}
 }
