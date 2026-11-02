@@ -678,21 +678,29 @@ function setupGlobalListeners() {
                         const cleanC = cleanDigits(initC['CNPJ']);
                         if (cleanC && mapByCnpj.has(cleanC)) {
                             const existing = mapByCnpj.get(cleanC);
-                            if (initC['VANS'] && (!existing['VANS'] || existing['VANS'] === 'SIM')) {
-                                existing['VANS'] = initC['VANS'];
-                                needsSyncBack = true;
-                            }
-                            if (initC['NEW ERA'] && (!existing['NEW ERA'] || existing['NEW ERA'] === 'SIM')) {
-                                existing['NEW ERA'] = initC['NEW ERA'];
-                                needsSyncBack = true;
-                            }
+                            CLIENT_BRAND_COLS.forEach(b => {
+                                if (initC[b]) {
+                                    const currVal = existing[b];
+                                    const isStatusStr = !currVal || currVal === 'SIM' || currVal === '1' || currVal === 1 || String(currVal).includes('FIDELIZAD') || String(currVal).includes('FECHAD') || currVal === 'INATIVO' || String(currVal).includes('CADASTRO');
+                                    if (isStatusStr && initC[b] !== 'SIM') {
+                                        existing[b] = initC[b];
+                                        if (existing[b + '_STATUS'] && String(existing[b + '_STATUS']).includes('FIDELIZAD')) {
+                                            existing[b + '_STATUS'] = 'ATIVO';
+                                        }
+                                        needsSyncBack = true;
+                                    } else if (!existing[b]) {
+                                        existing[b] = initC[b];
+                                        needsSyncBack = true;
+                                    }
+                                }
+                            });
                             if ('CODIGO AREZZO' in existing) {
-                                if (!existing['VANS'] && existing['CODIGO AREZZO']) existing['VANS'] = String(existing['CODIGO AREZZO']);
+                                if ((!existing['VANS'] || String(existing['VANS']).includes('FIDELIZAD')) && existing['CODIGO AREZZO']) existing['VANS'] = String(existing['CODIGO AREZZO']);
                                 delete existing['CODIGO AREZZO'];
                                 needsSyncBack = true;
                             }
                             if ('CODIGO NEW ERA' in existing) {
-                                if (!existing['NEW ERA'] && existing['CODIGO NEW ERA']) existing['NEW ERA'] = String(existing['CODIGO NEW ERA']);
+                                if ((!existing['NEW ERA'] || String(existing['NEW ERA']).includes('FIDELIZAD')) && existing['CODIGO NEW ERA']) existing['NEW ERA'] = String(existing['CODIGO NEW ERA']);
                                 delete existing['CODIGO NEW ERA'];
                                 needsSyncBack = true;
                             }
@@ -3898,13 +3906,19 @@ window.initClientsModule = function() {
                     const cleanC = cleanDigits(initC['CNPJ']);
                     if (cleanC && mapByCnpj.has(cleanC)) {
                         const existing = mapByCnpj.get(cleanC);
-                        if (initC['VANS'] && (!existing['VANS'] || existing['VANS'] === 'SIM' || existing['VANS'] === '1')) {
-                            existing['VANS'] = initC['VANS'];
-                        }
-                        if (initC['NEW ERA'] && (!existing['NEW ERA'] || existing['NEW ERA'] === 'SIM' || existing['NEW ERA'] === '1')) {
-                            existing['NEW ERA'] = initC['NEW ERA'];
-                        }
                         CLIENT_BRAND_COLS.forEach(b => {
+                            if (initC[b]) {
+                                const currVal = existing[b];
+                                const isStatusStr = !currVal || currVal === 'SIM' || currVal === '1' || currVal === 1 || String(currVal).includes('FIDELIZAD') || String(currVal).includes('FECHAD') || currVal === 'INATIVO' || String(currVal).includes('CADASTRO');
+                                if (isStatusStr && initC[b] !== 'SIM') {
+                                    existing[b] = initC[b];
+                                    if (existing[b + '_STATUS'] && String(existing[b + '_STATUS']).includes('FIDELIZAD')) {
+                                        existing[b + '_STATUS'] = 'ATIVO';
+                                    }
+                                } else if (!existing[b]) {
+                                    existing[b] = initC[b];
+                                }
+                            }
                             if (existing[b] === 1 || existing[b] === '1') existing[b] = 'SIM';
                         });
                     } else if (cleanC) {
@@ -4658,6 +4672,13 @@ function fallbackCopy(text, successMsg) {
 // --------------------------------------------------------------------------
 
 window.exportClientsToExcel = function() {
+    const masterMap = new Map();
+    if (window.INITIAL_CLIENTS_DATA && Array.isArray(window.INITIAL_CLIENTS_DATA)) {
+        window.INITIAL_CLIENTS_DATA.forEach(mc => {
+            const k = cleanDigits(mc['CNPJ']);
+            if (k) masterMap.set(k, mc);
+        });
+    }
     if (!window.XLSX) {
         window.showNotification('Biblioteca Excel não carregada. Verifique sua conexão.', 'error');
         return;
@@ -4688,8 +4709,17 @@ window.exportClientsToExcel = function() {
                 'ANIVERSARIO': c['ANIVERSARIO'] || ''
             };
 
+            const cleanC = cleanDigits(c['CNPJ']);
+            const masterC = (cleanC && masterMap) ? masterMap.get(cleanC) : null;
+
             CLIENT_BRAND_COLS.forEach(brand => {
-                row[brand] = c[brand] || '';
+                let brandVal = c[brand];
+                const isStatusStr = !brandVal || String(brandVal).includes('FIDELIZAD') || brandVal === 'INATIVO' || String(brandVal).includes('CADASTRO');
+                if (isStatusStr && masterC && masterC[brand] && masterC[brand] !== 'SIM') {
+                    brandVal = masterC[brand];
+                    c[brand] = masterC[brand]; // Sincroniza em memória
+                }
+                row[brand] = brandVal || '';
             });
 
             return row;
@@ -5041,6 +5071,13 @@ function renderFormBrandToggles(clientData = {}) {
         let codeVal = isNotCode ? '' : String(rawVal).trim();
         if (!codeVal && brand === 'NEW ERA' && clientData['CODIGO NEW ERA']) {
             codeVal = String(clientData['CODIGO NEW ERA']).trim();
+        }
+                if (!codeVal && window.INITIAL_CLIENTS_DATA) {
+            const cleanC = cleanDigits(clientData['CNPJ']);
+            const mC = cleanC ? window.INITIAL_CLIENTS_DATA.find(x => cleanDigits(x['CNPJ']) === cleanC) : null;
+            if (mC && mC[brand] && !String(mC[brand]).includes('FIDELIZAD') && mC[brand] !== 'SIM') {
+                codeVal = String(mC[brand]).trim();
+            }
         }
         if (!codeVal && brand === 'VANS' && clientData['CODIGO AREZZO']) {
             codeVal = String(clientData['CODIGO AREZZO']).trim();
