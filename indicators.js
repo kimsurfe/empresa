@@ -1,4 +1,4 @@
-// indicators.js - Dashboard de Indicadores Comerciais (Power BI Style)
+﻿// indicators.js - Dashboard de Indicadores Comerciais (Power BI Style)
 // Sistema KR Gestão de Marcas
 
 (function() {
@@ -957,12 +957,9 @@
 
     // Limpar filtros (restaura para o padrão)
     window.clearIndicatorsFilter = function() {
-        const metricSelect = document.getElementById('filter-ind-metric');
         const startInput = document.getElementById('filter-ind-start-date');
         const endInput = document.getElementById('filter-ind-end-date');
         const def = getDefaultPeriod();
-
-        if (metricSelect) metricSelect.value = 'gross';
         if (startInput) startInput.value = def.start;
         if (endInput) endInput.value = def.end;
 
@@ -1109,7 +1106,6 @@
         const selectedGroupReals = getIndCMSSelectedValues('group-real');
         const selectedClasses = getIndCMSSelectedValues('class');
         const selectedNFs = getIndCMSSelectedValues('nf');
-        const metricVal = document.getElementById('filter-ind-metric')?.value || 'gross';
         const startDateVal = document.getElementById('filter-ind-start-date')?.value || '';
         const endDateVal = document.getElementById('filter-ind-end-date')?.value || '';
 
@@ -1119,9 +1115,8 @@
         const clientsMap = buildClientsMap();
 
         function runItemFilter(item) {
-            const itemGross = item.vg !== undefined ? item.vg : (item.v || 0);
-            const itemNet = item.vn !== undefined ? item.vn : (item.v || 0);
-            item.v = (metricVal === 'net') ? itemNet : itemGross;
+            // Valor Total (prioriza item.v / vg / vn)
+            item.v = item.v !== undefined ? item.v : (item.vg !== undefined ? item.vg : (item.vn || 0));
 
             const dObj = parseDateBR(item.d);
             if (dObj) {
@@ -1163,7 +1158,6 @@
         }
 
         const subtitleEl = document.getElementById('indicators-subtitle');
-        const metricLabel = metricVal === 'net' ? 'Valor Líquido (Net)' : 'Valor Bruto (Gross)';
 
         if (currentDatasetType === 'comparison') {
             const rawBilling = getBillingData();
@@ -1176,10 +1170,10 @@
             billingFilteredData = [...bFiltered, ...eFiltered];
 
             if (subtitleEl) {
-                subtitleEl.innerHTML = `Confronto Comercial: Pedidos a Entregar vs Faturamento Realizado (${metricLabel}) &mdash; NEW ERA &nbsp;&bull;&nbsp; Base: CNPJ, Data e Mês &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
+                subtitleEl.innerHTML = `Confronto Comercial: Pedidos a Entregar vs Faturamento Realizado &mdash; NEW ERA &nbsp;&bull;&nbsp; Base: CNPJ, Data e Mês &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
             }
 
-            updateComparisonKpis(bFiltered, eFiltered, clientsMap, metricVal);
+            updateComparisonKpis(bFiltered, eFiltered, clientsMap);
             renderComparisonCharts(bFiltered, eFiltered, clientsMap);
             renderComparisonConfrontation(bFiltered, eFiltered, clientsMap);
             window.applyKpiCardsOrder();
@@ -1193,14 +1187,14 @@
         // Atualizar subtítulo com indicação da métrica e data do último relatório atualizado
         if (subtitleEl) {
             if (currentDatasetType === 'extrato') {
-                subtitleEl.innerHTML = `Extrato de Pedidos a Entregar (${metricLabel}) &mdash; NEW ERA &nbsp;&bull;&nbsp; Base: <strong>Data Entrega</strong> &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
+                subtitleEl.innerHTML = `Extrato de Pedidos a Entregar &mdash; NEW ERA &nbsp;&bull;&nbsp; Base: <strong>Data Entrega</strong> &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
             } else {
-                subtitleEl.innerHTML = `Análise estratégica de vendas (${metricLabel}) &mdash; NEW ERA &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
+                subtitleEl.innerHTML = `Análise estratégica de vendas (Valor Total) &mdash; NEW ERA &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
             }
         }
 
         // Atualizar todas as seções do dashboard
-        updateKpiCards(billingFilteredData, clientsMap, metricVal);
+        updateKpiCards(billingFilteredData, clientsMap);
         renderCharts(billingFilteredData, clientsMap);
         renderRankings(billingFilteredData, clientsMap);
         renderAuditSection(billingFilteredData, clientsMap);
@@ -1227,7 +1221,7 @@
         });
     }
 
-    function updateKpiCards(data, clientsMap, metricVal = 'gross') {
+    function updateKpiCards(data, clientsMap) {
         let totalRevenue = 0;
         let totalPieces = 0;
         let totalOrders = 0;
@@ -3104,9 +3098,9 @@
                         cor: (kCor && row[kCor]) ? String(row[kCor]).trim() : '',
                         sub: (kSub && row[kSub]) ? String(row[kSub]).trim() : '',
                         cl: (kClasse && row[kClasse]) ? String(row[kClasse]).trim() : '',
-                        vg: Math.round(grossVal * 100) / 100,
-                        vn: Math.round(netVal * 100) / 100,
-                        v: Math.round(grossVal * 100) / 100,
+                        vg: Math.round(totalVal * 100) / 100,
+                        vn: Math.round(totalVal * 100) / 100,
+                        v: Math.round(totalVal * 100) / 100,
                         q: (kQtde && row[kQtde]) ? (parseInt(row[kQtde], 10) || 0) : 0,
                         nf: (kNota && row[kNota]) ? String(row[kNota]).trim() : ''
                     });
@@ -3196,10 +3190,6 @@
         try {
             const isExtrato = (currentDatasetType === 'extrato');
             const clientsMap = buildClientsMap();
-            const metricVal = document.getElementById('filter-ind-metric')?.value || 'gross';
-            const metricHeader = metricVal === 'net' 
-                ? (isExtrato ? 'Valor Booking Líquido (R$)' : 'Valor Considerado (Líquido)')
-                : (isExtrato ? 'Valor Booking Bruto (R$)' : 'Valor Considerado (Bruto)');
 
             const exportRows = billingFilteredData.map(item => {
                 const clientMatch = resolveClientForItem(item, clientsMap);
@@ -3221,8 +3211,7 @@
                         'Descrição': item.desc || '',
                         'Sub-Grupo': item.sub || '',
                         'Classe Produto': item.cl || '',
-                        [metricHeader]: item.v || 0,
-                        'Valor Entregar (Bruto R$)': item.vg !== undefined ? item.vg : item.v,
+                        'Valor Entregar (R$)': item.v || 0,
                         'Valor Entregar (Líquido R$)': item.vn !== undefined ? item.vn : item.v,
                         'Qtde Entregar (Peças)': item.q || 0
                     };
@@ -3242,8 +3231,7 @@
                     'Descrição': item.desc || '',
                     'Sub-Grupo': item.sub || '',
                     'Classe Produto': item.cl || '',
-                    [metricHeader]: item.v || 0,
-                    'Valor Gross (Bruto R$)': item.vg !== undefined ? item.vg : item.v,
+                        'Valor Total (R$)': item.v || 0,
                     'Valor Net (Líquido R$)': item.vn !== undefined ? item.vn : item.v,
                     'Quantidade': item.q || 0
                 };
@@ -3284,7 +3272,7 @@
     // Confrontação das Informações por CNPJ, Data de Entrega/Emissão e Mês
     // ==========================================================================
 
-    function updateComparisonKpis(bData, eData, clientsMap, metricVal) {
+    function updateComparisonKpis(bData, eData, clientsMap) {
         let fatTotal = 0;
         let fatPieces = 0;
         let extTotal = 0;
