@@ -21,7 +21,7 @@
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     
     <!-- CSS Customizado -->
-    <link rel="stylesheet" href="style.css?v=70">
+    <link rel="stylesheet" href="style.css?v=79">
 </head>
 <body>
     <div class="app-container">
@@ -618,38 +618,43 @@
 
             <!-- VIEW: INDICADORES (BI & DASHBOARD COMERCIAL) -->
             <div id="view-indicators" class="view-container">
-                <div class="view-header" style="justify-content: space-between; align-items: center; display: flex; flex-wrap: wrap; gap: 1rem; width: 100%; margin-bottom: 1.25rem;">
-                    <div class="view-title-group" style="display: flex; flex-direction: column; gap: 0.25rem;">
-                        <h1 style="margin: 0; font-size: 1.6rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.6rem;">
-                            <i class='bx bx-line-chart' style="color: var(--accent-color);"></i> Indicadores Comerciais
-                        </h1>
-                        <span class="subtitle" style="color: var(--text-secondary); font-size: 0.9rem;" id="indicators-subtitle">
-                            Análise estrat&eacute;gica de vendas (Faturamento Bruto (Gross)) &mdash; NEW ERA &nbsp;&bull;&nbsp; Atualizado em: 31/10/2026
-                        </span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                        <!-- Seletor de Base / Dataset -->
-                        <div class="ind-dataset-pills" style="display: inline-flex; background: rgba(255,255,255,0.06); padding: 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); gap: 4px;">
-                            <button type="button" class="btn-dataset-pill active" id="btn-dataset-extrato" onclick="switchIndicatorsDataset('extrato')" style="background: var(--accent-color, #3b82f6); color: white; border: none; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" title="Pedidos a Entregar (NEW ERA - EXTRATO PEDIDOS.xlsx)">
-                                <i class='bx bx-package'></i> Extrato de Pedidos (A Entregar)
+                <div class="view-header" style="display: flex; flex-direction: column; gap: 0.85rem; width: 100%; margin-bottom: 1.25rem;">
+                    <!-- Linha 1: Titulo e Acoes (Fixos na mesma linha, sem quebra) -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; width: 100%;">
+                        <div class="view-title-group" style="display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; flex: 1 1 auto;">
+                            <h1 style="margin: 0; font-size: 1.6rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.6rem; white-space: nowrap;">
+                                <i class='bx bx-line-chart' style="color: var(--accent-color);"></i> Indicadores Comerciais
+                            </h1>
+                            <span class="subtitle" style="color: var(--text-secondary); font-size: 0.9rem; white-space: normal;" id="indicators-subtitle">
+                                An&aacute;lise estrat&eacute;gica de vendas &mdash; NEW ERA &nbsp;&bull;&nbsp; Atualizado em: 31/10/2026
+                            </span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.65rem; flex-shrink: 0; margin-left: auto; white-space: nowrap;">
+                            <input type="file" id="billing-file-input" accept=".xlsx,.xls" style="display: none;" onchange="handleUploadBillingExcel(event)">
+                            <button type="button" class="btn-indicators-secondary" id="btn-upload-billing-header" onclick="document.getElementById('billing-file-input').click()" title="Importar ou atualizar planilha de faturamento">
+                                <i class='bx bx-upload'></i> Atualizar Faturamento (.xlsx)
                             </button>
-                            <button type="button" class="btn-dataset-pill" id="btn-dataset-billing" onclick="switchIndicatorsDataset('billing')" style="background: transparent; color: var(--text-secondary); border: none; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" title="Faturamento Histórico Realizado (NEW ERA)">
-                                <i class='bx bx-receipt'></i> Faturamento Realizado
-                            </button>
-                            <button type="button" class="btn-dataset-pill" id="btn-dataset-comparison" onclick="switchIndicatorsDataset('comparison')" style="background: transparent; color: var(--text-secondary); border: none; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" title="Confronto direto: Pedidos a Entregar vs Faturamento Realizado">
-                                <i class='bx bx-git-compare'></i> A Entregar X Faturamento
+                            <button type="button" class="btn-indicators-export" onclick="exportIndicatorsSummaryToExcel()" title="Exportar dados consolidados em planilha Excel">
+                                <i class='bx bx-file'></i> Exportar Relat&oacute;rio
                             </button>
                         </div>
-                        <input type="file" id="billing-file-input" accept=".xlsx,.xls" style="display: none;" onchange="handleUploadBillingExcel(event)">
-                        <button type="button" class="btn-indicators-secondary" onclick="document.getElementById('billing-file-input').click()" title="Importar ou atualizar planilha de faturamento">
-                            <i class='bx bx-upload'></i> Atualizar Faturamento (.xlsx)
-                        </button>
-                        <button type="button" class="btn-indicators-export" onclick="exportIndicatorsSummaryToExcel()" title="Exportar dados consolidados em planilha Excel">
-                            <i class='bx bx-file'></i> Exportar Relatório
-                        </button>
+                    </div>
+
+                    <!-- Linha 2: Seletor de Base / Dataset (Fixo e alinhado a esquerda em Saldo, Faturamento e Saldo X Faturamento) -->
+                    <div class="ind-dataset-pills-bar" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.75rem; width: 100%;">
+                        <div class="ind-dataset-pills" style="display: inline-flex; background: rgba(255,255,255,0.06); padding: 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); gap: 4px;">
+                            <button type="button" class="btn-dataset-pill active" id="btn-dataset-extrato" onclick="switchIndicatorsDataset('extrato')" style="background: var(--accent-color, #3b82f6); color: white; border: none; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" title="Pedidos a Entregar (NEW ERA - EXTRATO PEDIDOS.xlsx)">
+                                <i class='bx bx-package'></i> Saldo
+                            </button>
+                            <button type="button" class="btn-dataset-pill" id="btn-dataset-billing" onclick="switchIndicatorsDataset('billing')" style="background: transparent; color: var(--text-secondary); border: none; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" title="Faturamento Hist&oacute;rico Realizado (NEW ERA)">
+                                <i class='bx bx-receipt'></i> Faturamento
+                            </button>
+                            <button type="button" class="btn-dataset-pill" id="btn-dataset-comparison" onclick="switchIndicatorsDataset('comparison')" style="background: transparent; color: var(--text-secondary); border: none; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" title="Confronto direto: Pedidos a Entregar vs Faturamento Realizado">
+                                <i class='bx bx-git-compare'></i> Saldo X Faturamento
+                            </button>
+                        </div>
                     </div>
                 </div>
-
                 <!-- CARD DE FILTROS POWER BI COM SELEÇÃO MÚLTIPLA -->
                 <div class="indicators-filter-card">
                     <div class="indicators-filter-grid">
@@ -1148,21 +1153,40 @@
                     </div>
 
                     <!-- SEÇÃO DE RANKINGS DE PRODUTOS -->
-                    <div class="ranking-header-title" style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.75rem;">
+                    <div class="ranking-header-title" style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.25rem;">
                         <div>
-                            <h2><i class='bx bx-purchase-tag' style="color: #6366f1;"></i> Desempenho de Produtos</h2>
-                            <span style="color: var(--text-secondary); font-size: 0.85rem;" id="products-ranking-subtitle">Referências mais vendidas, modelos, divisões e maiores notas fiscais emitidas</span>
+                            <h2 style="font-size: 1.25rem; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.25rem 0;">
+                                <i class='bx bx-purchase-tag' style="color: #6366f1;"></i> <span id="products-ranking-title-text">Desempenho de Produtos</span>
+                            </h2>
+                            <span style="color: var(--text-secondary); font-size: 0.85rem;" id="products-ranking-subtitle">
+                                Análise detalhada de referências, volumes físicos e carteira por produto (New Era)
+                            </span>
                         </div>
-                        <div class="ranking-limit-control" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--text-secondary);">
-                            <label for="ranking-limit-select-products"><i class='bx bx-list-ol'></i> Exibir:</label>
-                            <select id="ranking-limit-select-products" class="ind-select" style="padding: 0.32rem 0.65rem; font-size: 0.82rem; width: auto; min-width: 110px;" onchange="setRankingLimit(this.value)">
-                                <option value="10" selected>Top 10</option>
-                                <option value="20">Top 20</option>
-                                <option value="30">Top 30</option>
-                                <option value="50">Top 50</option>
-                                <option value="all">Todos os Dados</option>
-                            </select>
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <div class="comp-product-mode-toggle" id="std-product-mode-toggle" style="margin: 0;">
+                                <button type="button" class="btn-product-mode-pill active" id="btn-std-prod-mode-sku" onclick="setStdProductGroupMode('sku')" title="Exibe cada cor/variante separadamente com sua foto real">
+                                    <i class='bx bx-palette'></i> Referência + Cor
+                                </button>
+                                <button type="button" class="btn-product-mode-pill" id="btn-std-prod-mode-ref" onclick="setStdProductGroupMode('ref')" title="Consolida todas as cores na referência">
+                                    <i class='bx bx-purchase-tag'></i> Por Referência
+                                </button>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--text-secondary);">
+                                <label for="ranking-limit-select-products"><i class='bx bx-list-ol'></i> Exibir:</label>
+                                <select id="ranking-limit-select-products" class="ind-select" style="padding: 0.32rem 0.65rem; font-size: 0.82rem; width: auto; min-width: 110px;" onchange="setRankingLimit(this.value)">
+                                    <option value="10" selected>Top 10</option>
+                                    <option value="20">Top 20</option>
+                                    <option value="30">Top 30</option>
+                                    <option value="50">Top 50</option>
+                                    <option value="all">Todos os Dados</option>
+                                </select>
+                            </div>
                         </div>
+                    </div>
+
+                    <!-- Grid de 4 Cards de KPIs de Produtos no Saldo / Faturamento -->
+                    <div class="indicators-kpis-grid" id="std-product-kpis-grid" style="margin-bottom: 1.5rem;">
+                        <!-- Injetado dinamicamente via JS: updateStdProductKpis() -->
                     </div>
 
                     <div class="rankings-grid-4">
@@ -1170,15 +1194,14 @@
                         <div class="ranking-panel-card">
                             <div class="ranking-card-header">
                                 <div class="ranking-card-title">
-                                    <i class='bx bx-barcode'></i> Produtos
+                                    <i class='bx bx-barcode'></i> Top Produtos
                                 </div>
-                                <span class="ranking-card-badge">Referências</span>
+                                <span class="ranking-card-badge" id="ranking-products-badge">Ranking SKUs</span>
                             </div>
                             <div class="ranking-table-wrapper" id="ranking-products-container">
                                 <!-- Injetado via JS -->
                             </div>
                         </div>
-
                         <!-- Ranking 5: TOP GRUPOS DE PRODUTO -->
                         <div class="ranking-panel-card">
                             <div class="ranking-card-header">
@@ -1276,69 +1299,77 @@
                     <div class="chart-header" style="flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 1rem;">
                         <div class="chart-title-group">
                             <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
-                                <h3><i class='bx bx-git-compare' style="color: #6366f1;"></i> Confronto Analítico: A Entregar vs Faturamento</h3>
+                                <h3><i class='bx bx-git-compare' style="color: #6366f1;"></i> Análise Comparativa: Saldo X Faturamento</h3>
                                 <span class="badge" id="comp-table-total-badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; font-weight: 600; padding: 3px 9px; border-radius: 12px; font-size: 0.75rem;">0 CNPJs Cruzados</span>
                             </div>
-                            <span class="chart-subtitle">Confrontação direta e cruzamento das informações por CNPJ, por Mês e por Data</span>
+                            <span class="chart-subtitle">Cruzamento detalhado das informações por CNPJ/Loja, por Mês, por Data e por Produto</span>
                         </div>
 
-                        <!-- Pílulas de Sub-Abas e Exportação -->
+                        <!-- Pílulas de Sub-Abas, Exportação e Botão Recolher/Expandir -->
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                             <div class="comparison-pills-bar" style="margin: 0; padding: 2px;">
                                 <button type="button" class="btn-comp-subtab active" id="btn-subtab-cnpj" onclick="switchComparisonSubTab('cnpj')">
-                                    <i class='bx bx-store-alt'></i> Por CNPJ / Loja
+                                    <i class='bx bx-store-alt'></i> CNPJ / Loja
                                 </button>
                                 <button type="button" class="btn-comp-subtab" id="btn-subtab-month" onclick="switchComparisonSubTab('month')">
-                                    <i class='bx bx-calendar'></i> Por Mês / Ano
+                                    <i class='bx bx-calendar'></i> Mês / Ano
                                 </button>
                                 <button type="button" class="btn-comp-subtab" id="btn-subtab-date" onclick="switchComparisonSubTab('date')">
-                                    <i class='bx bx-calendar-event'></i> Por Data
+                                    <i class='bx bx-calendar-event'></i> Data
                                 </button>
                                 <button type="button" class="btn-comp-subtab" id="btn-subtab-product" onclick="switchComparisonSubTab('product')">
-                                    <i class='bx bx-barcode'></i> Por Produto (SKU)
+                                    <i class='bx bx-barcode'></i> Produto (SKU)
                                 </button>
                             </div>
-                            <button type="button" class="btn-indicators-export" onclick="exportComparisonToExcel()" title="Exportar Confronto Analítico em Excel">
+                            <button type="button" class="btn-indicators-export" onclick="exportComparisonToExcel()" title="Exportar Análise Comparativa em Excel">
                                 <i class='bx bx-download'></i> Exportar Excel
+                            </button>
+                            <button type="button" class="btn-indicators-secondary" id="btn-toggle-comp-card" onclick="toggleComparisonCardSection()" title="Recolher ou expandir esta análise detalhada" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer;">
+                                <i class='bx bx-chevron-up' id="icon-toggle-comp-card"></i> <span id="label-toggle-comp-card">Recolher</span>
                             </button>
                         </div>
                     </div>
 
-                    <!-- Barra de Pesquisa e Ordenação (Visível na aba de CNPJ) -->
-                    <div id="comp-controls-bar" style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 1rem; margin-bottom: 1rem;">
-                        <div style="position: relative; flex: 1; min-width: 280px; max-width: 480px;">
-                            <i class='bx bx-search' style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 1.1rem;"></i>
-                            <input type="text" id="comp-search-input" class="ind-input" style="padding-left: 2.3rem; width: 100%; border-radius: 6px; font-size: 0.85rem;" placeholder="Buscar por CNPJ (com ou sem máscara) ou Nome do Cliente..." oninput="onComparisonSearchInput(this.value)">
+                    <!-- Início do Corpo Recolhível da Análise Comparativa -->
+                    <div id="comp-tables-collapsible-body">
+
+                    <!-- Barra de Controles e Ordenação (Visível na aba de CNPJ / Grupo) -->
+                    <div id="comp-controls-bar" style="display: flex; gap: 0.85rem; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 1rem; margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <button type="button" class="btn-comp-pill active" id="btn-comp-cnpj-group-toggle" onclick="toggleCompCnpjGrouping()" title="Alternar entre visualização agrupada por grupo ou lista corrida de lojas">
+                                <i class='bx bx-folder'></i> Agrupado por Grupo
+                            </button>
+                            <button type="button" class="btn-comp-pill" id="btn-comp-cnpj-expand-all" onclick="toggleAllCompCnpjGroups()" title="Expandir ou recolher todos os grupos">
+                                <i class='bx bx-expand-vertical' id="icon-comp-cnpj-expand-all"></i> <span id="label-comp-cnpj-expand-all">Expandir Todos</span>
+                            </button>
                         </div>
                         <div id="comp-sort-container" style="display: flex; align-items: center; gap: 0.5rem;">
                             <label for="comp-sort-select" style="font-size: 0.82rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem;"><i class='bx bx-sort'></i> Ordenar:</label>
                             <select id="comp-sort-select" class="ind-select" style="padding: 0.35rem 0.65rem; font-size: 0.82rem; width: auto;" onchange="onComparisonSortChange(this.value)">
                                 <option value="total_desc" selected>Maior Total Geral Previsto</option>
                                 <option value="fat_desc">Maior Faturamento Realizado</option>
-                                <option value="ext_desc">Maior A Entregar (Carteira)</option>
+                                <option value="ext_desc">Maior Saldo a Entregar</option>
                                 <option value="pct_fat_desc">Maior % Faturado</option>
-                                <option value="pct_ext_desc">Maior % A Entregar</option>
-                                <option value="name_asc">Nome do Cliente (A - Z)</option>
+                                <option value="pct_ext_desc">Maior % Saldo a Entregar</option>
                             </select>
                         </div>
                     </div>
-
                     <!-- Tabela 1: Por CNPJ -->
                     <div id="comp-tab-content-cnpj" class="comparison-tab-content">
                         <div style="overflow-x: auto; max-height: 560px;" class="custom-scrollbar">
                             <table class="comp-table" id="comp-table-cnpj">
 <thead>
                                     <tr>
-                                        <th class="sortable" onclick="sortCompCnpjTable('cnpj')" id="th-cnpj-cnpj" style="min-width: 105px; white-space: nowrap;">CNPJ <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompCnpjTable('cnpj')" id="th-cnpj-cnpj" style="min-width: 155px; white-space: nowrap;">CNPJ <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
                                         <th class="sortable" onclick="sortCompCnpjTable('fantasia')" id="th-cnpj-fantasia" style="min-width: 140px;">Cliente (Fantasia / Razão) <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
-                                        <th class="sortable" onclick="sortCompCnpjTable('rede')" id="th-cnpj-rede" style="min-width: 80px;">Rede / Grupo <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompCnpjTable('rede')" id="th-cnpj-rede" style="min-width: 110px;">Rede / Grupo <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
                                         <th class="sortable" onclick="sortCompCnpjTable('fatV')" id="th-cnpj-fatV" style="min-width: 85px; text-align: right; white-space: nowrap;">Fat. (R$) <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
                                         <th class="sortable" onclick="sortCompCnpjTable('fatQ')" id="th-cnpj-fatQ" style="min-width: 50px; text-align: right; white-space: nowrap;">Pçs Fat. <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
                                         <th class="sortable" onclick="sortCompCnpjTable('extV')" id="th-cnpj-extV" style="min-width: 85px; text-align: right; white-space: nowrap;">A Entregar <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
                                         <th class="sortable" onclick="sortCompCnpjTable('extQ')" id="th-cnpj-extQ" style="min-width: 50px; text-align: right; white-space: nowrap;">Pçs Entr. <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
                                         <th class="sortable active-sort" onclick="sortCompCnpjTable('totalV')" id="th-cnpj-totalV" style="min-width: 95px; text-align: right; white-space: nowrap;">Total (R$) <span class="th-sort-icon"><i class='bx bx-sort-down'></i></span></th>
                                         <th class="sortable" onclick="sortCompCnpjTable('pctFat')" id="th-cnpj-pctFat" style="min-width: 90px; text-align: center; white-space: nowrap;">% Progresso <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
-                                        <th style="min-width: 65px; text-align: center;">Detalhes</th>
+                                        <th style="min-width: 45px; text-align: center;">Ação</th>
                                     </tr>
                                 </thead>
                                 <tbody id="comp-tbody-cnpj">
@@ -1491,6 +1522,7 @@
                             </table>
                         </div>
                     </div>
+                    </div> <!-- /#comp-tables-collapsible-body -->
                 </div>
 
                 <!-- SEÇÃO DE AUDITORIA / CONFERÊNCIA DE CNPJS NÃO VINCULADOS -->
@@ -2260,7 +2292,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js?v=28"></script>
-    <script src="app.js?v=70"></script>
-    <script src="indicators.js?v=70" charset="UTF-8"></script>
+    <script src="app.js?v=79"></script>
+    <script src="indicators.js?v=82" charset="UTF-8"></script>
 </body>
 </html>

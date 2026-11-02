@@ -1,4 +1,4 @@
-﻿// indicators.js - Dashboard de Indicadores Comerciais (Power BI Style)
+// indicators.js - Dashboard de Indicadores Comerciais (Power BI Style)
 // Sistema KR Gestão de Marcas
 
 (function() {
@@ -36,18 +36,125 @@
     let compProductSortDir = 'desc';
     let compRankingDisplayLimit = 10;
     let compProductGroupMode = localStorage.getItem('empresa_comp_product_group_mode') || 'sku';
+    let stdProductGroupMode = localStorage.getItem('empresa_std_product_group_mode') || 'sku';
+    let compMasterSummaryExpanded = false; // Exibe somente o Total Consolidado por padrÃ£o
+
+    window.toggleCompMasterSummary = function() {
+        compMasterSummaryExpanded = !compMasterSummaryExpanded;
+        const label = document.getElementById('label-comp-cnpj-expand-all');
+        if (label) {
+            label.textContent = compMasterSummaryExpanded ? 'Recolher Resumo' : 'Expandir Clientes';
+        }
+        const cardToggleIcon = document.getElementById('icon-toggle-comp-card');
+        const cardToggleLabel = document.getElementById('label-toggle-comp-card');
+        if (cardToggleIcon) cardToggleIcon.className = compMasterSummaryExpanded ? 'bx bx-chevron-up' : 'bx bx-chevron-down';
+        if (cardToggleLabel) cardToggleLabel.textContent = compMasterSummaryExpanded ? 'Recolher' : 'Expandir';
+
+        const controlsBar = document.getElementById('comp-controls-bar');
+        if (controlsBar) controlsBar.style.display = (currentCompSubTab === 'cnpj' && compMasterSummaryExpanded) ? 'flex' : 'none';
+        const dateToolbar = document.querySelector('.comp-date-toolbar');
+        if (dateToolbar) dateToolbar.style.display = (currentCompSubTab === 'date' && compMasterSummaryExpanded) ? 'flex' : 'none';
+        const prodToolbar = document.querySelector('.comp-product-toolbar');
+        if (prodToolbar) prodToolbar.style.display = (currentCompSubTab === 'product' && compMasterSummaryExpanded) ? 'flex' : 'none';
+
+        renderCompCnpjTable();
+        renderCompMonthTable();
+        renderCompDateTable();
+        renderCompProductTable();
+    };
+    let compCnpjGroupByGroup = localStorage.getItem('empresa_comp_cnpj_group') !== 'false';
+    let compExpandedGroups = new Set();
 
     window.setCompProductGroupMode = function(mode) {
         if (!['ref', 'sku'].includes(mode)) mode = 'sku';
         compProductGroupMode = mode;
         try { localStorage.setItem('empresa_comp_product_group_mode', mode); } catch(e) {}
 
-        document.querySelectorAll('.btn-product-mode-pill').forEach(btn => {
+        document.querySelectorAll('#comp-product-mode-toggle-toolbar .btn-product-mode-pill, #comp-product-mode-toggle-header .btn-product-mode-pill').forEach(btn => {
             const isTarget = (btn.getAttribute('onclick') && btn.getAttribute('onclick').indexOf("'" + mode + "'") !== -1) || btn.id.indexOf(mode) !== -1;
             btn.classList.toggle('active', isTarget);
         });
 
         buildCompProductList(lastCompFilteredBilling, lastCompFilteredExtrato);
+    };
+
+    window.setStdProductGroupMode = function(mode) {
+        if (!['ref', 'sku'].includes(mode)) mode = 'sku';
+        stdProductGroupMode = mode;
+        try { localStorage.setItem('empresa_std_product_group_mode', mode); } catch(e) {}
+
+        document.querySelectorAll('#std-product-mode-toggle .btn-product-mode-pill').forEach(btn => {
+            const isTarget = (btn.getAttribute('onclick') && btn.getAttribute('onclick').indexOf("'" + mode + "'") !== -1) || btn.id.indexOf(mode) !== -1;
+            btn.classList.toggle('active', isTarget);
+        });
+
+        if (billingFilteredData && billingFilteredData.length > 0) {
+            let totRev = 0, totPcs = 0;
+            billingFilteredData.forEach(it => { totRev += (it.v || 0); totPcs += (it.q || 0); });
+            renderTopProducts(billingFilteredData, totRev, totPcs);
+        }
+    };
+
+    window.toggleComparisonCardSection = function() {
+        const body = document.getElementById('comp-tables-collapsible-body');
+        if (body) body.style.display = 'block';
+        window.toggleCompMasterSummary();
+    };
+
+
+
+
+
+
+
+
+
+
+
+    window.toggleCompCnpjGrouping = function() {
+        compCnpjGroupByGroup = !compCnpjGroupByGroup;
+        try { localStorage.setItem('empresa_comp_cnpj_group', compCnpjGroupByGroup); } catch(e) {}
+        const btn = document.getElementById('btn-comp-cnpj-group-toggle');
+        if (btn) {
+            btn.classList.toggle('active', compCnpjGroupByGroup);
+            btn.innerHTML = `<i class='bx ${compCnpjGroupByGroup ? 'bx-folder' : 'bx-list-ul'}'></i> ${compCnpjGroupByGroup ? 'Agrupado por Grupo' : 'Todas as Lojas'}`;
+        }
+        const btnExp = document.getElementById('btn-comp-cnpj-expand-all');
+        if (btnExp) {
+            btnExp.style.display = compCnpjGroupByGroup ? 'inline-flex' : 'none';
+        }
+        renderCompCnpjTable();
+    };
+
+    window.toggleCompGroup = function(groupName) {
+        if (compExpandedGroups.has(groupName)) {
+            compExpandedGroups.delete(groupName);
+        } else {
+            compExpandedGroups.add(groupName);
+        }
+        renderCompCnpjTable();
+    };
+
+    window.toggleAllCompCnpjGroups = function() {
+        const allGroups = new Set();
+        currentCompCnpjList.forEach(r => {
+            const gName = (r.rede || r.grupo || r.fantasia || 'Sem Grupo').trim() || 'Sem Grupo';
+            allGroups.add(gName);
+        });
+
+        if (compExpandedGroups.size === allGroups.size) {
+            compExpandedGroups.clear();
+        } else {
+            allGroups.forEach(g => compExpandedGroups.add(g));
+        }
+
+        const label = document.getElementById('label-comp-cnpj-expand-all');
+        const icon = document.getElementById('icon-comp-cnpj-expand-all');
+        const isAllCollapsed = (allGroups.size > 0 && compExpandedGroups.size === allGroups.size);
+        if (label) label.textContent = isAllCollapsed ? 'Recolher Todos' : 'Expandir Todos';
+        if (icon) icon.className = isAllCollapsed ? 'bx bx-collapse-vertical' : 'bx bx-expand-vertical';
+
+        renderCompCnpjTable();
     };
 
     // Estado de Ordenação e Agrupamento das Tabelas de Confronto
@@ -259,8 +366,10 @@
     function getDefaultPeriod() {
         const now = new Date();
         const curYear = now.getFullYear().toString();
-        // Ano completo como período padrão
-        return { curYear, curSemester: 'all', start: `${curYear}-01-01`, end: `${curYear}-12-31` };
+        const curSemester = (now.getMonth() >= 6) ? '2' : '1';
+        const start = curSemester === '1' ? `${curYear}-01-01` : `${curYear}-07-01`;
+        const end = curSemester === '1' ? `${curYear}-06-30` : `${curYear}-12-31`;
+        return { curYear, curSemester, start, end };
     }
 
     // Inicialização do Módulo de Indicadores
@@ -609,34 +718,14 @@
             cb.checked = selectAll;
         });
         updateIndCMSLabel(dim);
-        if (dim === 'year') {
-            // Ao selecionar ano(s), marca os dois semestres e expande para o ano todo
-            const semList = document.getElementById('ind-cms-semester-list');
-            if (semList) {
-                semList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    cb.checked = true;
-                });
-                updateIndCMSLabel('semester');
-            }
-            syncDatesWithSelectedYears();
-        } else if (dim === 'semester') {
+        if (dim === 'year' || dim === 'semester') {
             syncDatesWithSelectedYears();
         }
         applyIndicatorsFilter();
     };
 
     window.onIndCMSCheckboxChange = function(dim) {
-        if (dim === 'year') {
-            // Quando seleciona o ano (como 2027), deixa selecionado os 2 semestres e também o ano todo nas datas
-            const semList = document.getElementById('ind-cms-semester-list');
-            if (semList) {
-                semList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    cb.checked = true;
-                });
-                updateIndCMSLabel('semester');
-            }
-            syncDatesWithSelectedYears();
-        } else if (dim === 'semester') {
+        if (dim === 'year' || dim === 'semester') {
             syncDatesWithSelectedYears();
         }
         updateIndCMSLabel(dim);
@@ -676,10 +765,17 @@
             labelEl.textContent = defaultLabels[dim] || 'Todos';
             labelEl.title = defaultLabels[dim] || 'Todos';
         } else if (count === 1) {
-            const span = checkedCheckboxes[0].closest('label').querySelector('.ind-cms-option-label') || checkedCheckboxes[0].closest('label');
-            const fullText = span.textContent.trim();
-            labelEl.textContent = fullText;
-            labelEl.title = fullText;
+            if (dim === 'semester') {
+                const val = checkedCheckboxes[0].value;
+                const semText = val === '1' ? '1\u00BA Semestre' : '2\u00BA Semestre';
+                labelEl.textContent = semText;
+                labelEl.title = semText;
+            } else {
+                const span = checkedCheckboxes[0].closest('label').querySelector('.ind-cms-option-label') || checkedCheckboxes[0].closest('label');
+                const fullText = span.textContent.trim();
+                labelEl.textContent = fullText;
+                labelEl.title = fullText;
+            }
         } else {
             // Mais de 1 selecionado: exibe contagem limpa e elegante sem estourar o layout
             if (dim === 'client') {
@@ -759,7 +855,7 @@
         const semList = document.getElementById('ind-cms-semester-list');
         if (semList && isInitial) {
             semList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                cb.checked = true;
+                cb.checked = (cb.value === def.curSemester);
             });
         }
         updateIndCMSLabel('semester');
@@ -981,11 +1077,11 @@
             updateIndCMSLabel('year');
         }
 
-        // Reset Semestre: marca ambos os semestres
+        // Reset Semestre: marca o semestre vigente
         const semList = document.getElementById('ind-cms-semester-list');
         if (semList) {
             semList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                cb.checked = true;
+                cb.checked = (cb.value === def.curSemester);
             });
             updateIndCMSLabel('semester');
         }
@@ -1170,7 +1266,7 @@
             billingFilteredData = [...bFiltered, ...eFiltered];
 
             if (subtitleEl) {
-                subtitleEl.innerHTML = `Confronto Comercial: Pedidos a Entregar vs Faturamento Realizado &mdash; NEW ERA &nbsp;&bull;&nbsp; Base: CNPJ, Data e Mês &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
+                subtitleEl.innerHTML = `Saldo X Faturamento &mdash; NEW ERA &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
             }
 
             updateComparisonKpis(bFiltered, eFiltered, clientsMap);
@@ -1187,9 +1283,9 @@
         // Atualizar subtítulo com indicação da métrica e data do último relatório atualizado
         if (subtitleEl) {
             if (currentDatasetType === 'extrato') {
-                subtitleEl.innerHTML = `Extrato de Pedidos a Entregar &mdash; NEW ERA &nbsp;&bull;&nbsp; Base: <strong>Data Entrega</strong> &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
+                subtitleEl.innerHTML = `Saldo de Pedidos a Entregar &mdash; NEW ERA &nbsp;&bull;&nbsp; Base: <strong>Data Entrega</strong> &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
             } else {
-                subtitleEl.innerHTML = `Análise estratégica de vendas (Valor Total) &mdash; NEW ERA &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
+                subtitleEl.innerHTML = `Faturamento (Valor Total) &mdash; NEW ERA &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
             }
         }
 
@@ -2227,6 +2323,168 @@
     // --------------------------------------------------------------------------
     // 3. RANKINGS COMERCIAIS TOP 10
     // --------------------------------------------------------------------------
+        function updateStdProductKpis(data) {
+        const container = document.getElementById('std-product-kpis-grid');
+        if (!container) return;
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const isSkuMode = (stdProductGroupMode === 'sku');
+        const isExtrato = (currentDatasetType === 'extrato');
+
+        // Atualizar textos dos cabeÃ§alhos conforme dataset
+        const titleEl = document.getElementById('products-ranking-title-text');
+        const subEl = document.getElementById('products-ranking-subtitle');
+        if (titleEl) {
+            titleEl.textContent = isExtrato ? 'Desempenho de Produtos: Saldo a Entregar' : 'Desempenho de Produtos: Faturamento Realizado';
+        }
+        if (subEl) {
+            subEl.textContent = isExtrato
+                ? 'Análise de referências, volumes físicos e pedidos pendentes na carteira (New Era)'
+                : 'Análise de referências faturadas, volumes físicos e faturamento realizado (New Era)';
+        }
+
+        const prodTotals = {};
+        let totalPieces = 0;
+        let totalRevenue = 0;
+
+        data.forEach(item => {
+            const pCode = (item.p || '').trim();
+            const pDesc = (item.desc || '').trim();
+            const pCor = (item.cor || '').toString().trim();
+            const pCorUpper = pCor.toUpperCase();
+            const key = isSkuMode
+                ? `${pCode || 'SEM_REF'}___${pCorUpper || 'UNICA'}`
+                : (pCode || pDesc || 'Sem Referência');
+
+            if (!prodTotals[key]) {
+                prodTotals[key] = {
+                    code: pCode,
+                    desc: pDesc,
+                    cor: isSkuMode ? pCor : '',
+                    name: pDesc || pCode || 'Produto sem descriÃ§Ã£o',
+                    q: 0,
+                    v: 0
+                };
+            }
+            const val = item.v || 0;
+            const qty = item.q || 0;
+            prodTotals[key].v += val;
+            prodTotals[key].q += qty;
+            totalRevenue += val;
+            totalPieces += qty;
+        });
+
+        const prodList = Object.values(prodTotals);
+        const totalSkus = prodList.length;
+
+        const sortedByVal = [...prodList].sort((a, b) => b.v - a.v);
+        const sortedByQty = [...prodList].sort((a, b) => b.q - a.q);
+
+        const topValProd = (sortedByVal.length > 0 && sortedByVal[0].v > 0) ? sortedByVal[0] : null;
+        const topQtyProd = (sortedByQty.length > 0 && sortedByQty[0].q > 0) ? sortedByQty[0] : null;
+
+        const renderHeroThumb = (p) => {
+            if (!p) return '';
+            const urls = getProductImageUrls(p.code, p.cor);
+            if (urls.primaryUrl) {
+                return `
+                    <img class="comp-product-hero-thumb" src="${urls.primaryUrl}" alt="${escapeHTML(p.desc)}" onclick="openProductImageModal('${escapeHTML(p.code)}', '${escapeHTML(p.cor || '')}', '${escapeHTML(p.desc)}')" title="Clique para ampliar foto" ${urls.fallbacks && urls.fallbacks.length > 0 ? `data-fallbacks="${urls.fallbacks.join('|')}"` : ''} onerror="onRankingProductImgError(this)" />
+                `;
+            }
+            return `<div class="comp-product-hero-placeholder"><i class='bx bx-purchase-tag-alt'></i></div>`;
+        };
+
+        const heroValHtml = topValProd ? `
+            <div class="comp-product-hero-card">
+                ${renderHeroThumb(topValProd)}
+                <div class="comp-product-hero-info">
+                    <div class="comp-product-hero-code">${escapeHTML(topValProd.code)} ${topValProd.cor ? `<span style="font-size: 0.72rem; color: #34d399; font-weight: normal;">(${escapeHTML(topValProd.cor)})</span>` : ''}</div>
+                    <div class="comp-product-hero-desc" title="${escapeHTML(topValProd.desc)}">${escapeHTML(topValProd.desc)}</div>
+                    <div class="comp-product-hero-val" style="color: #34d399;">
+                        <span>${formatBRL(topValProd.v)}</span>
+                        <span style="font-size: 0.74rem; color: var(--text-secondary); font-weight: normal;">&bull; ${topValProd.q.toLocaleString('pt-BR')} pÃ§s</span>
+                    </div>
+                </div>
+            </div>
+        ` : `<div style="color: var(--text-secondary); font-size: 0.82rem; padding: 0.75rem 0;">Nenhum produto registrado no perÃ­odo.</div>`;
+
+        const heroQtyHtml = topQtyProd ? `
+            <div class="comp-product-hero-card">
+                ${renderHeroThumb(topQtyProd)}
+                <div class="comp-product-hero-info">
+                    <div class="comp-product-hero-code">${escapeHTML(topQtyProd.code)} ${topQtyProd.cor ? `<span style="font-size: 0.72rem; color: #60a5fa; font-weight: normal;">(${escapeHTML(topQtyProd.cor)})</span>` : ''}</div>
+                    <div class="comp-product-hero-desc" title="${escapeHTML(topQtyProd.desc)}">${escapeHTML(topQtyProd.desc)}</div>
+                    <div class="comp-product-hero-val" style="color: #60a5fa;">
+                        <span>${formatBRL(topQtyProd.v)}</span>
+                        <span style="font-size: 0.74rem; color: var(--text-secondary); font-weight: normal;">&bull; ${topQtyProd.q.toLocaleString('pt-BR')} pÃ§s</span>
+                    </div>
+                </div>
+            </div>
+        ` : `<div style="color: var(--text-secondary); font-size: 0.82rem; padding: 0.75rem 0;">Nenhum produto registrado no perÃ­odo.</div>`;
+
+        const avgPcs = totalSkus > 0 ? (totalPieces / totalSkus).toFixed(1) : 0;
+
+        container.innerHTML = `
+            <!-- KPI 1: Mix de SKUs -->
+            <div class="kpi-card highlight-purple">
+                <div class="kpi-header">
+                    <span class="kpi-title">${isExtrato ? 'Mix de SKUs (Em Carteira)' : 'Mix de SKUs Faturados'}</span>
+                    <div class="kpi-icon-badge"><i class='bx bx-barcode'></i></div>
+                </div>
+                <div class="kpi-value-container">
+                    <div class="kpi-value font-mono">${totalSkus.toLocaleString('pt-BR')} SKUs</div>
+                </div>
+                <div class="kpi-footer" style="flex-direction: column; align-items: flex-start; gap: 0.35rem;">
+                    <div style="font-size: 0.78rem; color: var(--text-secondary);">
+                        ${isExtrato ? `${totalPieces.toLocaleString('pt-BR')} pçs pendentes na carteira` : `${totalPieces.toLocaleString('pt-BR')} pçs faturadas no perÃ­odo`}
+                    </div>
+                    <div style="font-size: 0.73rem; color: #a5b4fc;">
+                        MÃ©dia de ${avgPcs} pçs por referÃªncia
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI 2: Volume FÃ­sico de PeÃ§as -->
+            <div class="kpi-card highlight-amber">
+                <div class="kpi-header">
+                    <span class="kpi-title">${isExtrato ? 'Saldo de PeÃ§as a Entregar' : 'Volume de PeÃ§as Faturadas'}</span>
+                    <div class="kpi-icon-badge"><i class='bx bx-package'></i></div>
+                </div>
+                <div class="kpi-value-container">
+                    <div class="kpi-value font-mono" style="font-size: 1.35rem;">
+                        ${totalPieces.toLocaleString('pt-BR')} <span style="font-size: 0.88rem; color: var(--text-secondary); font-weight: normal;">pçs</span>
+                    </div>
+                </div>
+                <div class="kpi-footer" style="flex-direction: column; align-items: stretch; gap: 0.4rem;">
+                    <div style="font-size: 0.78rem; color: ${isExtrato ? '#60a5fa' : '#34d399'}; font-weight: 600;">
+                        ${formatBRL(totalRevenue)} ${isExtrato ? 'a entregar' : 'faturado'}
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI 3: Top Produto Faturado / a Entregar -->
+            <div class="kpi-card highlight-green">
+                <div class="kpi-header">
+                    <span class="kpi-title">${isExtrato ? 'Top Produto a Entregar' : 'Top Produto Faturado'}</span>
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">${isExtrato ? 'Maior Demanda' : 'LÃ­der Faturamento'}</span>
+                </div>
+                ${heroValHtml}
+            </div>
+
+            <!-- KPI 4: Produto LÃ­der em PeÃ§as -->
+            <div class="kpi-card highlight-blue">
+                <div class="kpi-header">
+                    <span class="kpi-title">${isExtrato ? 'Produto Mais Demandado' : 'Maior Volume em PeÃ§as'}</span>
+                    <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">LÃ­der em PeÃ§as</span>
+                </div>
+                ${heroQtyHtml}
+            </div>
+        `;
+    }
     function renderRankings(data, clientsMap) {
         const totalRevenue = data.reduce((acc, curr) => acc + (curr.v || 0), 0);
         const totalPieces = data.reduce((acc, curr) => acc + (curr.q || 0), 0);
@@ -2625,17 +2883,22 @@
         const container = document.getElementById('ranking-products-container');
         if (!container) return;
 
+        const isSkuMode = (stdProductGroupMode === 'sku');
         const prodTotals = {};
         data.forEach(item => {
             const pCode = (item.p || '').trim();
             const pDesc = (item.desc || '').trim();
-            const pCor = (item.cor || '').toString().trim().toLowerCase();
-            const key = pCode || pDesc || 'Sem Referência';
+            const pCor = (item.cor || '').toString().trim();
+            const pCorUpper = pCor.toUpperCase();
+            const key = isSkuMode
+                ? `${pCode || 'SEM_REF'}___${pCorUpper || 'UNICA'}`
+                : (pCode || pDesc || 'Sem Referência');
 
             if (!prodTotals[key]) {
                 prodTotals[key] = {
                     code: pCode,
                     desc: pDesc,
+                    cor: isSkuMode ? pCor : '',
                     name: pDesc || pCode || 'Produto sem descrição',
                     colors: {},
                     q: 0,
@@ -2653,19 +2916,33 @@
             return currentKpiDisplayMode === 'pieces' ? (b.q - a.q) : (b.v - a.v);
         }).map(it => {
             const parts = [];
-            let primaryCor = '';
-            const colorEntries = Object.entries(it.colors || {});
-            if (colorEntries.length > 0) {
-                colorEntries.sort((a, b) => b[1] - a[1]);
-                primaryCor = colorEntries[0][0];
-            } else if (it.code && KNOWN_PRODUCT_COLORS[it.code]) {
-                primaryCor = KNOWN_PRODUCT_COLORS[it.code];
+            if (isSkuMode) {
+                if (it.code) parts.push(it.code);
+                if (it.cor) {
+                    parts.push(`Cor: ${it.cor}`);
+                } else {
+                    const colorEntries = Object.entries(it.colors || {});
+                    if (colorEntries.length > 0) {
+                        colorEntries.sort((a, b) => b[1] - a[1]);
+                        it.cor = colorEntries[0][0];
+                        parts.push(`Cor: ${it.cor}`);
+                    }
+                }
+            } else {
+                let primaryCor = '';
+                const colorEntries = Object.entries(it.colors || {});
+                if (colorEntries.length > 0) {
+                    colorEntries.sort((a, b) => b[1] - a[1]);
+                    primaryCor = colorEntries[0][0];
+                    const numCores = colorEntries.length;
+                    if (it.code) parts.push(it.code);
+                    parts.push(`${numCores} ${numCores === 1 ? 'cor' : 'cores'}`);
+                } else {
+                    if (it.code) parts.push(it.code);
+                }
+                it.cor = primaryCor;
             }
-            it.cor = primaryCor;
-
-            if (it.code) parts.push(it.code);
-            if (it.cor) parts.push(`Cor: ${it.cor}`);
-            it.sub = parts.join(' • ');
+            it.sub = parts.join(' \u2022 ');
             return it;
         });
 
@@ -2793,7 +3070,7 @@
             const parts = [];
             if (it.date && it.date !== '-') parts.push(it.date);
             if (it.fantasia && it.fantasia !== 'Cliente' && it.fantasia !== 'Cliente s/ Cadastro') parts.push(it.fantasia);
-            it.sub = parts.join(' • ');
+            it.sub = parts.join(' \u2022 ');
             return it;
         });
 
@@ -3224,7 +3501,7 @@
                     'Grupo Real': (clientMatch && (clientMatch['GRUPO REAL'] || clientMatch['GRUPO'])) || item.gr || '',
                     'Grupo': (clientMatch && clientMatch['GRUPO']) || item.g || '',
                     'Rede': item.r || '',
-                    'Data Emissão': item.d || '',
+                    'Data EmissÃ£o': item.d || '',
                     'Nota Fiscal': item.nf || '',
                     'Referência Produto': item.p || '',
                     'Cor / Variante': item.cor || '',
@@ -4058,9 +4335,57 @@
         renderCompCnpjTable();
     };
 
+    function renderCompDetailBoxHtml(row) {
+        return `
+            <tr class="comp-detail-row" id="comp-detail-${row.key}">
+                <td colspan="10" style="padding: 0.75rem 1rem; background: rgba(15, 23, 42, 0.45);">
+                    <div class="comp-detail-box">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <!-- Coluna 1: Pedidos a Entregar -->
+                            <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; padding: 0.75rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <span style="font-weight: 600; color: #3b82f6; font-size: 0.8rem;">
+                                        <i class='bx bx-package'></i> Pedidos em Carteira (${row.extItemsList.length} itens)
+                                    </span>
+                                    <span style="font-size: 0.75rem; color: #60a5fa;" class="font-mono">${formatBRL(row.extV)} | ${row.extQ.toLocaleString('pt-BR')} pçs</span>
+                                </div>
+                                <div style="max-height: 180px; overflow-y: auto;" class="custom-scrollbar">
+                                    ${renderDetailItemsTable(row.extItemsList, 'Data Entrega', 'Pedido')}
+                                </div>
+                            </div>
+
+                            <!-- Coluna 2: Notas Faturadas -->
+                            <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; padding: 0.75rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <span style="font-weight: 600; color: #10b981; font-size: 0.8rem;">
+                                        <i class='bx bx-receipt'></i> Notas Faturadas (${row.fatItemsList.length} itens)
+                                    </span>
+                                    <span style="font-size: 0.75rem; color: #34d399;" class="font-mono">${formatBRL(row.fatV)} | ${row.fatQ.toLocaleString('pt-BR')} pçs</span>
+                                </div>
+                                <div style="max-height: 180px; overflow-y: auto;" class="custom-scrollbar">
+                                    ${renderDetailItemsTable(row.fatItemsList, 'Data Ã£o', 'NF')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
     function renderCompCnpjTable() {
         const tbody = document.getElementById('comp-tbody-cnpj');
         if (!tbody) return;
+
+        // Sincronizar select de ordenação
+        const sortSelect = document.getElementById('comp-sort-select');
+        if (sortSelect) {
+            if (compCnpjSortCol === 'totalV' && compCnpjSortDir === 'desc') sortSelect.value = 'total_desc';
+            else if (compCnpjSortCol === 'fatV' && compCnpjSortDir === 'desc') sortSelect.value = 'fat_desc';
+            else if (compCnpjSortCol === 'extV' && compCnpjSortDir === 'desc') sortSelect.value = 'ext_desc';
+            else if (compCnpjSortCol === 'pctFat' && compCnpjSortDir === 'desc') sortSelect.value = 'pct_fat_desc';
+            else if (compCnpjSortCol === 'pctExt' && compCnpjSortDir === 'desc') sortSelect.value = 'pct_ext_desc';
+        }
 
         // Atualizar classes e ícones dos cabeçalhos
         const cnpjCols = ['cnpj', 'fantasia', 'rede', 'fatV', 'fatQ', 'extV', 'extQ', 'totalV', 'pctFat'];
@@ -4080,127 +4405,37 @@
 
         let filtered = [...currentCompCnpjList];
 
-        // Filtro de busca de CNPJ e Nome
-        if (currentCompSearch) {
-            const qClean = cleanDigits(currentCompSearch);
-            const qText = currentCompSearch.trim().toLowerCase();
-            filtered = filtered.filter(row => {
-                if (qClean && row.cnpjClean && row.cnpjClean.includes(qClean)) return true;
-                if (row.fantasia && row.fantasia.toLowerCase().includes(qText)) return true;
-                if (row.razao && row.razao.toLowerCase().includes(qText)) return true;
-                if (row.cidade && row.cidade.toLowerCase().includes(qText)) return true;
-                if (row.rede && row.rede.toLowerCase().includes(qText)) return true;
-                return false;
-            });
-        }
-
-        // Ordenação dinâmica por cabeçalho
-        filtered.sort((a, b) => {
+        // Comparador de ordenação dinâmico
+        const compareItems = (a, b) => {
             let res = 0;
-            if (compCnpjSortCol === 'cnpj') {
-                res = (a.cnpjClean || '').localeCompare(b.cnpjClean || '');
-            } else if (compCnpjSortCol === 'fantasia') {
-                res = (a.fantasia || a.razao || '').localeCompare(b.fantasia || b.razao || '');
-            } else if (compCnpjSortCol === 'rede') {
-                res = (a.rede || a.cidade || '').localeCompare(b.rede || b.cidade || '');
-            } else if (['fatV', 'fatQ', 'extV', 'extQ', 'totalV', 'pctFat'].includes(compCnpjSortCol)) {
-                res = (b[compCnpjSortCol] || 0) - (a[compCnpjSortCol] || 0);
+            if (['cnpj', 'fantasia', 'rede'].includes(compCnpjSortCol)) {
+                let valA = (compCnpjSortCol === 'cnpj') ? (a.cnpjClean || '') : (compCnpjSortCol === 'fantasia' ? (a.fantasia || a.razao || '') : (a.rede || a.cidade || ''));
+                let valB = (compCnpjSortCol === 'cnpj') ? (b.cnpjClean || '') : (compCnpjSortCol === 'fantasia' ? (b.fantasia || b.razao || '') : (b.rede || b.cidade || ''));
+                res = valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base' });
+                return (compCnpjSortDir === 'desc') ? -res : res;
             } else {
-                res = (b.totalV || 0) - (a.totalV || 0);
+                let numA = a[compCnpjSortCol] !== undefined ? (a[compCnpjSortCol] || 0) : (a.totalV || 0);
+                let numB = b[compCnpjSortCol] !== undefined ? (b[compCnpjSortCol] || 0) : (b.totalV || 0);
+                res = numB - numA; // desc padrão
+                return (compCnpjSortDir === 'asc') ? -res : res;
             }
-            return (compCnpjSortDir === 'desc') ? res : -res;
-        });
+        };
+
+        filtered.sort(compareItems);
 
         if (filtered.length === 0) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
                         <i class='bx bx-search-alt' style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.5;"></i>
-                        Nenhum CNPJ ou loja encontrado com os critérios de busca selecionados.
+                        Nenhum CNPJ ou loja encontrado com os critérios selecionados.
                     </td>
                 </tr>
             `;
-    
+            const tfoot = document.getElementById('comp-tfoot-cnpj');
+            if (tfoot) tfoot.innerHTML = '';
+            return;
         }
-
-        let html = '';
-        filtered.forEach(row => {
-            const isExpanded = compExpandedCnpjs.has(row.key);
-            const clientTitle = row.fantasia || row.razao || 'Cliente sem nome';
-            const clientSub = (row.razao && row.fantasia && row.razao.toUpperCase() !== row.fantasia.toUpperCase()) ? row.razao : '';
-            const redeText = escapeHTML(row.rede || row.cidade || '-');
-
-            html += `
-                <tr class="comp-row" id="comp-row-${row.key}">
-                    <td class="font-mono text-accent" style="font-weight: 600; font-size: 0.78rem;">${escapeHTML(row.cnpjFormatted)}</td>
-                    <td>
-                        <div style="font-weight: 600; color: var(--text-primary);">${escapeHTML(clientTitle)}</div>
-                        ${clientSub ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">${escapeHTML(clientSub)}</div>` : ''}
-                    </td>
-                    <td style="font-size: 0.78rem; color: var(--text-secondary); font-weight: 500;">${redeText}</td>
-                    <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(row.fatV)}</td>
-                    <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.fatQ.toLocaleString('pt-BR')}</td>
-                    <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(row.extV)}</td>
-                    <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.extQ.toLocaleString('pt-BR')}</td>
-                    <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(row.totalV)}</td>
-                    <td>
-                        <div class="comp-progress-wrap">
-                            <div class="comp-progress-bar">
-                                <div class="comp-bar-fat" style="width: ${row.pctFat.toFixed(1)}%;" title="Faturado: ${row.pctFat.toFixed(1)}%"></div>
-                                <div class="comp-bar-ext" style="width: ${row.pctExt.toFixed(1)}%;" title="A Entregar: ${row.pctExt.toFixed(1)}%"></div>
-                            </div>
-                            <div class="comp-progress-labels">
-                                <span style="color: #34d399;">${row.pctFat.toFixed(0)}% Fat</span>
-                                <span style="color: #60a5fa;">${row.pctExt.toFixed(0)}% Entr</span>
-                            </div>
-                        </div>
-                    </td>
-                    <td style="text-align: center;">
-                        <button type="button" class="btn-comp-detail" onclick="toggleCompDetail('${row.key}')" title="Ver entregas e notas fiscais">
-                            <i class='bx ${isExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}'></i> ${isExpanded ? 'Ocultar' : 'Detalhar'}
-                        </button>
-                    </td>
-                </tr>
-            `;
-
-            if (isExpanded) {
-                html += `
-                    <tr class="comp-detail-row" id="comp-detail-${row.key}">
-                        <td colspan="10" style="padding: 0.75rem 1rem; background: rgba(15, 23, 42, 0.45);">
-                            <div class="comp-detail-box">
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                                    <!-- Coluna 1: Pedidos a Entregar -->
-                                    <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; padding: 0.75rem;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                            <span style="font-weight: 600; color: #3b82f6; font-size: 0.8rem;">
-                                                <i class='bx bx-package'></i> Pedidos em Carteira (${row.extItemsList.length} itens)
-                                            </span>
-                                            <span style="font-size: 0.75rem; color: #60a5fa;" class="font-mono">${formatBRL(row.extV)} | ${row.extQ.toLocaleString('pt-BR')} pçs</span>
-                                        </div>
-                                        <div style="max-height: 180px; overflow-y: auto;" class="custom-scrollbar">
-                                            ${renderDetailItemsTable(row.extItemsList, 'Data Entrega', 'Pedido')}
-                                        </div>
-                                    </div>
-
-                                    <!-- Coluna 2: Notas Faturadas -->
-                                    <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; padding: 0.75rem;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                            <span style="font-weight: 600; color: #10b981; font-size: 0.8rem;">
-                                                <i class='bx bx-receipt'></i> Notas Faturadas (${row.fatItemsList.length} itens)
-                                            </span>
-                                            <span style="font-size: 0.75rem; color: #34d399;" class="font-mono">${formatBRL(row.fatV)} | ${row.fatQ.toLocaleString('pt-BR')} pçs</span>
-                                        </div>
-                                        <div style="max-height: 180px; overflow-y: auto;" class="custom-scrollbar">
-                                            ${renderDetailItemsTable(row.fatItemsList, 'Data Emissão', 'NF')}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }
-        });
 
         // Linha de Total Consolidado das lojas filtradas
         let sumFatV = 0, sumFatQ = 0, sumExtV = 0, sumExtQ = 0, sumTotalV = 0;
@@ -4214,38 +4449,259 @@
         const sumPctFat = sumTotalV > 0 ? (sumFatV / sumTotalV * 100) : 0;
         const sumPctExt = sumTotalV > 0 ? (sumExtV / sumTotalV * 100) : 0;
 
-        tbody.innerHTML = html;
+        // Sincronizar o botao do cabecalho do card (Recolher / Expandir)
+        const cardToggleIcon = document.getElementById('icon-toggle-comp-card');
+        const cardToggleLabel = document.getElementById('label-toggle-comp-card');
+        if (cardToggleIcon) cardToggleIcon.className = compMasterSummaryExpanded ? 'bx bx-chevron-up' : 'bx bx-chevron-down';
+        if (cardToggleLabel) cardToggleLabel.textContent = compMasterSummaryExpanded ? 'Recolher' : 'Expandir';
 
-        const tfoot = document.getElementById('comp-tfoot-cnpj');
-        if (tfoot) {
-            tfoot.innerHTML = `
-                <tr style="background: #0f172a; font-weight: 700; border-top: 2px solid rgba(255,255,255,0.2); position: sticky; bottom: 0; z-index: 3;">
-                    <td style="color: var(--accent-color, #3b82f6); text-transform: uppercase; font-size: 0.72rem; white-space: nowrap;">TOTAL (${filtered.length} ${filtered.length === 1 ? 'loja' : 'lojas'})</td>
-                    <td style="color: var(--text-secondary); font-size: 0.72rem; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Consolidado das lojas</td>
-                    <td style="color: var(--text-secondary); font-size: 0.72rem;">-</td>
-                    <td style="text-align: right; color: #34d399; font-size: 0.75rem; white-space: nowrap;" class="font-mono">${formatBRL(sumFatV)}</td>
-                    <td style="text-align: right; color: #94a3b8; font-size: 0.74rem; white-space: nowrap;" class="font-mono">${sumFatQ.toLocaleString('pt-BR')}</td>
-                    <td style="text-align: right; color: #60a5fa; font-size: 0.75rem; white-space: nowrap;" class="font-mono">${formatBRL(sumExtV)}</td>
-                    <td style="text-align: right; color: #94a3b8; font-size: 0.74rem; white-space: nowrap;" class="font-mono">${sumExtQ.toLocaleString('pt-BR')}</td>
-                    <td style="text-align: right; font-weight: 700; color: #fbbf24; font-size: 0.78rem; white-space: nowrap;" class="font-mono">${formatBRL(sumTotalV)}</td>
-                    <td>
-                        <div class="comp-progress-wrap">
-                            <div class="comp-progress-bar">
-                                <div class="comp-bar-fat" style="width: ${sumPctFat.toFixed(1)}%;"></div>
-                                <div class="comp-bar-ext" style="width: ${sumPctExt.toFixed(1)}%;"></div>
-                            </div>
-                            <div class="comp-progress-labels">
-                                <span style="color: #34d399;">${sumPctFat.toFixed(0)}% Fat</span>
-                                <span style="color: #60a5fa;">${sumPctExt.toFixed(0)}% Entr</span>
-                            </div>
+        // Ocultar barra de controles e cabecalho da tabela quando recolhido
+        const controlsBar = document.getElementById('comp-controls-bar');
+        if (controlsBar) controlsBar.style.display = compMasterSummaryExpanded ? 'flex' : 'none';
+
+        const tableThead = document.querySelector('#comp-table-cnpj thead');
+        if (tableThead) tableThead.style.display = ''; // Cabecalho thead sempre visivel
+
+        const masterSummaryRowHtml = `
+            <tr class="comp-row comp-master-summary-row" onclick="toggleCompMasterSummary()" style="cursor: pointer; background: rgba(59, 130, 246, 0.12); border-bottom: 2px solid rgba(59, 130, 246, 0.3);">
+                <td class="font-mono" style="font-weight: 800; font-size: 0.80rem; white-space: nowrap; color: #fbbf24;">
+                    <i class='bx ${compMasterSummaryExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}' style="font-size: 1.15rem; margin-right: 4px; vertical-align: middle; color: #fbbf24;"></i>
+                    <i class='bx bx-calculator' style="color: #fbbf24; margin-right: 2px;"></i> TOTAL
+                </td>
+                <td>
+                    <div style="font-weight: 700; color: #fbbf24; font-size: 0.78rem;">${filtered.length} ${filtered.length === 1 ? 'Loja' : 'Lojas'} Consolidadas</div>
+                    <div style="font-size: 0.70rem; color: var(--text-secondary);">${compMasterSummaryExpanded ? 'Clique para recolher resumo' : 'Clique para expandir detalhamento por loja'}</div>
+                </td>
+                <td style="font-size: 0.76rem; font-weight: 600;">
+                    <span class="badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24; padding: 2px 7px; border-radius: 4px;">TOTAL</span>
+                </td>
+                <td style="text-align: right; font-weight: 700; color: #34d399; font-size: 0.78rem;" class="font-mono">${formatBRL(sumFatV)}</td>
+                <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${sumFatQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; font-weight: 700; color: #60a5fa; font-size: 0.78rem;" class="font-mono">${formatBRL(sumExtV)}</td>
+                <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${sumExtQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; font-weight: 700; color: #fbbf24; font-size: 0.78rem;" class="font-mono">${formatBRL(sumTotalV)}</td>
+                <td>
+                    <div class="comp-progress-wrap">
+                        <div class="comp-progress-bar">
+                            <div class="comp-bar-fat" style="width: ${sumPctFat.toFixed(1)}%;"></div>
+                            <div class="comp-bar-ext" style="width: ${sumPctExt.toFixed(1)}%;"></div>
                         </div>
-                    </td>
-                    <td style="text-align: center; color: var(--text-secondary); font-size: 0.70rem;">-</td>
-                </tr>
-            `;
+                        <div class="comp-progress-labels" style="font-size: 0.72rem;">
+                            <span style="color: #34d399; font-weight: 700;">${sumPctFat.toFixed(0)}%</span>
+                            <span style="color: #60a5fa; font-weight: 700;">${sumPctExt.toFixed(0)}%</span>
+                        </div>
+                    </div>
+                </td>
+                <td style="text-align: center;" onclick="event.stopPropagation()">
+                    <button type="button" class="btn-comp-detail btn-icon-only" onclick="toggleCompMasterSummary()" title="${compMasterSummaryExpanded ? 'Recolher resumo' : 'Expandir lojas'}">
+                        <i class='bx ${compMasterSummaryExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}'></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        const tfoot = document.getElementById('comp-tfoot-cnpj');
+        if (tfoot) tfoot.innerHTML = '';
+        if (!compMasterSummaryExpanded) {
+            tbody.innerHTML = masterSummaryRowHtml;
+            return;
         }
-    }
 
+        let html = masterSummaryRowHtml;
+
+        if (compCnpjGroupByGroup) {
+            // Agrupamento por Grupo / Rede
+            const groupMap = new Map();
+            filtered.forEach(row => {
+                const gName = (row.rede || row.grupo || row.fantasia || 'Sem Grupo').trim() || 'Sem Grupo';
+                if (!groupMap.has(gName)) {
+                    groupMap.set(gName, {
+                        groupName: gName,
+                        rede: row.rede || row.grupo || gName,
+                        stores: [],
+                        fatV: 0,
+                        fatQ: 0,
+                        extV: 0,
+                        extQ: 0,
+                        totalV: 0,
+                        totalQ: 0
+                    });
+                }
+                const gObj = groupMap.get(gName);
+                if (!gObj.rede && (row.rede || row.grupo)) {
+                    gObj.rede = row.rede || row.grupo;
+                }
+                gObj.stores.push(row);
+                gObj.fatV += (row.fatV || 0);
+                gObj.fatQ += (row.fatQ || 0);
+                gObj.extV += (row.extV || 0);
+                gObj.extQ += (row.extQ || 0);
+                gObj.totalV += (row.totalV || 0);
+                gObj.totalQ += (row.totalQ || 0);
+            });
+
+            const groupsList = Array.from(groupMap.values()).map(g => {
+                const pctFat = g.totalV > 0 ? (g.fatV / g.totalV * 100) : 0;
+                const pctExt = g.totalV > 0 ? (g.extV / g.totalV * 100) : 0;
+                return { ...g, pctFat, pctExt };
+            });
+
+            // Ordenar os grupos pelo mesmo critério
+            groupsList.sort((a, b) => {
+                if (['cnpj', 'fantasia', 'rede'].includes(compCnpjSortCol)) {
+                    let res = a.groupName.localeCompare(b.groupName, 'pt-BR', { sensitivity: 'base' });
+                    return (compCnpjSortDir === 'desc') ? -res : res;
+                } else {
+                    let numA = a[compCnpjSortCol] !== undefined ? (a[compCnpjSortCol] || 0) : (a.totalV || 0);
+                    let numB = b[compCnpjSortCol] !== undefined ? (b[compCnpjSortCol] || 0) : (b.totalV || 0);
+                    let res = numB - numA;
+                    return (compCnpjSortDir === 'asc') ? -res : res;
+                }
+            });
+
+            groupsList.forEach(grp => {
+                const isGroupExpanded = compExpandedGroups.has(grp.groupName);
+                const countStores = grp.stores.length;
+
+                html += `
+                    <tr class="comp-row comp-group-row" onclick="toggleCompGroup('${escapeHTML(grp.groupName)}')">
+                        <td class="font-mono text-accent" style="font-weight: 700; font-size: 0.8rem; white-space: nowrap;">
+                            <i class='bx ${isGroupExpanded ? 'bx-chevron-down' : 'bx-chevron-right'}' style="font-size: 1rem; margin-right: 4px; vertical-align: middle; color: #60a5fa;"></i>
+                            <span style="color: #60a5fa;">${escapeHTML(grp.groupName)}</span>
+                        </td>
+                        <td>
+                            <div style="font-weight: 700; color: var(--text-primary); font-size: 0.82rem;">${escapeHTML(grp.groupName)}</div>
+                            <div style="font-size: 0.72rem; color: var(--text-secondary);">${countStores} ${countStores === 1 ? 'loja vinculada' : 'lojas vinculadas'}</div>
+                        </td>
+                        <td style="font-size: 0.76rem; font-weight: 600; color: #cbd5e1;">
+                            <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #a5b4fc; padding: 2px 7px; border-radius: 4px;">${escapeHTML(grp.rede || grp.groupName)}</span>
+                        </td>
+                        <td style="text-align: right; font-weight: 700; color: #34d399;" class="font-mono">${formatBRL(grp.fatV)}</td>
+                        <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${grp.fatQ.toLocaleString('pt-BR')}</td>
+                        <td style="text-align: right; font-weight: 700; color: #60a5fa;" class="font-mono">${formatBRL(grp.extV)}</td>
+                        <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${grp.extQ.toLocaleString('pt-BR')}</td>
+                        <td style="text-align: right; font-weight: 800; color: #fbbf24;" class="font-mono">${formatBRL(grp.totalV)}</td>
+                        <td>
+                            <div class="comp-progress-wrap">
+                                <div class="comp-progress-bar">
+                                    <div class="comp-bar-fat" style="width: ${grp.pctFat.toFixed(1)}%;" title="Faturado: ${grp.pctFat.toFixed(1)}%"></div>
+                                    <div class="comp-bar-ext" style="width: ${grp.pctExt.toFixed(1)}%;" title="A Entregar: ${grp.pctExt.toFixed(1)}%"></div>
+                                </div>
+                                <div class="comp-progress-labels">
+                                    <span style="color: #34d399;">${grp.pctFat.toFixed(0)}%</span>
+                                    <span style="color: #60a5fa;">${grp.pctExt.toFixed(0)}%</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="text-align: center;" onclick="event.stopPropagation()">
+                            <button type="button" class="btn-comp-detail btn-icon-only" onclick="toggleCompGroup('${escapeHTML(grp.groupName)}')" title="${isGroupExpanded ? 'Recolher lojas' : 'Expandir lojas'}">
+                                <i class='bx ${isGroupExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}'></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+
+                if (isGroupExpanded) {
+                    grp.stores.forEach(row => {
+                        const isExpanded = compExpandedCnpjs.has(row.key);
+                        const clientTitle = row.fantasia || row.razao || 'Loja sem nome';
+                        const clientSub = (row.razao && row.fantasia && row.razao.toUpperCase() !== row.fantasia.toUpperCase()) ? row.razao : '';
+
+                        html += `
+                            <tr class="comp-row comp-store-subrow" id="comp-row-${row.key}">
+                                <td class="font-mono text-accent" style="font-weight: 500; font-size: 0.76rem; padding-left: 1.25rem; white-space: nowrap;">
+                                    <i class='bx bx-subdirectory-right' style="color: rgba(255,255,255,0.4); margin-right: 4px;"></i>${escapeHTML(row.cnpjFormatted)}
+                                </td>
+                                <td>
+                                    <div style="font-weight: 600; color: var(--text-primary); font-size: 0.8rem;">${escapeHTML(clientTitle)}</div>
+                                    ${clientSub ? `<div style="font-size: 0.70rem; color: var(--text-secondary);">${escapeHTML(clientSub)}</div>` : ''}
+                                </td>
+                                <td style="font-size: 0.74rem;">
+                                    <div style="font-weight: 500; color: #cbd5e1;">${escapeHTML(row.rede || grp.rede || grp.groupName || '-')}</div>
+                                    ${row.cidade ? `<div style="font-size: 0.70rem; color: var(--text-secondary);">${escapeHTML(row.cidade)}</div>` : ''}
+                                </td>
+                                <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(row.fatV)}</td>
+                                <td style="text-align: right; font-size: 0.74rem; color: #94a3b8;" class="font-mono">${row.fatQ.toLocaleString('pt-BR')}</td>
+                                <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(row.extV)}</td>
+                                <td style="text-align: right; font-size: 0.74rem; color: #94a3b8;" class="font-mono">${row.extQ.toLocaleString('pt-BR')}</td>
+                                <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(row.totalV)}</td>
+                                <td>
+                                    <div class="comp-progress-wrap">
+                                        <div class="comp-progress-bar">
+                                            <div class="comp-bar-fat" style="width: ${row.pctFat.toFixed(1)}%;"></div>
+                                            <div class="comp-bar-ext" style="width: ${row.pctExt.toFixed(1)}%;"></div>
+                                        </div>
+                                        <div class="comp-progress-labels">
+                                            <span style="color: #34d399;">${row.pctFat.toFixed(0)}%</span>
+                                            <span style="color: #60a5fa;">${row.pctExt.toFixed(0)}%</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style="text-align: center;">
+                                    <button type="button" class="btn-comp-detail btn-icon-only" onclick="toggleCompDetail('${row.key}')" title="Ver pedidos em carteira e notas fiscais">
+                                        <i class='bx ${isExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}'></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+
+                        if (isExpanded) {
+                            html += renderCompDetailBoxHtml(row);
+                        }
+                    });
+                }
+            });
+        } else {
+            // Modo plano (todas as lojas em lista corrida)
+            filtered.forEach(row => {
+                const isExpanded = compExpandedCnpjs.has(row.key);
+                const clientTitle = row.fantasia || row.razao || 'Cliente sem nome';
+                const clientSub = (row.razao && row.fantasia && row.razao.toUpperCase() !== row.fantasia.toUpperCase()) ? row.razao : '';
+                const redeText = escapeHTML(row.rede || row.cidade || '-');
+
+                html += `
+                    <tr class="comp-row" id="comp-row-${row.key}">
+                        <td class="font-mono text-accent" style="font-weight: 600; font-size: 0.78rem; white-space: nowrap;">${escapeHTML(row.cnpjFormatted)}</td>
+                        <td>
+                            <div style="font-weight: 600; color: var(--text-primary);">${escapeHTML(clientTitle)}</div>
+                            ${clientSub ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">${escapeHTML(clientSub)}</div>` : ''}
+                        </td>
+                        <td style="font-size: 0.76rem;">
+                            <div style="font-weight: 500; color: #cbd5e1;">${escapeHTML(row.rede || '-')}</div>
+                            ${row.cidade ? `<div style="font-size: 0.70rem; color: var(--text-secondary);">${escapeHTML(row.cidade)}</div>` : ''}
+                        </td>
+                        <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(row.fatV)}</td>
+                        <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.fatQ.toLocaleString('pt-BR')}</td>
+                        <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(row.extV)}</td>
+                        <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.extQ.toLocaleString('pt-BR')}</td>
+                        <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(row.totalV)}</td>
+                        <td>
+                            <div class="comp-progress-wrap">
+                                <div class="comp-progress-bar">
+                                    <div class="comp-bar-fat" style="width: ${row.pctFat.toFixed(1)}%;"></div>
+                                    <div class="comp-bar-ext" style="width: ${row.pctExt.toFixed(1)}%;"></div>
+                                </div>
+                                <div class="comp-progress-labels">
+                                    <span style="color: #34d399;">${row.pctFat.toFixed(0)}%</span>
+                                    <span style="color: #60a5fa;">${row.pctExt.toFixed(0)}%</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="text-align: center;">
+                            <button type="button" class="btn-comp-detail btn-icon-only" onclick="toggleCompDetail('${row.key}')" title="Ver pedidos em carteira e notas fiscais">
+                                <i class='bx ${isExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}'></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+
+                if (isExpanded) {
+                    html += renderCompDetailBoxHtml(row);
+                }
+            });
+        }
+
+        tbody.innerHTML = html;
+    }
     function renderDetailItemsTable(items, dateHeader, docHeader) {
         if (!items || items.length === 0) {
             return `<div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; padding: 1rem;">Nenhum registro para este cliente.</div>`;
@@ -4368,36 +4824,47 @@
         const totalPctFat = totGrandV > 0 ? (totFatV / totGrandV * 100) : 0;
         const totalPctExt = totGrandV > 0 ? (totExtV / totGrandV * 100) : 0;
 
-        tbody.innerHTML = html;
+        const tableThead = document.querySelector('#comp-table-month thead');
+        if (tableThead) tableThead.style.display = '';
+
+        const monthMasterSummaryRowHtml = `
+            <tr class="comp-row comp-master-summary-row" onclick="toggleCompMasterSummary()" style="cursor: pointer; background: rgba(59, 130, 246, 0.12); border-bottom: 2px solid rgba(59, 130, 246, 0.3);">
+                <td class="font-mono" style="font-weight: 800; font-size: 0.80rem; white-space: nowrap; color: #fbbf24;">
+                    <i class='bx ${compMasterSummaryExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}' style="font-size: 1.15rem; margin-right: 4px; vertical-align: middle; color: #fbbf24;"></i>
+                    <i class='bx bx-calculator' style="color: #fbbf24; margin-right: 2px;"></i> TOTAL
+                </td>
+                <td style="text-align: right; font-weight: 700; color: #34d399; font-size: 0.78rem;" class="font-mono">${formatBRL(totFatV)}</td>
+                <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${totFatQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; font-weight: 700; color: #60a5fa; font-size: 0.78rem;" class="font-mono">${formatBRL(totExtV)}</td>
+                <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${totExtQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; font-weight: 700; color: #fbbf24; font-size: 0.78rem;" class="font-mono">${formatBRL(totGrandV)}</td>
+                <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${totGrandQ.toLocaleString('pt-BR')}</td>
+                <td>
+                    <div class="comp-progress-wrap">
+                        <div class="comp-progress-bar">
+                            <div class="comp-bar-fat" style="width: ${totalPctFat.toFixed(1)}%;"></div>
+                            <div class="comp-bar-ext" style="width: ${totalPctExt.toFixed(1)}%;"></div>
+                        </div>
+                        <div class="comp-progress-labels" style="font-size: 0.72rem;">
+                            <span style="color: #34d399; font-weight: 700;">${totalPctFat.toFixed(0)}%</span>
+                            <span style="color: #60a5fa; font-weight: 700;">${totalPctExt.toFixed(0)}%</span>
+                        </div>
+                    </div>
+                </td>
+                <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">-</td>
+                <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">-</td>
+            </tr>
+        `;
 
         const tfoot = document.getElementById('comp-tfoot-month');
-        if (tfoot) {
-            tfoot.innerHTML = `
-                <tr style="background: #0f172a; font-weight: 700; border-top: 2px solid rgba(255,255,255,0.2); position: sticky; bottom: 0; z-index: 3;">
-                    <td style="color: var(--accent-color, #3b82f6); text-transform: uppercase; font-size: 0.72rem; white-space: nowrap;">Total Consolidado</td>
-                    <td style="text-align: right; color: #34d399; font-size: 0.75rem; white-space: nowrap;" class="font-mono">${formatBRL(totFatV)}</td>
-                    <td style="text-align: right; color: #94a3b8; font-size: 0.74rem; white-space: nowrap;" class="font-mono">${totFatQ.toLocaleString('pt-BR')}</td>
-                    <td style="text-align: right; color: #60a5fa; font-size: 0.75rem; white-space: nowrap;" class="font-mono">${formatBRL(totExtV)}</td>
-                    <td style="text-align: right; color: #94a3b8; font-size: 0.74rem; white-space: nowrap;" class="font-mono">${totExtQ.toLocaleString('pt-BR')}</td>
-                    <td style="text-align: right; color: #fbbf24; font-size: 0.78rem; white-space: nowrap;" class="font-mono">${formatBRL(totGrandV)}</td>
-                    <td style="text-align: right; color: #ffffff; font-size: 0.74rem; white-space: nowrap;" class="font-mono">${totGrandQ.toLocaleString('pt-BR')}</td>
-                    <td>
-                        <div class="comp-progress-wrap">
-                            <div class="comp-progress-bar">
-                                <div class="comp-bar-fat" style="width: ${totalPctFat.toFixed(1)}%;"></div>
-                                <div class="comp-bar-ext" style="width: ${totalPctExt.toFixed(1)}%;"></div>
-                            </div>
-                            <div class="comp-progress-labels">
-                                <span style="color: #34d399;">${totalPctFat.toFixed(0)}%</span>
-                                <span style="color: #60a5fa;">${totalPctExt.toFixed(0)}%</span>
-                            </div>
-                        </div>
-                    </td>
-                    <td style="text-align: right; font-size: 0.74rem;" class="font-mono">-</td>
-                    <td style="text-align: right; font-size: 0.74rem;" class="font-mono">-</td>
-                </tr>
-            `;
+        if (tfoot) tfoot.innerHTML = '';
+
+        if (!compMasterSummaryExpanded) {
+            tbody.innerHTML = monthMasterSummaryRowHtml;
+            return;
         }
+
+        tbody.innerHTML = monthMasterSummaryRowHtml + html;
     }
 
     // Ordenação e Agrupamento da Tabela por Data
@@ -4480,7 +4947,47 @@
             tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2.5rem; color: var(--text-secondary);"><i class='bx bx-calendar-x' style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Nenhum lançamento no período selecionado.</td></tr>`;
             const summaryBadge = document.getElementById('comp-date-summary-badge');
             if (summaryBadge) summaryBadge.innerHTML = '0 meses &bull; 0 datas';
-    
+            return;
+        }
+
+        let sumDateFatV = 0, sumDateFatQ = 0, sumDateExtV = 0, sumDateExtQ = 0, sumDateTotalV = 0;
+        currentCompDateList.forEach(d => {
+            sumDateFatV += d.fatV || 0;
+            sumDateFatQ += d.fatQ || 0;
+            sumDateExtV += d.extV || 0;
+            sumDateExtQ += d.extQ || 0;
+            sumDateTotalV += d.totalV || 0;
+        });
+
+        const tableThead = document.querySelector('#comp-table-date thead');
+        if (tableThead) tableThead.style.display = '';
+
+        const dateToolbar = document.querySelector('.comp-date-toolbar');
+        if (dateToolbar) dateToolbar.style.display = compMasterSummaryExpanded ? 'flex' : 'none';
+
+        const dateMasterSummaryRowHtml = `
+            <tr class="comp-row comp-master-summary-row" onclick="toggleCompMasterSummary()" style="cursor: pointer; background: rgba(59, 130, 246, 0.12); border-bottom: 2px solid rgba(59, 130, 246, 0.3);">
+                <td class="font-mono" style="font-weight: 800; font-size: 0.80rem; white-space: nowrap; color: #fbbf24;">
+                    <i class='bx ${compMasterSummaryExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}' style="font-size: 1.15rem; margin-right: 4px; vertical-align: middle; color: #fbbf24;"></i>
+                    <i class='bx bx-calculator' style="color: #fbbf24; margin-right: 2px;"></i> TOTAL
+                </td>
+                <td style="font-size: 0.76rem; color: #cbd5e1; font-weight: 600;">
+                    ${currentCompDateList.length} ${currentCompDateList.length === 1 ? 'Data' : 'Datas'}
+                </td>
+                <td style="text-align: right; font-weight: 700; color: #34d399; font-size: 0.78rem;" class="font-mono">${formatBRL(sumDateFatV)}</td>
+                <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${sumDateFatQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; font-weight: 700; color: #60a5fa; font-size: 0.78rem;" class="font-mono">${formatBRL(sumDateExtV)}</td>
+                <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${sumDateExtQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; font-weight: 700; color: #fbbf24; font-size: 0.78rem;" class="font-mono">${formatBRL(sumDateTotalV)}</td>
+                <td style="text-align: center;">
+                    <span class="badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24; padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">TOTAL</span>
+                </td>
+            </tr>
+        `;
+
+        if (!compMasterSummaryExpanded) {
+            tbody.innerHTML = dateMasterSummaryRowHtml;
+            return;
         }
 
         // 1. Agrupar os itens por mês
@@ -4675,32 +5182,7 @@
             });
         }
 
-        // Linha de Total Consolidado da tabela de datas
-        let sumDateFatV = 0, sumDateFatQ = 0, sumDateExtV = 0, sumDateExtQ = 0, sumDateTotalV = 0;
-        currentCompDateList.forEach(d => {
-            sumDateFatV += d.fatV || 0;
-            sumDateFatQ += d.fatQ || 0;
-            sumDateExtV += d.extV || 0;
-            sumDateExtQ += d.extQ || 0;
-            sumDateTotalV += d.totalV || 0;
-        });
-
-        html += `
-            <tr style="background: rgba(30, 41, 59, 0.95); font-weight: 700; border-top: 2px solid rgba(255,255,255,0.18); position: sticky; bottom: 0; z-index: 2;">
-                <td style="color: var(--accent-color, #3b82f6); text-transform: uppercase;">TOTAL CONSOLIDADO (${currentCompDateList.length} ${currentCompDateList.length === 1 ? 'data' : 'datas'})</td>
-                <td style="color: var(--text-secondary); font-size: 0.78rem;">${monthGroups.length} ${monthGroups.length === 1 ? 'mês' : 'meses'}</td>
-                <td style="text-align: right; color: #34d399;" class="font-mono">${formatBRL(sumDateFatV)}</td>
-                <td style="text-align: right; color: #94a3b8;" class="font-mono">${sumDateFatQ.toLocaleString('pt-BR')}</td>
-                <td style="text-align: right; color: #60a5fa;" class="font-mono">${formatBRL(sumDateExtV)}</td>
-                <td style="text-align: right; color: #94a3b8;" class="font-mono">${sumDateExtQ.toLocaleString('pt-BR')}</td>
-                <td style="text-align: right; font-weight: 800; color: #fbbf24; font-size: 0.88rem;" class="font-mono">${formatBRL(sumDateTotalV)}</td>
-                <td style="text-align: center;">
-                    <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fcd34d; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">Geral Consolidado</span>
-                </td>
-            </tr>
-        `;
-
-        tbody.innerHTML = html;
+        tbody.innerHTML = dateMasterSummaryRowHtml + html;
     }
 
     window.switchComparisonSubTab = function(tabName) {
@@ -4725,7 +5207,11 @@
         if (tabMonth) tabMonth.style.display = (tabName === 'month') ? 'block' : 'none';
         if (tabDate) tabDate.style.display = (tabName === 'date') ? 'block' : 'none';
         if (tabProduct) tabProduct.style.display = (tabName === 'product') ? 'block' : 'none';
-        if (controlsBar) controlsBar.style.display = (tabName === 'cnpj') ? 'flex' : 'none';
+        if (controlsBar) controlsBar.style.display = (tabName === 'cnpj' && compMasterSummaryExpanded) ? 'flex' : 'none';
+        const dateToolbar = document.querySelector('.comp-date-toolbar');
+        if (dateToolbar) dateToolbar.style.display = (tabName === 'date' && compMasterSummaryExpanded) ? 'flex' : 'none';
+        const prodToolbar = document.querySelector('.comp-product-toolbar');
+        if (prodToolbar) prodToolbar.style.display = (tabName === 'product' && compMasterSummaryExpanded) ? 'flex' : 'none';
     };
 
     window.onComparisonSearchInput = function(val) {
@@ -4735,6 +5221,22 @@
 
     window.onComparisonSortChange = function(sortVal) {
         currentCompSort = sortVal || 'total_desc';
+        if (sortVal === 'total_desc') {
+            compCnpjSortCol = 'totalV';
+            compCnpjSortDir = 'desc';
+        } else if (sortVal === 'fat_desc') {
+            compCnpjSortCol = 'fatV';
+            compCnpjSortDir = 'desc';
+        } else if (sortVal === 'ext_desc') {
+            compCnpjSortCol = 'extV';
+            compCnpjSortDir = 'desc';
+        } else if (sortVal === 'pct_fat_desc') {
+            compCnpjSortCol = 'pctFat';
+            compCnpjSortDir = 'desc';
+        } else if (sortVal === 'pct_ext_desc') {
+            compCnpjSortCol = 'pctExt';
+            compCnpjSortDir = 'desc';
+        }
         renderCompCnpjTable();
     };
 
@@ -4992,40 +5494,53 @@
                 </tr>
             `;
         });
-        tbody.innerHTML = rowsHtml;
+        const tableThead = document.querySelector('#comp-table-product thead');
+        if (tableThead) tableThead.style.display = '';
 
-        if (tfoot) {
-            const overallPctFat = sumTotalV > 0 ? (sumFatV / sumTotalV * 100) : 0;
-            const overallPctExt = sumTotalV > 0 ? (sumExtV / sumTotalV * 100) : 0;
-            tfoot.innerHTML = `
-                <tr>
-                    <td colspan="4" style="text-align: left; font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.5px;">
-                        <i class='bx bx-calculator' style="color: #fbbf24; margin-right: 4px;"></i> TOTAL CONSOLIDADO (${filtered.length} PRODUTOS)
-                    </td>
-                    <td style="text-align: right; color: #34d399; font-size: 0.85rem;" class="font-mono">${formatBRL(sumFatV)}</td>
-                    <td style="text-align: right; color: #94a3b8;" class="font-mono">${sumFatQ.toLocaleString('pt-BR')}</td>
-                    <td style="text-align: right; color: #60a5fa; font-size: 0.85rem;" class="font-mono">${formatBRL(sumExtV)}</td>
-                    <td style="text-align: right; color: #94a3b8;" class="font-mono">${sumExtQ.toLocaleString('pt-BR')}</td>
-                    <td style="text-align: right; font-weight: 800; color: #fbbf24; font-size: 0.9rem;" class="font-mono">${formatBRL(sumTotalV)}</td>
-                    <td style="text-align: right; font-weight: 700; color: #f8fafc;" class="font-mono">${sumTotalQ.toLocaleString('pt-BR')}</td>
-                    <td>
-                        <div class="comp-progress-wrap">
-                            <div class="comp-progress-bar">
-                                <div class="comp-bar-fat" style="width: ${overallPctFat.toFixed(1)}%;"></div>
-                                <div class="comp-bar-ext" style="width: ${overallPctExt.toFixed(1)}%;"></div>
-                            </div>
-                            <div class="comp-progress-labels">
-                                <span style="color: #34d399;">${overallPctFat.toFixed(0)}% Fat</span>
-                                <span style="color: #60a5fa;">${overallPctExt.toFixed(0)}% Entr</span>
-                            </div>
+        const productToolbar = document.querySelector('.comp-product-toolbar');
+        if (productToolbar) productToolbar.style.display = compMasterSummaryExpanded ? 'flex' : 'none';
+
+        const overallPctFat = sumTotalV > 0 ? (sumFatV / sumTotalV * 100) : 0;
+        const overallPctExt = sumTotalV > 0 ? (sumExtV / sumTotalV * 100) : 0;
+
+        const prodMasterSummaryRowHtml = `
+            <tr class="comp-row comp-master-summary-row" onclick="toggleCompMasterSummary()" style="cursor: pointer; background: rgba(59, 130, 246, 0.12); border-bottom: 2px solid rgba(59, 130, 246, 0.3);">
+                <td colspan="4" style="font-weight: 800; font-size: 0.80rem; white-space: nowrap; color: #fbbf24;">
+                    <i class='bx ${compMasterSummaryExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}' style="font-size: 1.15rem; margin-right: 4px; vertical-align: middle; color: #fbbf24;"></i>
+                    <i class='bx bx-calculator' style="color: #fbbf24; margin-right: 2px;"></i> TOTAL (${filtered.length} ${filtered.length === 1 ? 'PRODUTO' : 'PRODUTOS'})
+                </td>
+                <td style="text-align: right; font-weight: 700; color: #34d399; font-size: 0.78rem;" class="font-mono">${formatBRL(sumFatV)}</td>
+                <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${sumFatQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; font-weight: 700; color: #60a5fa; font-size: 0.78rem;" class="font-mono">${formatBRL(sumExtV)}</td>
+                <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${sumExtQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; font-weight: 700; color: #fbbf24; font-size: 0.78rem;" class="font-mono">${formatBRL(sumTotalV)}</td>
+                <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${sumTotalQ.toLocaleString('pt-BR')}</td>
+                <td>
+                    <div class="comp-progress-wrap">
+                        <div class="comp-progress-bar">
+                            <div class="comp-bar-fat" style="width: ${overallPctFat.toFixed(1)}%;"></div>
+                            <div class="comp-bar-ext" style="width: ${overallPctExt.toFixed(1)}%;"></div>
                         </div>
-                    </td>
-                    <td style="text-align: center;">
-                        <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fcd34d; font-size: 0.72rem; padding: 3px 8px; border-radius: 4px;">Consolidado</span>
-                    </td>
-                </tr>
-            `;
+                        <div class="comp-progress-labels" style="font-size: 0.72rem;">
+                            <span style="color: #34d399; font-weight: 700;">${overallPctFat.toFixed(0)}%</span>
+                            <span style="color: #60a5fa; font-weight: 700;">${overallPctExt.toFixed(0)}%</span>
+                        </div>
+                    </div>
+                </td>
+                <td style="text-align: center;">
+                    <span class="badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24; padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">TOTAL</span>
+                </td>
+            </tr>
+        `;
+
+        if (tfoot) tfoot.innerHTML = '';
+
+        if (!compMasterSummaryExpanded) {
+            tbody.innerHTML = prodMasterSummaryRowHtml;
+            return;
         }
+
+        tbody.innerHTML = prodMasterSummaryRowHtml + rowsHtml;
     }
 
     function updateCompProductKpis(productList) {

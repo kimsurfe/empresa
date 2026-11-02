@@ -3844,17 +3844,38 @@ window.getClientBrandStatus = function(client, brand) {
         }
     }
 
-    // 3. Faturamento ativo
+    // 3. Se o cliente em si está INATIVO ou LOJA FECHADA:
+    // Conforme regra de negócio, lojas inativas/fechadas não mantêm marcas ativas (verde).
+    // Se tem código (números) na marca -> INATIVO (vermelho). Se não tem código -> SEM_CADASTRO.
+    const isClientInactive = (function() {
+        const af = client['CLIENTE ATIVO?'];
+        if (af) {
+            const saf = String(af).trim().toUpperCase();
+            if (saf === 'NAO' || saf === 'NÃO' || saf === '0' || saf === 'INATIVO' || saf.includes('FECHAD')) return true;
+        }
+        const st = client['STATUS'];
+        if (st) {
+            const sst = String(st).trim().toUpperCase();
+            if (sst.includes('FECHAD') || sst === 'VERMELHO' || sst === 'INATIVO' || sst === 'NAO' || sst === 'NÃO') return true;
+        }
+        return false;
+    })();
+
+    if (isClientInactive) {
+        return code ? 'INATIVO' : 'SEM_CADASTRO';
+    }
+
+    // 4. Faturamento ativo
     if (window.isClientBrandActive && window.isClientBrandActive(client, brand)) {
         return 'ATIVO';
     }
 
-    // 4. Se tem código (números), mas está inativo na marca -> INATIVO (vermelho)
+    // 5. Se tem código (números), mas está inativo na marca -> INATIVO (vermelho)
     if (code) {
         return 'INATIVO';
     }
 
-    // 5. Sem código -> SEM_CADASTRO
+    // 6. Sem código -> SEM_CADASTRO
     return 'SEM_CADASTRO';
 };
 
@@ -3936,6 +3957,9 @@ window.initClientsModule = function() {
     } catch (e) {
         console.error('Erro ao carregar dados de clientes:', e);
         clientsMasterData = window.INITIAL_CLIENTS_DATA || [];
+    }
+    if ((!clientsMasterData || clientsMasterData.length === 0) && window.INITIAL_CLIENTS_DATA && Array.isArray(window.INITIAL_CLIENTS_DATA)) {
+        clientsMasterData = [...window.INITIAL_CLIENTS_DATA];
     }
     window.clientsMasterData = clientsMasterData;
 

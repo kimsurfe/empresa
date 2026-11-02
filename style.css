@@ -5205,6 +5205,7 @@ select.cfm-input option {
 }
 
 /* Layout especÃ­fico do Grid de 4 Cards de KPIs de Produtos no Confronto */
+#std-product-kpis-grid,
 #comp-product-kpis-grid {
     display: grid !important;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
@@ -5214,30 +5215,72 @@ select.cfm-input option {
     clear: both !important;
 }
 
+#std-product-kpis-grid .kpi-card,
 #comp-product-kpis-grid .kpi-card {
     min-width: 0 !important;
     overflow: hidden;
 }
 
+#std-product-kpis-grid .kpi-card .comp-progress-wrap,
 #comp-product-kpis-grid .kpi-card .comp-progress-wrap {
     min-width: 0 !important;
     max-width: 100% !important;
     width: 100% !important;
 }
 
+#std-product-kpis-grid .comp-product-hero-val,
 #comp-product-kpis-grid .comp-product-hero-val {
     flex-wrap: wrap !important;
     gap: 0.3rem !important;
 }
 
 @media (max-width: 1100px) {
-    #comp-product-kpis-grid {
+    #std-product-kpis-grid,
+#comp-product-kpis-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
 }
 
 @media (max-width: 600px) {
-    #comp-product-kpis-grid {
+    #std-product-kpis-grid,
+#comp-product-kpis-grid {
         grid-template-columns: 1fr !important;
     }
+}
+
+
+/* ==========================================================================
+   AGRUPAMENTO POR GRUPO / LOJA NO CONFRONTO ANALÍTICO
+   ========================================================================== */
+.comp-table tr.comp-group-row {
+    background: rgba(30, 41, 59, 0.75) !important;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.15s ease;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.comp-table tr.comp-group-row:hover {
+    background: rgba(51, 65, 85, 0.9) !important;
+}
+.comp-table tr.comp-store-subrow {
+    background: rgba(15, 23, 42, 0.4) !important;
+    transition: background 0.15s ease;
+}
+.comp-table tr.comp-store-subrow:hover {
+    background: rgba(30, 41, 59, 0.6) !important;
+}
+.comp-table tr.comp-store-subrow td:first-child {
+    border-left: 3px solid rgba(99, 102, 241, 0.4);
+}
+
+
+.btn-comp-detail.btn-icon-only {
+    width: 28px;
+    height: 28px;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1.15rem !important;
+    border-radius: 6px !important;
 }
