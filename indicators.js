@@ -1,4 +1,4 @@
-﻿// indicators.js - Dashboard de Indicadores Comerciais (Power BI Style)
+// indicators.js - Dashboard de Indicadores Comerciais (Power BI Style)
 // Sistema KR Gestão de Marcas
 
 (function() {
@@ -3487,7 +3487,6 @@
                 return `${monthNames[parseInt(m, 10) - 1]}/${y.substring(2)}`;
             });
 
-            const isPieces = (compChartDisplayMode === 'pieces');
             const fatData = sortedKeys.map(k => isPieces ? monthMap[k].fatQ : monthMap[k].fatV);
             const extData = sortedKeys.map(k => isPieces ? monthMap[k].extQ : monthMap[k].extV);
             const totalData = sortedKeys.map(k => (isPieces ? monthMap[k].fatQ : monthMap[k].fatV) + (isPieces ? monthMap[k].extQ : monthMap[k].extV));
@@ -3647,7 +3646,7 @@
                             ticks: {
                                 color: '#94a3b8',
                                 font: { size: 9 },
-                                callback: val => 'R$ ' + (val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val)
+                                callback: val => isPieces ? val.toLocaleString('pt-BR') : 'R$ ' + (val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val)
                             }
                         }
                     }
@@ -3722,7 +3721,7 @@
                             ticks: {
                                 color: '#94a3b8',
                                 font: { size: 9 },
-                                callback: val => 'R$ ' + (val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val)
+                                callback: val => isPieces ? val.toLocaleString('pt-BR') : 'R$ ' + (val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val)
                             }
                         }
                     }
@@ -5226,8 +5225,8 @@
                                     <div class="comp-bar-ext" style="width: ${item.pctExt.toFixed(1)}%;"></div>
                                 </div>
                                 <div class="comp-progress-labels">
-                                    <span style="color: #34d399; font-size: 0.68rem;">${item.pctFat.toFixed(0)}% Fat (${item.fatQ} pçs)</span>
-                                    <span style="color: #60a5fa; font-size: 0.68rem;">${item.pctExt.toFixed(0)}% Entr (${item.extQ} pçs)</span>
+                                    <span style="color: #34d399; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctFat.toFixed(0)}% Fat (${(item.fatQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                    <span style="color: #60a5fa; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctExt.toFixed(0)}% Entr (${(item.extQ || 0).toLocaleString('pt-BR')} pçs)</span>
                                 </div>
                             </div>
                         </div>
@@ -5289,8 +5288,8 @@
                                 <div class="comp-bar-ext" style="width: ${item.pctExt.toFixed(1)}%;"></div>
                             </div>
                             <div class="comp-progress-labels">
-                                <span style="color: #34d399; font-size: 0.68rem;">${item.pctFat.toFixed(0)}% Fat (${item.fatQ} pçs)</span>
-                                <span style="color: #60a5fa; font-size: 0.68rem;">${item.pctExt.toFixed(0)}% Entr (${item.extQ} pçs)</span>
+                                <span style="color: #34d399; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctFat.toFixed(0)}% Fat (${(item.fatQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                <span style="color: #60a5fa; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctExt.toFixed(0)}% Entr (${(item.extQ || 0).toLocaleString('pt-BR')} pçs)</span>
                             </div>
                         </div>
                     </div>
@@ -5351,8 +5350,8 @@
                                 <div class="comp-bar-ext" style="width: ${item.pctExt.toFixed(1)}%;"></div>
                             </div>
                             <div class="comp-progress-labels">
-                                <span style="color: #34d399; font-size: 0.68rem;">${item.pctFat.toFixed(0)}% Fat (${item.fatQ} pçs)</span>
-                                <span style="color: #60a5fa; font-size: 0.68rem;">${item.pctExt.toFixed(0)}% Entr (${item.extQ} pçs)</span>
+                                <span style="color: #34d399; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctFat.toFixed(0)}% Fat (${(item.fatQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                <span style="color: #60a5fa; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctExt.toFixed(0)}% Entr (${(item.extQ || 0).toLocaleString('pt-BR')} pçs)</span>
                             </div>
                         </div>
                     </div>

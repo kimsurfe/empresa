@@ -3789,29 +3789,65 @@ window.getClientGeneralStatus = function(client) {
     return 'INATIVO';
 };
 
-window.getClientBrandStatus = function(client, brand) {
-    if (!client) return 'INATIVO';
+window.getClientBrandCode = function(client, brand) {
+    if (!client) return '';
+    const rawVal = client[brand];
+    const isNotCode = !rawVal || rawVal === 'SIM' || rawVal === 'sim' || rawVal === 1 || rawVal === '1' || rawVal === 'null' || rawVal === 'ATIVO' || String(rawVal).includes('FIDELIZAD') || String(rawVal).includes('FECHAD') || String(rawVal).includes('INATIV') || String(rawVal).includes('SEM CADASTRO');
+    let codeVal = isNotCode ? '' : String(rawVal).trim();
+    if (!codeVal && brand === 'NEW ERA' && client['CODIGO NEW ERA']) {
+        codeVal = String(client['CODIGO NEW ERA']).trim();
+    }
+    if (!codeVal && brand === 'VANS' && client['CODIGO AREZZO']) {
+        codeVal = String(client['CODIGO AREZZO']).trim();
+    }
+    return (codeVal && codeVal !== 'null' && codeVal !== 'undefined') ? codeVal : '';
+};
 
+window.getClientBrandStatus = function(client, brand) {
+    if (!client) return 'SEM_CADASTRO';
+
+    const code = window.getClientBrandCode(client, brand);
+
+    // 1. Status explícito salvo
     const specificStatus = client[brand + '_STATUS'];
     if (specificStatus) {
         const s = String(specificStatus).trim().toUpperCase();
+        if (s === 'ATIVO' || s === 'SIM' || s === '1' || s === 'VERDE') return 'ATIVO';
         if (s.includes('FIDELIZAD') || s === 'LARANJA') return 'NAO_FIDELIZADO';
-        if (s === 'ATIVO' || s === 'SIM' || s === '1') return 'ATIVO';
-        if (s.includes('FECHAD') || s === 'VERMELHO' || s === 'INATIVO' || s === 'NAO' || s === 'NÃO' || s === '0') return 'INATIVO';
+        if (s === 'INATIVO' || s === 'VERMELHO' || s.includes('FECHAD')) {
+            return code ? 'INATIVO' : 'SEM_CADASTRO';
+        }
+        if (s === 'SEM_CADASTRO' || s === 'SEM CADASTRO' || s === 'NAO' || s === 'NÃO' || s === '0') {
+            return 'SEM_CADASTRO';
+        }
     }
 
+    // 2. Valor explícito na coluna da marca
     const val = client[brand];
     if (val !== undefined && val !== null && val !== '') {
         const sv = String(val).trim().toUpperCase();
+        if (sv === 'SIM' || sv === '1' || sv === 'ATIVO') return 'ATIVO';
         if (sv.includes('FIDELIZAD') || sv === 'LARANJA') return 'NAO_FIDELIZADO';
-        if (sv.includes('FECHAD') || sv === 'VERMELHO' || sv === 'INATIVO' || sv === 'NAO' || sv === 'NÃO' || sv === '0' || sv === 'NULL' || sv === 'UNDEFINED') return 'INATIVO';
+        if (sv.includes('FECHAD') || sv === 'VERMELHO' || sv === 'INATIVO') {
+            return code ? 'INATIVO' : 'SEM_CADASTRO';
+        }
+        if (sv === 'NAO' || sv === 'NÃO' || sv === '0' || sv === 'NULL' || sv === 'UNDEFINED') {
+            return 'SEM_CADASTRO';
+        }
     }
 
-    if (window.isClientBrandActive(client, brand)) {
+    // 3. Faturamento ativo
+    if (window.isClientBrandActive && window.isClientBrandActive(client, brand)) {
         return 'ATIVO';
     }
 
-    return 'INATIVO';
+    // 4. Se tem código (números), mas está inativo na marca -> INATIVO (vermelho)
+    if (code) {
+        return 'INATIVO';
+    }
+
+    // 5. Sem código -> SEM_CADASTRO
+    return 'SEM_CADASTRO';
 };
 
 window.renderClientStatusBadge = function(status) {
@@ -3827,8 +3863,12 @@ let clientsFilteredData = [];
 let clientsCurrentPage = 1;
 let clientsPageSize = 25;
 let clientsActiveStatus = 'all';
+    clientsSortCol = null;
+    clientsSortDir = 'asc';
 let clientsActiveBrand = 'all';
 let currentModalClient = null;
+let clientsSortCol = null;
+let clientsSortDir = 'asc';
 
 window.initClientsModule = function() {
     try {
@@ -4034,13 +4074,15 @@ window.applyClientsFilter = function() {
         // Filtro de Marca
         if (clientsActiveBrand !== 'all') {
             const bStatus = window.getClientBrandStatus(client, clientsActiveBrand);
-            if (bStatus === 'INATIVO') {
+            if (bStatus === 'SEM_CADASTRO') {
                 return false;
             }
         }
 
         return true;
     });
+
+    applyClientsSorting();
 
     clientsCurrentPage = 1;
     renderClientsTable();
@@ -4060,6 +4102,8 @@ window.clearClientsFilter = function() {
     });
 
     clientsActiveStatus = 'all';
+    clientsSortCol = null;
+    clientsSortDir = 'asc';
     document.querySelectorAll('.client-pill-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-status-val') === 'all');
     });
@@ -4078,6 +4122,64 @@ window.changeClientsPageSize = function(val) {
     } else {
         clientsPageSize = parseInt(val, 10) || 25;
     }
+    clientsCurrentPage = 1;
+    renderClientsTable();
+};
+
+function getClientSortIcon(col) {
+    if (clientsSortCol === col) {
+        const iconClass = (clientsSortDir === 'desc') ? 'bx bx-sort-down' : 'bx bx-sort-up';
+        return '<span class="th-sort-icon"><i class="' + iconClass + '"></i></span>';
+    }
+    return '<span class="th-sort-icon"><i class="bx bx-sort"></i></span>';
+}
+
+function applyClientsSorting() {
+    if (!clientsSortCol) return;
+
+    clientsFilteredData.sort((a, b) => {
+        let cmp = 0;
+        if (clientsSortCol === 'cnpj') {
+            const vA = cleanDigits(a['CNPJ'] || '');
+            const vB = cleanDigits(b['CNPJ'] || '');
+            cmp = vA.localeCompare(vB);
+        } else if (clientsSortCol === 'razao') {
+            const vA = (a['FANTASIA'] || a['RAZAO SOCIAL'] || '').trim();
+            const vB = (b['FANTASIA'] || b['RAZAO SOCIAL'] || '').trim();
+            cmp = vA.localeCompare(vB, 'pt-BR', { sensitivity: 'base' });
+        } else if (clientsSortCol === 'grupo') {
+            const vA = (a['GRUPO'] || '').trim();
+            const vB = (b['GRUPO'] || '').trim();
+            cmp = vA.localeCompare(vB, 'pt-BR', { sensitivity: 'base' });
+        } else if (clientsSortCol === 'grupoReal') {
+            const vA = (a['GRUPO REAL'] || '').trim();
+            const vB = (b['GRUPO REAL'] || '').trim();
+            cmp = vA.localeCompare(vB, 'pt-BR', { sensitivity: 'base' });
+        } else if (clientsSortCol === 'cidade') {
+            const vA = [a['CIDADE'], a['ESTADO']].filter(Boolean).join(' / ').trim();
+            const vB = [b['CIDADE'], b['ESTADO']].filter(Boolean).join(' / ').trim();
+            cmp = vA.localeCompare(vB, 'pt-BR', { sensitivity: 'base' });
+        } else if (clientsSortCol === 'status') {
+            const vA = window.getClientGeneralStatus(a);
+            const vB = window.getClientGeneralStatus(b);
+            cmp = vA.localeCompare(vB, 'pt-BR', { sensitivity: 'base' });
+        } else if (clientsSortCol === 'marcas') {
+            const brandsA = CLIENT_BRAND_COLS.filter(br => window.getClientBrandStatus(a, br) !== 'SEM_CADASTRO').join(', ');
+            const brandsB = CLIENT_BRAND_COLS.filter(br => window.getClientBrandStatus(b, br) !== 'SEM_CADASTRO').join(', ');
+            cmp = brandsA.localeCompare(brandsB, 'pt-BR', { sensitivity: 'base' });
+        }
+        return (clientsSortDir === 'desc') ? -cmp : cmp;
+    });
+}
+
+window.toggleClientsSort = function(col) {
+    if (clientsSortCol === col) {
+        clientsSortDir = (clientsSortDir === 'asc') ? 'desc' : 'asc';
+    } else {
+        clientsSortCol = col;
+        clientsSortDir = 'asc';
+    }
+    applyClientsSorting();
     clientsCurrentPage = 1;
     renderClientsTable();
 };
@@ -4138,13 +4240,27 @@ function renderClientsTable() {
         <table class="clients-table">
             <thead>
                 <tr>
-                    <th style="width: 140px; white-space: nowrap;">CNPJ</th>
-                    <th style="min-width: 180px;">Razão Social / Nome Fantasia</th>
-                    <th style="width: 90px; white-space: nowrap;">Grupo</th>
-                    <th style="width: 90px; white-space: nowrap;">Grupo Real</th>
-                    <th style="width: 85px; white-space: nowrap; font-size: 0.72rem;">Cidade / UF</th>
-                    <th style="text-align: center; width: 85px; white-space: nowrap;">Status</th>
-                    <th style="width: 180px;">Marcas</th>
+                    <th class="sortable ${clientsSortCol === 'cnpj' ? 'active-sort' : ''}" onclick="toggleClientsSort('cnpj')" style="width: 140px; white-space: nowrap;" title="Ordenar por CNPJ">
+                        CNPJ ${getClientSortIcon('cnpj')}
+                    </th>
+                    <th class="sortable ${clientsSortCol === 'razao' ? 'active-sort' : ''}" onclick="toggleClientsSort('razao')" style="min-width: 180px;" title="Ordenar por Razão Social / Nome Fantasia">
+                        Razão Social / Nome Fantasia ${getClientSortIcon('razao')}
+                    </th>
+                    <th class="sortable ${clientsSortCol === 'grupo' ? 'active-sort' : ''}" onclick="toggleClientsSort('grupo')" style="width: 90px; white-space: nowrap;" title="Ordenar por Grupo">
+                        Grupo ${getClientSortIcon('grupo')}
+                    </th>
+                    <th class="sortable ${clientsSortCol === 'grupoReal' ? 'active-sort' : ''}" onclick="toggleClientsSort('grupoReal')" style="width: 90px; white-space: nowrap;" title="Ordenar por Grupo Real">
+                        Grupo Real ${getClientSortIcon('grupoReal')}
+                    </th>
+                    <th class="sortable ${clientsSortCol === 'cidade' ? 'active-sort' : ''}" onclick="toggleClientsSort('cidade')" style="width: 85px; white-space: nowrap; font-size: 0.72rem;" title="Ordenar por Cidade / UF">
+                        Cidade / UF ${getClientSortIcon('cidade')}
+                    </th>
+                    <th class="sortable ${clientsSortCol === 'status' ? 'active-sort' : ''}" onclick="toggleClientsSort('status')" style="text-align: center; width: 85px; white-space: nowrap;" title="Ordenar por Status">
+                        Status ${getClientSortIcon('status')}
+                    </th>
+                    <th class="sortable ${clientsSortCol === 'marcas' ? 'active-sort' : ''}" onclick="toggleClientsSort('marcas')" style="width: 180px;" title="Ordenar por Marcas">
+                        Marcas ${getClientSortIcon('marcas')}
+                    </th>
                     <th style="text-align: right; width: 85px; white-space: nowrap;">Ações</th>
                 </tr>
             </thead>
@@ -4156,16 +4272,20 @@ function renderClientsTable() {
         const clientStatus = window.getClientGeneralStatus(client);
         const statusBadge = window.renderClientStatusBadge(clientStatus);
 
-        // Marcas que o cliente possui apenas com a cor simbolizando o status (SEM CÓDIGO JUNTO)
+        // Marcas do cliente: Ativo (verde), Não Fidelizado (laranja) e Inativo com código em vermelho
         const brandTags = [];
         CLIENT_BRAND_COLS.forEach(brand => {
             const bStatus = window.getClientBrandStatus(client, brand);
-            if (bStatus === 'INATIVO') return;
+            if (bStatus === 'SEM_CADASTRO') return;
+
+            const code = window.getClientBrandCode(client, brand);
 
             if (bStatus === 'ATIVO') {
                 brandTags.push(`<span class="client-brand-mini-tag brand-status-ativo" title="${escapeHTML(brand)}: Ativo">${escapeHTML(brand)}</span>`);
             } else if (bStatus === 'NAO_FIDELIZADO') {
                 brandTags.push(`<span class="client-brand-mini-tag brand-status-nao-fidelizado" title="${escapeHTML(brand)}: Não Fidelizado">${escapeHTML(brand)}</span>`);
+            } else if (bStatus === 'INATIVO') {
+                brandTags.push(`<span class="client-brand-mini-tag brand-status-inativo" title="${escapeHTML(brand)}${code ? ` (Cód: ${escapeHTML(code)})` : ""}: Inativo">${escapeHTML(brand)}</span>`);
             }
         });
 
@@ -4393,17 +4513,16 @@ window.openClientDetailModal = function(clientIndex) {
         const brandBadges = [];
         CLIENT_BRAND_COLS.forEach(b => {
             const bStatus = window.getClientBrandStatus(client, b);
-            if (bStatus === 'INATIVO') return;
+            if (bStatus === 'SEM_CADASTRO') return;
 
-            const val = client[b];
-            const isCode = val && val !== 'SIM' && val !== 'ATIVO' && val !== '1' && !String(val).includes('FIDELIZAD') && !String(val).includes('FECHAD');
-            const codeText = isCode ? `<span style="font-family: monospace; font-size: 0.75rem; background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 4px; margin-left: 4px;">#${escapeHTML(val)}</span>` : '';
+            const codeVal = window.getClientBrandCode(client, b);
+            const codeText = codeVal ? `<span style="font-family: monospace; font-size: 0.75rem; background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 4px; margin-left: 4px;">#${escapeHTML(codeVal)}</span>` : '';
 
             if (bStatus === 'ATIVO') {
                 brandBadges.push(`
                     <div class="cdm-brand-badge status-ativo" title="Comprando da marca">
                         <i class='bx bx-check-circle'></i>
-                        <span><strong>${escapeHTML(b)}</strong> ${codeText}</span>
+                        <span><strong>${escapeHTML(b)}</strong> (Ativo) ${codeText}</span>
                     </div>
                 `);
             } else if (bStatus === 'NAO_FIDELIZADO') {
@@ -4411,6 +4530,13 @@ window.openClientDetailModal = function(clientIndex) {
                     <div class="cdm-brand-badge status-nao-fidelizado" title="Já comprou, não compra mais atualmente">
                         <i class='bx bx-time-five'></i>
                         <span><strong>${escapeHTML(b)}</strong> (Não Fidelizado) ${codeText}</span>
+                    </div>
+                `);
+            } else if (bStatus === 'INATIVO') {
+                brandBadges.push(`
+                    <div class="cdm-brand-badge status-inativo-red" title="Tem cadastro/código na marca, mas está inativo">
+                        <i class='bx bx-x-circle'></i>
+                        <span><strong>${escapeHTML(b)}</strong> (Inativo) ${codeText}</span>
                     </div>
                 `);
             }
@@ -4924,9 +5050,10 @@ function renderFormBrandToggles(clientData = {}) {
 
         const safeCode = (codeVal && codeVal !== 'null' && codeVal !== 'undefined') ? codeVal : '';
 
-        let statusClass = 'status-inativo';
+        let statusClass = 'status-sem-cadastro';
         if (bStatus === 'ATIVO') statusClass = 'status-ativo';
         else if (bStatus === 'NAO_FIDELIZADO') statusClass = 'status-nao-fidelizado';
+        else if (bStatus === 'INATIVO') statusClass = 'status-inativo';
 
         const selectClass = `select-${bStatus.toLowerCase().replace(/_/g, '-')}`;
 
@@ -4939,7 +5066,8 @@ function renderFormBrandToggles(clientData = {}) {
                             onchange="onBrandStatusSelectChange('${escapeHTML(brand)}', this.value)">
                         <option value="ATIVO" ${bStatus === 'ATIVO' ? 'selected' : ''}>🟢 Ativo</option>
                         <option value="NAO_FIDELIZADO" ${bStatus === 'NAO_FIDELIZADO' ? 'selected' : ''}>🟠 Não Fidelizado</option>
-                        <option value="INATIVO" ${bStatus === 'INATIVO' ? 'selected' : ''}>⚪ Inativo</option>
+                        <option value="INATIVO" ${bStatus === 'INATIVO' ? 'selected' : ''}>🔴 Inativo</option>
+                        <option value="SEM_CADASTRO" ${bStatus === 'SEM_CADASTRO' ? 'selected' : ''}>⚪ Sem Cadastro</option>
                     </select>
                 </div>
                 <div class="cfm-brand-card-bottom">
@@ -4976,8 +5104,10 @@ window.onBrandStatusSelectChange = function(brand, newStatus, syncGeneral = true
         card.classList.add('status-ativo');
     } else if (newStatus === 'NAO_FIDELIZADO') {
         card.classList.add('status-nao-fidelizado');
-    } else {
+    } else if (newStatus === 'INATIVO') {
         card.classList.add('status-inativo');
+    } else {
+        card.classList.add('status-sem-cadastro');
     }
 };
 
@@ -4996,8 +5126,8 @@ window.onBrandCodeInput = function(brand, value) {
     if (!card) return;
     const select = card.querySelector('.cfm-brand-status-select');
     const trimmed = (value || '').trim();
-    // Se digitou código e estava inativo, ativa automaticamente na marca
-    if (trimmed && select && select.value === 'INATIVO') {
+    // Se digitou código e estava sem cadastro, altera automaticamente para Ativo
+    if (trimmed && select && select.value === 'SEM_CADASTRO') {
         select.value = 'ATIVO';
         window.onBrandStatusSelectChange(brand, 'ATIVO');
     }
@@ -5156,9 +5286,11 @@ window.saveClientFormData = async function() {
             clientBrandsObj[brand] = code || 'SIM';
         } else if (status === 'NAO_FIDELIZADO') {
             clientBrandsObj[brand] = code || 'NÃO FIDELIZADO';
+        } else if (status === 'INATIVO') {
+            clientBrandsObj[brand] = code || 'INATIVO';
         } else {
             clientBrandsObj[brand] = null;
-            clientBrandsObj[brand + '_STATUS'] = 'INATIVO';
+            clientBrandsObj[brand + '_STATUS'] = 'SEM_CADASTRO';
         }
     });
 

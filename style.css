@@ -2574,6 +2574,40 @@ body:not(.is-admin) .admin-only {
     z-index: 2;
 }
 
+.clients-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.clients-table th.sortable:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.clients-table th.sortable .th-sort-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    font-size: 0.8rem;
+    vertical-align: middle;
+    opacity: 0.45;
+    transition: opacity 0.15s, color 0.15s;
+}
+
+.clients-table th.sortable:hover .th-sort-icon {
+    opacity: 0.85;
+}
+
+.clients-table th.sortable.active-sort {
+    color: var(--accent-color, #6366f1);
+}
+
+.clients-table th.sortable.active-sort .th-sort-icon {
+    opacity: 1;
+    color: var(--accent-color, #6366f1);
+}
+
 .clients-table td {
     padding: 0.45rem 0.65rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
@@ -2703,6 +2737,7 @@ body:not(.is-admin) .admin-only {
     border: 1px solid rgba(245, 158, 11, 0.35) !important;
 }
 
+.client-brand-mini-tag.brand-status-inativo,
 .client-brand-mini-tag.brand-status-loja-fechada {
     background: rgba(239, 68, 68, 0.15) !important;
     color: #f87171 !important;
@@ -3446,9 +3481,9 @@ select.cfm-input option {
 }
 
 .cfm-brand-status-select.select-inativo {
-    background: rgba(148, 163, 184, 0.15);
-    border-color: #94a3b8;
-    color: #cbd5e1;
+    background: rgba(239, 68, 68, 0.18);
+    border-color: #ef4444;
+    color: #f87171;
 }
 
 .cfm-brand-status-select.select-loja-fechada {
@@ -3518,6 +3553,16 @@ select.cfm-input option {
     border: 1px solid rgba(16, 185, 129, 0.35);
     color: #34d399;
 }
+.cdm-brand-badge.status-inativo-red {
+    background: rgba(239, 68, 68, 0.14);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+}
+
+.cdm-brand-badge.status-inativo-red i {
+    color: #ef4444;
+}
+
 .cdm-brand-badge.status-nao-fidelizado {
     background: rgba(245, 158, 11, 0.15);
     border: 1px solid rgba(245, 158, 11, 0.35);
@@ -4871,6 +4916,26 @@ select.cfm-input option {
     justify-content: space-between;
     font-size: 0.66rem;
     font-family: monospace;
+}
+
+.kpi-card .comp-progress-wrap,
+.ranking-row-item .comp-progress-wrap {
+    max-width: 100%;
+    width: 100%;
+}
+
+.ranking-row-item .comp-progress-labels {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    margin-top: 3px;
+}
+
+.ranking-row-item .comp-progress-labels span {
+    white-space: nowrap;
 }
 
 .btn-comp-detail {
