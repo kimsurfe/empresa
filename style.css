@@ -613,6 +613,11 @@ body {
     border-radius: 8px;
 }
 
+#nav-day-btn,
+#nav-brands-btn {
+    justify-content: space-between;
+}
+
 .sidebar-nav-btn:hover {
     color: var(--text-primary);
 }
@@ -2125,7 +2130,9 @@ body:not(.is-admin) .admin-only {
         left: 0;
         right: 0;
         width: 100% !important;
-        height: 65px;
+        height: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
+        min-height: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
+        padding: 0 0 env(safe-area-inset-bottom, 0px) 0 !important;
         flex-direction: row;
         border-right: none;
         border-top: 1px solid var(--border-color);
@@ -2137,7 +2144,7 @@ body:not(.is-admin) .admin-only {
     }
     
     .main-content {
-        padding-bottom: 80px !important;
+        padding-bottom: calc(85px + env(safe-area-inset-bottom, 0px)) !important;
     }
     
     .calendar-panel .panel-header,
@@ -2162,6 +2169,82 @@ body:not(.is-admin) .admin-only {
     
     .sidebar-main-nav > div {
         margin-bottom: 0 !important;
+        flex: 1 1 0 !important;
+        width: 20% !important;
+        max-width: 20% !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        height: 100% !important;
+    }
+
+    .sidebar-nav-btn,
+    #nav-day-btn,
+    #nav-brands-btn {
+        flex-direction: column !important;
+        padding: 4px 2px !important;
+        font-size: 0.65rem !important;
+        gap: 0 !important;
+        justify-content: center !important;
+        align-items: center !important;
+        width: 100% !important;
+        height: 100% !important;
+        color: var(--text-secondary);
+        background: transparent !important;
+        border-radius: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    .sidebar-nav-btn > div {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        width: 100% !important;
+        height: auto !important;
+        gap: 0 !important;
+    }
+
+    .sidebar-nav-btn i {
+        width: 28px !important;
+        height: 28px !important;
+        line-height: 28px !important;
+        font-size: 1.45rem !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin: 0 auto !important;
+        color: var(--text-secondary);
+        flex-shrink: 0 !important;
+        text-align: center !important;
+    }
+
+    .sidebar-nav-btn .nav-text {
+        display: block !important;
+        font-size: 0.66rem !important;
+        font-weight: 500 !important;
+        line-height: 1.2 !important;
+        margin: 0 !important;
+        margin-top: 2px !important;
+        text-align: center !important;
+        white-space: nowrap !important;
+    }
+
+    .sidebar-nav-btn i.bx-chevron-up,
+    #sidebar-calendar-chevron,
+    #sidebar-brands-chevron {
+        display: none !important;
+    }
+
+    .sidebar-nav-btn.active,
+    .sidebar-nav-btn.active i,
+    .sidebar-nav-btn.active .nav-text {
+        color: var(--accent-color) !important;
+    }
+
+
+        margin-bottom: 0 !important;
         flex: 1;
         display: flex;
         justify-content: center;
@@ -2169,11 +2252,11 @@ body:not(.is-admin) .admin-only {
         height: 100%;
     }
     
-    .sidebar-nav-btn {
+    .sidebar-nav-btn-remove {
         flex-direction: column;
-        padding: 0.25rem;
+        /* unused */
         font-size: 0.65rem;
-        gap: 0.25rem;
+        /* unused */
         justify-content: center;
         align-items: center;
         width: 100%;
@@ -2195,7 +2278,7 @@ body:not(.is-admin) .admin-only {
         gap: 0 !important;
     }
 
-    .sidebar-nav-btn i.bx-chevron-up {
+    .old-nav-unused-chevron {
         display: none !important;
     }
 
@@ -2207,7 +2290,7 @@ body:not(.is-admin) .admin-only {
 
     .sidebar-nav-btn i {
         margin: 0;
-        font-size: 1.5rem;
+        /* closed */ } .old-unused-icon-rule {
         color: var(--text-secondary);
     }
 }
@@ -4342,7 +4425,13 @@ select.cfm-input option {
     gap: 0.5rem;
 }
 
+.chart-title-group h3 i {
+    flex-shrink: 0;
+    margin-top: 3px;
+}
+
 .chart-title-group h3 {
+    align-items: flex-start !important;
     margin: 0;
     font-size: 1.05rem;
     font-weight: 700;
