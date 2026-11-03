@@ -195,7 +195,23 @@
             : (window.INITIAL_BILLING_NEW_ERA && Array.isArray(window.INITIAL_BILLING_NEW_ERA) ? [...window.INITIAL_BILLING_NEW_ERA] : []);
     }
 
+    function updateUploadButtonLabel(type) {
+        const uploadBtn = document.getElementById('btn-upload-billing-header');
+        if (!uploadBtn) return;
+        if (type === 'extrato') {
+            uploadBtn.innerHTML = "<i class='bx bx-upload'></i> Atualizar Saldo (.xlsx)";
+            uploadBtn.title = "Importar ou atualizar planilha de Saldo / Extrato de Pedidos (.xlsx)";
+        } else if (type === 'billing') {
+            uploadBtn.innerHTML = "<i class='bx bx-upload'></i> Atualizar Faturamento (.xlsx)";
+            uploadBtn.title = "Importar ou atualizar planilha de Faturamento (.xlsx)";
+        } else {
+            uploadBtn.innerHTML = "<i class='bx bx-upload'></i> Atualizar Planilha (.xlsx)";
+            uploadBtn.title = "Importar planilha de Saldo ou Faturamento (.xlsx)";
+        }
+    }
+
     window.switchIndicatorsDataset = function(type) {
+        updateUploadButtonLabel(type);
         if (!['billing', 'extrato', 'comparison'].includes(type)) type = 'extrato';
         currentDatasetType = type;
         localStorage.setItem('empresa_indicators_dataset_type', type);
@@ -504,6 +520,7 @@
         }
 
         currentDatasetType = localStorage.getItem('empresa_indicators_dataset_type') || 'extrato';
+        updateUploadButtonLabel(currentDatasetType);
 
         // Atualizar estado visual dos botões de seleção de dataset
         const btnExtrato = document.getElementById('btn-dataset-extrato');
@@ -3476,8 +3493,14 @@
                     } else {
                         netVal = grossVal;
                     }
+                    if (grossVal === 0 && netVal !== 0) {
+                        grossVal = netVal;
+                    }
+                    const totalVal = (netVal || grossVal || 0); /*
 
-                    if (grossVal === 0 && netVal === 0) return;
+                    }
+
+                    */ if (grossVal === 0 && netVal === 0) return;
 
                     const cleanC = kCnpj ? cleanDigits(row[kCnpj]).padStart(14, '0') : '';
 
@@ -3547,8 +3570,8 @@
                         cor: (kCor && row[kCor]) ? String(row[kCor]).trim() : '',
                         sub: (kSub && row[kSub]) ? String(row[kSub]).trim() : '',
                         cl: (kClasse && row[kClasse]) ? String(row[kClasse]).trim() : '',
-                        vg: Math.round(totalVal * 100) / 100,
-                        vn: Math.round(totalVal * 100) / 100,
+                        vg: Math.round((grossVal || totalVal) * 100) / 100,
+                        vn: Math.round((netVal || totalVal) * 100) / 100,
                         v: Math.round(totalVal * 100) / 100,
                         q: (kQtde && row[kQtde]) ? (parseInt(row[kQtde], 10) || 0) : 0,
                         nf: (kNota && row[kNota]) ? String(row[kNota]).trim() : ''
@@ -3557,12 +3580,14 @@
 
                 if (parsed.length === 0) {
                     window.showNotification('Nenhum registro de faturamento ou pedido válido encontrado.', 'error');
+                    return;
             
                 }
 
                 const isExtrato = !!(findKey('data entrega') || findKey('valor entregar') || findKey('qtde entregar'));
                 currentDatasetType = isExtrato ? 'extrato' : 'billing';
                 localStorage.setItem('empresa_indicators_dataset_type', currentDatasetType);
+                updateUploadButtonLabel(currentDatasetType);
 
                 // Capturar data do arquivo enviado (lastModified) formatada em DD/MM/AAAA
                 const fileDateObj = file.lastModified ? new Date(file.lastModified) : new Date();
