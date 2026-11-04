@@ -21,7 +21,7 @@
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     
     <!-- CSS Customizado -->
-    <link rel="stylesheet" href="style.css?v=81">
+    <link rel="stylesheet" href="style.css?v=85">
 </head>
 <body>
     <div class="app-container">
@@ -869,6 +869,7 @@
                         <span class="kpi-drag-hint" title="Arraste e solte os cards para reorganizar a ordem"><i class='bx bx-move'></i> Arraste os cards para reposicionar</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
+                        <button type="button" class="btn-kpi-reset-order" id="btn-toggle-all-kpis-eye" onclick="toggleAllKpisVisibility()" title="Mostrar ou ocultar valores de todos os KPIs"><i class='bx bx-show' id="icon-toggle-all-kpis-eye"></i> <span id="label-toggle-all-kpis-eye">Ocultar Valores</span></button>
                         <button type="button" class="btn-kpi-reset-order" onclick="resetKpiCardsOrder()" title="Restaurar a ordem original dos cards">
                             <i class='bx bx-reset'></i> Posições Padrão
                         </button>
@@ -909,7 +910,7 @@
                             <span class="kpi-title" id="kpi-pieces-title">Peças a Entregar</span>
                             <div class="kpi-icon-badge"><i class='bx bx-package'></i></div>
                         </div>
-                        <div class="kpi-value font-mono" id="kpi-total-pieces-val">0 pçs</div>
+                        <div class="kpi-value-container"><div class="kpi-value font-mono" id="kpi-total-pieces-val">R$ 0,00</div><div class="kpi-sub-badge" id="kpi-pieces-sub" style="display: none;"></div></div>
                         <div class="kpi-footer">
                             <span id="kpi-pieces-footer">volume total programado</span>
                         </div>
@@ -918,10 +919,13 @@
                     <!-- KPI 3: Pedidos em Carteira / Total Geral Previsto -->
                     <div class="kpi-card highlight-amber" id="kpi-card-orders">
                         <div class="kpi-header">
-                            <span class="kpi-title" id="kpi-orders-title">Pedidos em Carteira</span>
+                            <span class="kpi-title" id="kpi-orders-title">Total Planejado</span>
                             <div class="kpi-icon-badge"><i class='bx bx-receipt'></i></div>
                         </div>
-                        <div class="kpi-value font-mono" id="kpi-unique-orders-val">0</div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value font-mono" id="kpi-unique-orders-val">R$ 0,00</div>
+                            <div class="kpi-sub-badge" id="kpi-orders-sub" style="display: none;"></div>
+                        </div>
                         <div class="kpi-footer">
                             <span id="kpi-orders-footer">pedidos programados</span>
                         </div>
@@ -996,7 +1000,50 @@
                         </div>
                     </div>
 
-                    <!-- KPI Suplementar (Modo Faturamento apenas): Faturamento no Mês -->
+                    <!-- KPI 9: Embalado (Pronto para Faturar) -->
+                    <div class="kpi-card highlight-cyan" id="kpi-card-packaged" style="display: none;">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-packaged-title">Embalado (Pronto p/ Faturar)</span>
+                            <div class="kpi-icon-badge" id="kpi-packaged-icon"><i class='bx bx-check-shield'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value font-mono" id="kpi-packaged-val">R$ 0,00</div>
+                            <div class="kpi-sub-badge" id="kpi-packaged-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-packaged-footer">pronto para expedição</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 10: Pedidos Cancelados -->
+                    <div class="kpi-card highlight-red" id="kpi-card-canceled" style="display: none;">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-canceled-title">Pedidos Cancelados</span>
+                            <div class="kpi-icon-badge" id="kpi-canceled-icon"><i class='bx bx-x-circle'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value font-mono" id="kpi-canceled-val">R$ 0,00</div>
+                            <div class="kpi-sub-badge" id="kpi-canceled-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-canceled-footer">0,0% de taxa de cancelamento</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 11: Prazo & Desconto (Condição Comercial) -->
+                    <div class="kpi-card highlight-indigo" id="kpi-card-commercial" style="display: none;">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-commercial-title">Prazo & Desconto</span>
+                            <div class="kpi-icon-badge" id="kpi-commercial-icon"><i class='bx bx-credit-card'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value font-mono" id="kpi-commercial-val" style="font-size: 1.15rem;">-</div>
+                            <div class="kpi-sub-badge" id="kpi-commercial-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-commercial-footer">condição de pagamento</span>
+                        </div>
+                    </div>
                     <div class="kpi-card highlight-emerald" id="kpi-card-month" style="display: none;">
                         <div class="kpi-header">
                             <span class="kpi-title" id="kpi-month-title">Faturamento no Mês</span>
@@ -1366,10 +1413,10 @@
                     <!-- Barra de Controles e Ordenação (Visível na aba de CNPJ / Grupo) -->
                     <div id="comp-controls-bar" style="display: flex; gap: 0.85rem; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 1rem; margin-bottom: 1rem;">
                         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                            <button type="button" class="btn-comp-pill active" id="btn-comp-cnpj-group-toggle" onclick="toggleCompCnpjGrouping()" title="Alternar entre visualização agrupada por grupo ou lista corrida de lojas">
+                            <button type="button" class="btn-comp-pill" id="btn-comp-cnpj-group-toggle" onclick="toggleCompCnpjGrouping()" style="display: none;" title="Alternar entre visualização agrupada por grupo ou lista corrida de lojas">
                                 <i class='bx bx-folder'></i> Agrupado por Grupo
                             </button>
-                            <button type="button" class="btn-comp-pill" id="btn-comp-cnpj-expand-all" onclick="toggleAllCompCnpjGroups()" title="Expandir ou recolher todos os grupos">
+                            <button type="button" class="btn-comp-pill" id="btn-comp-cnpj-expand-all" onclick="toggleAllCompCnpjGroups()" style="display: none;" title="Expandir ou recolher todos os grupos">
                                 <i class='bx bx-expand-vertical' id="icon-comp-cnpj-expand-all"></i> <span id="label-comp-cnpj-expand-all">Expandir Todos</span>
                             </button>
                         </div>
@@ -1397,6 +1444,8 @@
                                         <th class="sortable" onclick="sortCompCnpjTable('fatQ')" id="th-cnpj-fatQ" style="min-width: 50px; text-align: right; white-space: nowrap;">Pçs Fat. <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
                                         <th class="sortable" onclick="sortCompCnpjTable('extV')" id="th-cnpj-extV" style="min-width: 85px; text-align: right; white-space: nowrap;">A Entregar <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
                                         <th class="sortable" onclick="sortCompCnpjTable('extQ')" id="th-cnpj-extQ" style="min-width: 50px; text-align: right; white-space: nowrap;">Pçs Entr. <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompCnpjTable('cancV')" id="th-cnpj-cancV" style="min-width: 85px; text-align: right; white-space: nowrap; color: #f87171;">Cancelado (R$) <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
+                                        <th class="sortable" onclick="sortCompCnpjTable('cancQ')" id="th-cnpj-cancQ" style="min-width: 50px; text-align: right; white-space: nowrap; color: #f87171;">Pçs Canc. <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
                                         <th class="sortable active-sort" onclick="sortCompCnpjTable('totalV')" id="th-cnpj-totalV" style="min-width: 95px; text-align: right; white-space: nowrap;">Total (R$) <span class="th-sort-icon"><i class='bx bx-sort-down'></i></span></th>
                                         <th class="sortable" onclick="sortCompCnpjTable('pctFat')" id="th-cnpj-pctFat" style="min-width: 90px; text-align: center; white-space: nowrap;">% Progresso <span class="th-sort-icon"><i class='bx bx-sort'></i></span></th>
                                         <th style="min-width: 45px; text-align: center;">Ação</th>
@@ -1546,7 +1595,7 @@
                                         </th>
                                     </tr>
                                 </thead>
-                                <tbody id="comp-tbody-date">
+                                <tfoot id="comp-tfoot-date"></tfoot><tbody id="comp-tbody-date">
                                     <!-- Linhas injetadas via JS -->
                                 </tbody>
                             </table>
@@ -2316,13 +2365,13 @@
     <script src="billing-data.js?v=48"></script>
 
     <!-- Dados do Extrato de Pedidos a Entregar (NEW ERA) -->
-    <script src="extrato-pedidos-data.js?v=48" charset="UTF-8"></script>
+    <script src="extrato-pedidos-data.js?v=55" charset="UTF-8"></script>
 
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js?v=28"></script>
     <script src="app.js?v=79"></script>
-    <script src="indicators.js?v=86" charset="UTF-8"></script>
+    <script src="indicators.js?v=101" charset="UTF-8"></script>
 </body>
 </html>

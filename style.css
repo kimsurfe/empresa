@@ -4214,6 +4214,190 @@ select.cfm-input option {
     color: #ef4444;
 }
 
+.highlight-red .kpi-value {
+    color: #f87171;
+}
+
+.highlight-cyan .kpi-sub-badge {
+    background: rgba(6, 182, 212, 0.16);
+    color: #67e8f9;
+    border-color: rgba(6, 182, 212, 0.25);
+}
+
+.kpi-card.highlight-cyan {
+    border-left: 4px solid #06b6d4;
+}
+
+.highlight-cyan .kpi-icon-badge {
+    background: rgba(6, 182, 212, 0.15);
+    color: #06b6d4;
+}
+
+.highlight-indigo .kpi-sub-badge {
+    background: rgba(99, 102, 241, 0.16);
+    color: #c7d2fe;
+    border-color: rgba(99, 102, 241, 0.25);
+}
+
+.kpi-card.highlight-indigo {
+    border-left: 4px solid #6366f1;
+}
+
+.highlight-indigo .kpi-icon-badge {
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+}
+
+.highlight-indigo .kpi-value {
+    color: #a5b4fc;
+}
+
+/* Botão Olhinho (Mostrar/Ocultar tipo senha) nos Cards de KPI */
+.kpi-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.kpi-eye-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: all 0.18s ease;
+    padding: 0;
+}
+
+.kpi-eye-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #f8fafc;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.kpi-card.kpi-masked .kpi-eye-btn {
+    background: rgba(99, 102, 241, 0.18);
+    color: #a5b4fc;
+    border-color: rgba(99, 102, 241, 0.35);
+}
+
+/* Efeito de ocultação tipo senha (••••••) quando o card está com .kpi-masked */
+.kpi-card.kpi-masked .kpi-value {
+    font-size: 0 !important;
+    line-height: 1.5rem;
+    user-select: none;
+}
+
+.kpi-card.kpi-masked .kpi-value::after {
+    content: '••••••••';
+    font-size: 1.35rem;
+    letter-spacing: 3px;
+    color: #64748b;
+    font-family: monospace;
+    font-weight: 700;
+}
+
+.kpi-card.kpi-masked .kpi-sub-badge {
+    font-size: 0 !important;
+    user-select: none;
+}
+
+.kpi-card.kpi-masked .kpi-sub-badge i {
+    display: none !important;
+}
+
+.kpi-card.kpi-masked .kpi-sub-badge::after {
+    content: '••••';
+    font-size: 0.76rem;
+    letter-spacing: 2px;
+    color: #64748b;
+    font-family: monospace;
+}
+
+.kpi-card.kpi-masked .kpi-footer {
+    font-size: 0 !important;
+    user-select: none;
+}
+
+.kpi-card.kpi-masked .kpi-footer > * {
+    display: none !important;
+}
+
+.kpi-card.kpi-masked .kpi-footer::after {
+    content: '••••••••••••';
+    font-size: 0.78rem;
+    letter-spacing: 2px;
+    color: #475569;
+    font-family: monospace;
+}
+
+.kpi-card.kpi-masked .comp-product-hero-card {
+    filter: blur(8px);
+    opacity: 0.3;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* Lista de múltiplos clientes no card Prazo & Desconto */
+.kpi-comm-multi-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    max-height: 62px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.kpi-comm-multi-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.71rem;
+    line-height: 1.25;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.kpi-comm-cli-name {
+    color: #cbd5e1;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 115px;
+}
+
+.kpi-comm-cli-terms {
+    color: #e2e8f0;
+    font-family: monospace;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Rodapé fixo da tabela de Análise Comparativa */
+.comp-table tfoot tr.comp-master-summary-row td {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    background: #172136;
+    border-top: 2px solid rgba(251, 191, 36, 0.45);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.highlight-cyan .kpi-value {
+    color: #67e8f9;
+}
+
 /* Grid de Cards de Indicadores (KPIs) */
 .indicators-kpis-grid {
     display: grid;
@@ -5517,9 +5701,25 @@ select.cfm-input option {
 }
 
 .ranking-item-left {
-    min-width: 0 !important;
+    min-width: 130px !important;
     flex: 1 1 auto !important;
     overflow: hidden !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.45rem !important;
+}
+
+.ranking-product-thumb-container {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    max-width: 38px !important;
+    flex-shrink: 0 !important;
+}
+
+.ranking-pos-badge {
+    flex-shrink: 0 !important;
+    min-width: 22px !important;
 }
 
 .ranking-item-info {
@@ -5553,15 +5753,23 @@ select.cfm-input option {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    font-size: 0.76rem;
+    font-size: 0.74rem;
     line-height: 1.25;
-    flex-shrink: 0 !important;
+    flex-shrink: 1 !important;
+    max-width: 62%;
 }
 
 .comp-rank-split-sub {
     display: flex;
-    gap: 0.5rem;
-    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 2px 6px;
+    font-size: 0.68rem;
+    line-height: 1.25;
+    text-align: right;
+}
+
+.comp-rank-split-sub span {
     white-space: nowrap;
 }
 

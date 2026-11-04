@@ -10,10 +10,107 @@
     let availableYears = [];
     let rankingDisplayLimit = 10;
     let currentDatasetType = localStorage.getItem('empresa_indicators_dataset_type') || 'extrato';
+    const CURRENT_BILLING_VERSION = '20261104_extrato_v9';
     let currentKpiDisplayMode = localStorage.getItem('empresa_indicators_kpi_mode') || 'both';
     if (!['both', 'values', 'pieces'].includes(currentKpiDisplayMode)) {
         currentKpiDisplayMode = 'both';
     }
+
+    // Controle de Visibilidade (Olhinho igual senha) dos Cards de KPI
+    let hiddenKpiCards = new Set();
+    try {
+        const rawHidden = localStorage.getItem('empresa_hidden_kpi_cards');
+        if (rawHidden) {
+            const parsedHidden = JSON.parse(rawHidden);
+            if (Array.isArray(parsedHidden)) hiddenKpiCards = new Set(parsedHidden);
+        }
+    } catch (e) {}
+
+    function saveHiddenKpiCards() {
+        try {
+            localStorage.setItem('empresa_hidden_kpi_cards', JSON.stringify(Array.from(hiddenKpiCards)));
+        } catch (e) {}
+    }
+
+    function syncMasterKpiEyeButton() {
+        const allCards = Array.from(document.querySelectorAll('.indicators-kpis-grid .kpi-card, #comp-product-kpis-grid .kpi-card'))
+            .filter(c => c.style.display !== 'none');
+        const allMasked = allCards.length > 0 && allCards.every(c => c.classList.contains('kpi-masked'));
+        const iconEl = document.getElementById('icon-toggle-all-kpis-eye');
+        const labelEl = document.getElementById('label-toggle-all-kpis-eye');
+        if (iconEl) iconEl.className = allMasked ? 'bx bx-hide' : 'bx bx-show';
+        if (labelEl) labelEl.textContent = allMasked ? 'Mostrar Valores' : 'Ocultar Valores';
+    }
+
+    function ensureKpiEyeButtons() {
+        const allCards = document.querySelectorAll('.indicators-kpis-grid .kpi-card, #comp-product-kpis-grid .kpi-card');
+        allCards.forEach((card, idx) => {
+            if (!card.dataset.kpiKey) {
+                card.dataset.kpiKey = card.id || `comp-prod-kpi-${idx}`;
+            }
+            const key = card.dataset.kpiKey;
+            const header = card.querySelector('.kpi-header');
+            if (header && !header.querySelector('.kpi-eye-btn')) {
+                const eyeBtn = document.createElement('button');
+                eyeBtn.type = 'button';
+                eyeBtn.className = 'kpi-eye-btn';
+                eyeBtn.title = 'Mostrar / ocultar valores deste KPI';
+                eyeBtn.setAttribute('onclick', 'window.toggleKpiCardEye(this, event)');
+                eyeBtn.innerHTML = `<i class='bx bx-show'></i>`;
+
+                const existingBadge = header.querySelector('.kpi-icon-badge, .badge');
+                if (existingBadge) {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'kpi-header-actions';
+                    header.insertBefore(wrapper, existingBadge);
+                    wrapper.appendChild(eyeBtn);
+                    wrapper.appendChild(existingBadge);
+                } else {
+                    header.appendChild(eyeBtn);
+                }
+            }
+            const isMasked = hiddenKpiCards.has(key);
+            card.classList.toggle('kpi-masked', isMasked);
+            const btnIcon = card.querySelector('.kpi-eye-btn i');
+            if (btnIcon) {
+                btnIcon.className = isMasked ? 'bx bx-hide' : 'bx bx-show';
+            }
+        });
+        syncMasterKpiEyeButton();
+    }
+
+    window.toggleKpiCardEye = function(btn, event) {
+        if (event) event.stopPropagation();
+        const card = btn.closest('.kpi-card');
+        if (!card) return;
+        const key = card.dataset.kpiKey || card.id;
+        if (!key) return;
+        if (hiddenKpiCards.has(key)) {
+            hiddenKpiCards.delete(key);
+        } else {
+            hiddenKpiCards.add(key);
+        }
+        saveHiddenKpiCards();
+        ensureKpiEyeButtons();
+    };
+
+    window.toggleAllKpisVisibility = function() {
+        ensureKpiEyeButtons();
+        const visibleCards = Array.from(document.querySelectorAll('.indicators-kpis-grid .kpi-card, #comp-product-kpis-grid .kpi-card'))
+            .filter(c => c.style.display !== 'none');
+        const allMasked = visibleCards.length > 0 && visibleCards.every(c => c.classList.contains('kpi-masked'));
+        visibleCards.forEach(c => {
+            const key = c.dataset.kpiKey || c.id;
+            if (!key) return;
+            if (allMasked) {
+                hiddenKpiCards.delete(key);
+            } else {
+                hiddenKpiCards.add(key);
+            }
+        });
+        saveHiddenKpiCards();
+        ensureKpiEyeButtons();
+    };
 
     // Variáveis e instâncias do Confronto (A Entregar X Faturamento)
     let chartCompMonthlyInstance = null;
@@ -37,7 +134,7 @@
     let compRankingDisplayLimit = 10;
     let compProductGroupMode = localStorage.getItem('empresa_comp_product_group_mode') || 'sku';
     let stdProductGroupMode = localStorage.getItem('empresa_std_product_group_mode') || 'sku';
-    let compMasterSummaryExpanded = false; // Exibe somente o Total Consolidado por padrÃ£o
+    let compMasterSummaryExpanded = true; // Exibe todas as linhas de CNPJ por padrão
 
     window.toggleCompMasterSummary = function() {
         compMasterSummaryExpanded = !compMasterSummaryExpanded;
@@ -62,7 +159,7 @@
         renderCompDateTable();
         renderCompProductTable();
     };
-    let compCnpjGroupByGroup = localStorage.getItem('empresa_comp_cnpj_group') !== 'false';
+    let compCnpjGroupByGroup = false; // Sempre exibir por CNPJ (sem agrupar por rede)
     let compExpandedGroups = new Set();
 
     window.setCompProductGroupMode = function(mode) {
@@ -168,12 +265,16 @@
     let compCnpjSortDir = 'desc';
 
     function getExtratoData() {
+        const savedVersion = localStorage.getItem('empresa_billing_version');
+        if (savedVersion !== CURRENT_BILLING_VERSION) {
+            return (window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA && Array.isArray(window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA)) ? [...window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA] : [];
+        }
         const savedCustom = localStorage.getItem('empresa_extrato_new_era_custom');
         let parsed = null;
         if (savedCustom) {
             try { parsed = JSON.parse(savedCustom); } catch(e) {}
         }
-        return (parsed && Array.isArray(parsed) && parsed.length > 0)
+        return (parsed && Array.isArray(parsed) && parsed.length > 0 && parsed[0].prazo !== undefined)
             ? parsed
             : (window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA && Array.isArray(window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA) ? [...window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA] : []);
     }
@@ -306,6 +407,14 @@
     let latestReportDate = '08/10/2026';
 
     function computeLatestReportDate() {
+        const savedVersion = localStorage.getItem('empresa_billing_version');
+        if (savedVersion !== CURRENT_BILLING_VERSION) {
+            const extDate = window.EXTRATO_LAST_UPDATED || '03/11/2026';
+            latestReportDate = (currentDatasetType === 'extrato') 
+                ? extDate
+                : (currentDatasetType === 'comparison' ? (extDate + ' / 31/10/2026') : '31/10/2026');
+            return;
+        }
         if (currentDatasetType === 'comparison') {
             const extDate = localStorage.getItem('empresa_extrato_last_updated') || window.EXTRATO_LAST_UPDATED || '08/10/2026';
             const billDate = localStorage.getItem('empresa_billing_last_updated') || window.BILLING_LAST_UPDATED || '31/10/2026';
@@ -394,10 +503,13 @@
     // DRAG AND DROP & ORDEM PERSONALIZADA DOS CARDS DE KPIS
     // --------------------------------------------------------------------------
     const DEFAULT_KPI_ORDER = [
+        'kpi-card-orders',
         'kpi-card-total',
         'kpi-card-pieces',
-        'kpi-card-orders',
+        'kpi-card-canceled',
+        'kpi-card-packaged',
         'kpi-card-ticket',
+        'kpi-card-commercial',
         'kpi-card-clients',
         'kpi-card-groups',
         'kpi-card-days-no-billing',
@@ -513,11 +625,30 @@
     }
 
     window.initIndicatorsModule = function() {
-        const CURRENT_BILLING_VERSION = '20261031_extrato_v1';
         const savedVersion = localStorage.getItem('empresa_billing_version');
         if (savedVersion !== CURRENT_BILLING_VERSION) {
+            localStorage.removeItem('empresa_extrato_new_era_custom');
+            localStorage.removeItem('empresa_extrato_last_updated');
+            localStorage.removeItem('empresa_indicators_kpi_order');
             localStorage.setItem('empresa_billing_version', CURRENT_BILLING_VERSION);
+
+            if (window.db && window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA && window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA.length > 0) {
+                try {
+                    window.db.collection('settings').doc('extrato_new_era').set({
+                        version: CURRENT_BILLING_VERSION,
+                        list: window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA,
+                        lastUpdated: window.EXTRATO_LAST_UPDATED || '03/11/2026',
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        updatedBy: 'Sistema (Sync Oficial)'
+                    }).catch(e => console.warn('Sync Firestore extrato_new_era:', e));
+                } catch(e) {}
+            }
         }
+
+
+
+
+
 
         currentDatasetType = localStorage.getItem('empresa_indicators_dataset_type') || 'extrato';
         updateUploadButtonLabel(currentDatasetType);
@@ -618,7 +749,11 @@
             window.db.collection('settings').doc('extrato_new_era').onSnapshot((doc) => {
                 if (doc.exists && doc.data().list && Array.isArray(doc.data().list)) {
                     const remote = doc.data().list;
-                    if (remote.length > 0) {
+                    const remoteVersion = doc.data().version || '';
+                    if (remoteVersion && remoteVersion < CURRENT_BILLING_VERSION) {
+                        return;
+                    }
+                    if (remote.length > 0 && remote[0].prazo !== undefined) {
                         localStorage.setItem('empresa_extrato_new_era_custom', JSON.stringify(remote));
                         if (doc.data().lastUpdated) {
                             localStorage.setItem('empresa_extrato_last_updated', doc.data().lastUpdated);
@@ -634,6 +769,24 @@
                     }
                 }
             });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         }
     };
 
@@ -1341,10 +1494,130 @@
         });
     }
 
+    function hasActiveClientSelection() {
+        const selectedClients = getIndCMSSelectedValues('client');
+        const selectedGroups = getIndCMSSelectedValues('group');
+        const selectedGroupReals = getIndCMSSelectedValues('group-real');
+        const selectedNFs = getIndCMSSelectedValues('nf');
+        return (selectedClients.length > 0 || selectedGroups.length > 0 || selectedGroupReals.length > 0 || selectedNFs.length > 0);
+    }
+
+    function computeCommercialConditions(items, clientsMap) {
+        const clientMapTerms = new Map();
+        const cMap = clientsMap || buildClientsMap();
+
+        (items || []).forEach(it => {
+            const cMatch = resolveClientForItem(it, cMap);
+            const cKey = cleanDigits(it.c || (cMatch && cMatch['CNPJ']) || '') || (it.cli ? `CLI_${it.cli}` : (it.f || 'GERAL'));
+            const cName = (cMatch && (cMatch['FANTASIA'] || cMatch['NOME FANTASIA'])) || it.f || it.z || cKey;
+
+            if (!clientMapTerms.has(cKey)) {
+                clientMapTerms.set(cKey, {
+                    clientName: cName,
+                    prazos: new Set(),
+                    discountSum: 0,
+                    discountCount: 0,
+                    totalItems: 0
+                });
+            }
+            const entry = clientMapTerms.get(cKey);
+            entry.totalItems++;
+
+            const p = (it.prazo || '').toString().trim();
+            if (p && p !== '-' && p !== '0') {
+                entry.prazos.add(p);
+            }
+            const d = parseFloat(it.desconto || 0);
+            if (d > 0) {
+                entry.discountSum += d;
+                entry.discountCount++;
+            }
+        });
+
+        const clientTermsList = Array.from(clientMapTerms.values()).map(entry => {
+            const prazosArr = Array.from(entry.prazos);
+            const prazoLabel = prazosArr.length > 0 ? prazosArr.join(' / ') : '-';
+            let discountLabel = '0%';
+            if (entry.discountCount > 0) {
+                const avg = entry.discountSum / entry.discountCount;
+                discountLabel = `${avg.toFixed(2).replace('.', ',')}%`;
+            }
+            return {
+                clientName: entry.clientName,
+                prazoLabel,
+                discountLabel
+            };
+        });
+
+        return { clientTermsList };
+    }
+
+    function renderCommercialKpiCard(items, clientsMap) {
+        const cardComm = document.getElementById('kpi-card-commercial');
+        if (!cardComm) return;
+        cardComm.style.display = 'block';
+
+        const elCommVal = document.getElementById('kpi-commercial-val');
+        const elCommSub = document.getElementById('kpi-commercial-sub');
+        const elCommFoot = document.getElementById('kpi-commercial-footer');
+
+        if (!hasActiveClientSelection()) {
+            if (elCommVal) elCommVal.textContent = '—';
+            if (elCommSub) elCommSub.style.display = 'none';
+            if (elCommFoot) elCommFoot.innerHTML = 'selecione um cliente nos filtros';
+            return;
+        }
+
+        const { clientTermsList } = computeCommercialConditions(items, clientsMap);
+
+        if (clientTermsList.length === 0) {
+            if (elCommVal) elCommVal.textContent = '—';
+            if (elCommSub) elCommSub.style.display = 'none';
+            if (elCommFoot) elCommFoot.innerHTML = 'sem condição comercial na carteira';
+            return;
+        }
+
+        if (clientTermsList.length === 1) {
+            const single = clientTermsList[0];
+            if (elCommVal) elCommVal.textContent = single.prazoLabel;
+            if (elCommSub) {
+                elCommSub.innerHTML = `<i class='bx bx-purchase-tag'></i> Desc: ${single.discountLabel}`;
+                elCommSub.style.display = 'inline-flex';
+            }
+            if (elCommFoot) {
+                elCommFoot.innerHTML = escapeHTML(single.clientName);
+            }
+        } else {
+            const prazosRespectively = clientTermsList.map(c => c.prazoLabel).join(' | ');
+            const descsRespectively = clientTermsList.map(c => c.discountLabel).join(' | ');
+            if (elCommVal) elCommVal.textContent = prazosRespectively;
+            if (elCommSub) {
+                elCommSub.innerHTML = `<i class='bx bx-purchase-tag'></i> Desc: ${descsRespectively}`;
+                elCommSub.style.display = 'inline-flex';
+            }
+            if (elCommFoot) {
+                elCommFoot.innerHTML = `
+                    <div class="kpi-comm-multi-list custom-scrollbar">
+                        ${clientTermsList.map(c => `
+                            <div class="kpi-comm-multi-row" title="${escapeHTML(c.clientName)} — Prazo: ${escapeHTML(c.prazoLabel)} | Desc: ${escapeHTML(c.discountLabel)}">
+                                <span class="kpi-comm-cli-name">${escapeHTML(c.clientName)}</span>
+                                <span class="kpi-comm-cli-terms">${escapeHTML(c.prazoLabel)} &bull; <span style="color:#a5b4fc;">${escapeHTML(c.discountLabel)}</span></span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+    }
+
     function updateKpiCards(data, clientsMap) {
         let totalRevenue = 0;
         let totalPieces = 0;
         let totalOrders = 0;
+        let totalCanceladoVal = 0;
+        let totalCanceladoPcs = 0;
+        let totalEmbaladoVal = 0;
+        let totalEmbaladoPcs = 0;
         const activeClientsSet = new Set();
         const activeGroupsSet = new Set();
         const dailyRevenueMap = {};
@@ -1358,6 +1631,10 @@
             totalRevenue += v;
             totalPieces += q;
             totalOrders += 1;
+            totalCanceladoVal += (item.vc || 0);
+            totalCanceladoPcs += (item.qc || 0);
+            totalEmbaladoVal += (item.ve || 0);
+            totalEmbaladoPcs += (item.qe || 0);
 
             const clientMatch = resolveClientForItem(item, clientsMap);
             const clientKey = item.c || (clientMatch && clientMatch['CNPJ']) || (item.cli ? `CLI_${item.cli}` : item.f);
@@ -1452,11 +1729,59 @@
                 : `${numberFormatter.format(totalOrders)} lançamentos / notas`;
         }
 
-        // Cards de Booking: Peças a Entregar e Pedidos em Carteira
+        // Cards de Booking: A Entregar (Carteira) e Total Planejado
+        const elPiecesTitle = document.getElementById('kpi-pieces-title');
         const elPiecesVal = document.getElementById('kpi-total-pieces-val');
-        if (elPiecesVal) elPiecesVal.textContent = `${numberFormatter.format(totalPieces)} pçs`;
+        const elPiecesSub = document.getElementById('kpi-pieces-sub');
+        const elPiecesFoot = document.getElementById('kpi-pieces-footer');
+        if (elPiecesTitle) {
+            elPiecesTitle.textContent = isPiecesOnly ? 'A Entregar (Peças)' : 'A Entregar (Carteira)';
+        }
+        if (elPiecesVal) {
+            elPiecesVal.textContent = isPiecesOnly
+                ? `${numberFormatter.format(totalPieces)} pçs`
+                : formatBRL(totalRevenue);
+        }
+        if (elPiecesSub) {
+            if (isBoth) {
+                elPiecesSub.innerHTML = `<i class='bx bx-package'></i> ${numberFormatter.format(totalPieces)} pçs`;
+                elPiecesSub.style.display = 'inline-flex';
+            } else {
+                elPiecesSub.style.display = 'none';
+            }
+        }
+        if (elPiecesFoot) {
+            elPiecesFoot.textContent = `${numberFormatter.format(totalPieces)} peças programadas`;
+        }
+        const elOrdersTitle = document.getElementById('kpi-orders-title');
         const elOrdersVal = document.getElementById('kpi-unique-orders-val');
-        if (elOrdersVal) elOrdersVal.textContent = numberFormatter.format(uniqueOrdersCount);
+        const elOrdersSub = document.getElementById('kpi-orders-sub');
+        const elOrdersFoot = document.getElementById('kpi-orders-footer');
+
+        const totalPlanejadoVal = isExtrato ? (totalRevenue + totalCanceladoVal) : totalRevenue;
+        const totalPlanejadoPcs = isExtrato ? (totalPieces + totalCanceladoPcs) : totalPieces;
+
+        if (elOrdersTitle) {
+            elOrdersTitle.textContent = isExtrato ? (isPiecesOnly ? 'Total Planejado (Peças)' : 'Total Planejado') : 'Notas Fiscais';
+        }
+        if (elOrdersVal) {
+            elOrdersVal.textContent = isExtrato
+                ? (isPiecesOnly ? `${numberFormatter.format(totalPlanejadoPcs)} pçs` : formatBRL(totalPlanejadoVal))
+                : numberFormatter.format(uniqueOrdersCount);
+        }
+        if (elOrdersSub) {
+            if (isExtrato && isBoth) {
+                elOrdersSub.innerHTML = `<i class='bx bx-package'></i> ${numberFormatter.format(totalPlanejadoPcs)} pçs`;
+                elOrdersSub.style.display = 'inline-flex';
+            } else {
+                elOrdersSub.style.display = 'none';
+            }
+        }
+        if (elOrdersFoot) {
+            elOrdersFoot.textContent = isExtrato
+                ? `${numberFormatter.format(uniqueOrdersCount)} pedidos programados`
+                : `${numberFormatter.format(uniqueOrdersCount)} notas emitidas`;
+        }
 
         // Se estiver em modo Faturamento, atualiza os KPIs mensais e diários
         if (!isExtrato) {
@@ -1540,23 +1865,53 @@
             if (elDayDate) elDayDate.textContent = dayDateStr;
         }
 
-        // KPI 4: Clientes Booking / Faturados
+        // KPI 4: Clientes Booking / Faturados (ou Pedidos / Média por NF quando houver apenas 1 CNPJ)
         const totalClients = activeClientsSet.size;
         const elClientsTitle = document.getElementById('kpi-clients-title');
         const elActiveClients = document.getElementById('kpi-active-clients');
         const elClientsCoverage = document.getElementById('kpi-clients-coverage');
-        if (elClientsTitle) elClientsTitle.textContent = isExtrato ? 'Clientes Booking' : 'Clientes Faturados';
-        if (elActiveClients) elActiveClients.textContent = numberFormatter.format(totalClients);
-        if (elClientsCoverage) elClientsCoverage.textContent = isExtrato ? 'lojas com pedidos em carteira' : 'lojas com compras ativas';
 
-        // KPI 5: Redes / Grupos
+        // KPI 5: Redes / Grupos (ou Mix de Produtos SKUs quando houver apenas 1 CNPJ)
         const totalGroups = activeGroupsSet.size;
         const elGroupsTitle = document.getElementById('kpi-groups-title');
         const elActiveGroups = document.getElementById('kpi-active-groups');
         const elGroupsCoverage = document.getElementById('kpi-groups-coverage');
-        if (elGroupsTitle) elGroupsTitle.textContent = 'Redes / Grupos';
-        if (elActiveGroups) elActiveGroups.textContent = numberFormatter.format(totalGroups);
-        if (elGroupsCoverage) elGroupsCoverage.textContent = isExtrato ? 'redes com pedidos programados' : 'redes corporativas';
+
+        if (totalClients === 1) {
+            const uniqueSkusSet = new Set();
+            const uniqueCatsSet = new Set();
+            data.forEach(it => {
+                const sku = (it.p || it.c_prod || it.d_prod || '').toString().trim();
+                if (sku) uniqueSkusSet.add(sku);
+                const cat = (it.sg || it.cl || '').toString().trim();
+                if (cat && cat !== '-') uniqueCatsSet.add(cat);
+            });
+            const avgOrderVal = totalRevenue / Math.max(uniqueOrdersCount, 1);
+            const avgOrderPcs = Math.round(totalPieces / Math.max(uniqueOrdersCount, 1));
+
+            if (isExtrato) {
+                if (elClientsTitle) elClientsTitle.textContent = 'Pedidos da Loja';
+                if (elActiveClients) elActiveClients.textContent = `${numberFormatter.format(uniqueOrdersCount)} ${uniqueOrdersCount === 1 ? 'pedido' : 'pedidos'}`;
+                if (elClientsCoverage) elClientsCoverage.textContent = `média de ${formatBRL(avgOrderVal)} (${avgOrderPcs} pçs) / ped.`;
+            } else {
+                if (elClientsTitle) elClientsTitle.textContent = 'Média por Nota Fiscal';
+                if (elActiveClients) elActiveClients.textContent = isPiecesOnly ? `${numberFormatter.format(avgOrderPcs)} pçs / NF` : formatBRL(avgOrderVal);
+                if (elClientsCoverage) elClientsCoverage.textContent = `em ${numberFormatter.format(uniqueOrdersCount)} ${uniqueOrdersCount === 1 ? 'NF emitida' : 'NFs emitidas'}`;
+            }
+
+            if (elGroupsTitle) elGroupsTitle.textContent = 'Mix de Produtos (SKUs)';
+            if (elActiveGroups) elActiveGroups.textContent = `${numberFormatter.format(uniqueSkusSet.size)} SKUs`;
+            const catsCount = Math.max(uniqueCatsSet.size, 1);
+            if (elGroupsCoverage) elGroupsCoverage.textContent = `em ${catsCount} ${catsCount === 1 ? 'categoria comprada' : 'categorias compradas'}`;
+        } else {
+            if (elClientsTitle) elClientsTitle.textContent = isExtrato ? 'Clientes Booking' : 'Clientes Faturados';
+            if (elActiveClients) elActiveClients.textContent = numberFormatter.format(totalClients);
+            if (elClientsCoverage) elClientsCoverage.textContent = isExtrato ? 'lojas com pedidos em carteira' : 'lojas com compras ativas';
+
+            if (elGroupsTitle) elGroupsTitle.textContent = 'Redes / Grupos';
+            if (elActiveGroups) elActiveGroups.textContent = numberFormatter.format(totalGroups);
+            if (elGroupsCoverage) elGroupsCoverage.textContent = isExtrato ? 'redes com pedidos programados' : 'redes corporativas';
+        }
 
         // KPI 6: Ticket Médio / Média de Peças
         const avgTicket = totalClients > 0 ? (totalRevenue / totalClients) : 0;
@@ -1759,7 +2114,74 @@
             }
         }
 
+        // KPI 9: Embalado (Pronto para Faturar)
+        const cardPackaged = document.getElementById('kpi-card-packaged');
+        if (cardPackaged) {
+            cardPackaged.style.display = isExtrato ? 'block' : 'none';
+            const elPackVal = document.getElementById('kpi-packaged-val');
+            const elPackSub = document.getElementById('kpi-packaged-sub');
+            const elPackFoot = document.getElementById('kpi-packaged-footer');
+            if (elPackVal) {
+                elPackVal.textContent = isPiecesOnly 
+                    ? `${numberFormatter.format(totalEmbaladoPcs)} pçs` 
+                    : formatBRL(totalEmbaladoVal);
+            }
+            if (elPackSub) {
+                if (isBoth) {
+                    elPackSub.innerHTML = `<i class='bx bx-package'></i> ${numberFormatter.format(totalEmbaladoPcs)} pçs`;
+                    elPackSub.style.display = 'inline-flex';
+                } else {
+                    elPackSub.style.display = 'none';
+                }
+            }
+            if (elPackFoot) {
+                elPackFoot.textContent = `${numberFormatter.format(totalEmbaladoPcs)} pçs prontas para expedição`;
+            }
+        }
+
+        // KPI 10: Pedidos Cancelados
+        const cardCanceled = document.getElementById('kpi-card-canceled');
+        if (cardCanceled) {
+            cardCanceled.style.display = isExtrato ? 'block' : 'none';
+            const elCancVal = document.getElementById('kpi-canceled-val');
+            const elCancSub = document.getElementById('kpi-canceled-sub');
+            const elCancFoot = document.getElementById('kpi-canceled-footer');
+            const baseTotal = totalRevenue + totalCanceladoVal;
+            const pctCanc = baseTotal > 0 ? (totalCanceladoVal / baseTotal * 100) : 0;
+
+            if (elCancVal) {
+                elCancVal.textContent = isPiecesOnly 
+                    ? `${numberFormatter.format(totalCanceladoPcs)} pçs` 
+                    : formatBRL(totalCanceladoVal);
+            }
+            if (elCancSub) {
+                if (isBoth) {
+                    elCancSub.innerHTML = `<i class='bx bx-x-circle'></i> ${numberFormatter.format(totalCanceladoPcs)} pçs`;
+                    elCancSub.style.display = 'inline-flex';
+                } else {
+                    elCancSub.style.display = 'none';
+                }
+            }
+            if (elCancFoot) {
+                elCancFoot.textContent = `${pctCanc.toFixed(1).replace('.', ',')}% de taxa de cancelamento`;
+            }
+        }
+
+        // KPI 11: Prazo & Desconto (Condição Comercial)
+        if (isExtrato) {
+            renderCommercialKpiCard(data, clientsMap);
+        } else {
+            const rawExt = getExtratoData();
+            const matchedExt = rawExt.filter(it => {
+                const cMatch = resolveClientForItem(it, clientsMap);
+                const cKey = it.c || (cMatch && cMatch['CNPJ']) || (it.cli ? `CLI_${it.cli}` : it.f);
+                return cKey && activeClientsSet.has(cKey);
+            });
+            renderCommercialKpiCard(matchedExt, clientsMap);
+        }
+
         adjustKpiTextFit();
+        ensureKpiEyeButtons();
     }
 
     // --------------------------------------------------------------------------
@@ -2907,7 +3329,7 @@
                             ${isProduct ? renderProductThumbHTML(item) : ''}
                             <div class="ranking-item-info">
                                 <span class="ranking-item-name" title="${escapeHTML(item.name)}">${escapeHTML(item.name)}</span>
-                                ${item.sub ? `<span class="ranking-item-sub">${escapeHTML(item.sub)}</span>` : ''}
+                                ${item.sub ? `<div class="ranking-item-sub" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 3px;">${item.sub}</div>` : ''}
                             </div>
                         </div>
                         <div class="ranking-item-right">
@@ -3131,7 +3553,23 @@
                 }
                 it.cor = primaryCor;
             }
-            it.sub = parts.join(' \u2022 ');
+            const badges = [];
+            if (parts.length > 0) {
+                badges.push(`<span style="color: #94a3b8; font-size: 0.74rem;">${escapeHTML(parts.join(' \u2022 '))}</span>`);
+            }
+            if (it.prazo) {
+                badges.push(`<span class="badge-prazo" style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-time'></i> Prazo: ${escapeHTML(it.prazo)}</span>`);
+            }
+            if (it.desconto > 0) {
+                badges.push(`<span class="badge-desconto" style="background: rgba(245, 158, 11, 0.15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-purchase-tag'></i> Desc: ${it.desconto}%</span>`);
+            }
+            if (it.qe > 0) {
+                badges.push(`<span class="badge-embalado" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-package'></i> Emb: ${it.qe} pçs</span>`);
+            }
+            if (it.qc > 0) {
+                badges.push(`<span class="badge-cancelado" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-x-circle'></i> Canc: ${it.qc} pçs</span>`);
+            }
+            it.sub = badges.join(' ');
             return it;
         });
 
@@ -3242,12 +3680,24 @@
                     name: nfNum ? `${prefixName}${nfNum}` : defaultName,
                     date: item.d || '-',
                     fantasia: fantasia,
+                    prazo: item.prazo || '',
+                    desconto: item.desconto || 0,
+                    qc: 0,
+                    vc: 0,
+                    qe: 0,
+                    ve: 0,
                     q: 0,
                     v: 0
                 };
             }
             nfTotals[key].v += (item.v || 0);
             nfTotals[key].q += (item.q || 0);
+            nfTotals[key].qc += (item.qc || 0);
+            nfTotals[key].vc += (item.vc || 0);
+            nfTotals[key].qe += (item.qe || 0);
+            nfTotals[key].ve += (item.ve || 0);
+            if (!nfTotals[key].prazo && item.prazo) nfTotals[key].prazo = item.prazo;
+            if (!nfTotals[key].desconto && item.desconto) nfTotals[key].desconto = item.desconto;
             if ((!nfTotals[key].date || nfTotals[key].date === '-') && item.d) {
                 nfTotals[key].date = item.d;
             }
@@ -3259,7 +3709,23 @@
             const parts = [];
             if (it.date && it.date !== '-') parts.push(it.date);
             if (it.fantasia && it.fantasia !== 'Cliente' && it.fantasia !== 'Cliente s/ Cadastro') parts.push(it.fantasia);
-            it.sub = parts.join(' \u2022 ');
+            const badges = [];
+            if (parts.length > 0) {
+                badges.push(`<span style="color: #94a3b8; font-size: 0.74rem;">${escapeHTML(parts.join(' \u2022 '))}</span>`);
+            }
+            if (it.prazo) {
+                badges.push(`<span class="badge-prazo" style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-time'></i> Prazo: ${escapeHTML(it.prazo)}</span>`);
+            }
+            if (it.desconto > 0) {
+                badges.push(`<span class="badge-desconto" style="background: rgba(245, 158, 11, 0.15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-purchase-tag'></i> Desc: ${it.desconto}%</span>`);
+            }
+            if (it.qe > 0) {
+                badges.push(`<span class="badge-embalado" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-package'></i> Emb: ${it.qe} pçs</span>`);
+            }
+            if (it.qc > 0) {
+                badges.push(`<span class="badge-cancelado" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-x-circle'></i> Canc: ${it.qc} pçs</span>`);
+            }
+            it.sub = badges.join(' ');
             return it;
         });
 
@@ -3467,12 +3933,24 @@
                 // Sub-grupo: aceita 'grupo produto' ou 'sub-grupo'
                 const kSub = findKey('grupo produto') || findKey('grupo de produto') || findKey('sub-grupo') || findKey('subgrupo') || findKey('sub grupo');
                 const kClasse = findKey('classe produto') || findKey('classe') || findKey('divis');
+                const kPrazo = findKey('condiÃ§Ã£o de pgto') || findKey('condicao de pgto') || findKey('condiÃ§Ã£o') || findKey('condicao') || findKey('pgto') || findKey('prazo') || findKey('pagamento');
+                const kDesconto = findKey('% desconto') || findKey('desconto item') || findKey('desconto');
+                const kQtdeCanc = findKey('qtde cancelada') || findKey('qtd cancelada') || findKey('cancelada');
+                const kValCanc = findKey('valor cancelado') || findKey('val cancelado');
+                const kQtdeEmb = findKey('qtde embalado') || findKey('qtd embalado') || findKey('embalado');
+                const kValEmb = findKey('valor embalado') || findKey('val embalado');
+                const kCorNome = findKey('nome cor') || findKey('descriÃ§Ã£o cor') || findKey('descricao cor') || findKey('cor desc');
 
                 const parsed = [];
                 rawJson.forEach(row => {
                     const rawGross = kGross ? row[kGross] : null;
                     const rawNet = kNet ? row[kNet] : null;
-                    if ((rawGross === null || rawGross === undefined) && (rawNet === null || rawNet === undefined)) return;
+                    const rawValCanc = kValCanc ? row[kValCanc] : null;
+                    const rawQtdeCanc = kQtdeCanc ? row[kQtdeCanc] : null;
+                    const rawValEmb = kValEmb ? row[kValEmb] : null;
+                    const rawQtdeEmb = kQtdeEmb ? row[kQtdeEmb] : null;
+
+                    if (rawGross == null && rawNet == null && rawValCanc == null && rawQtdeCanc == null && rawValEmb == null && rawQtdeEmb == null) return;
 
                     let grossVal = 0;
                     if (rawGross !== null && rawGross !== undefined) {
@@ -3496,11 +3974,33 @@
                     if (grossVal === 0 && netVal !== 0) {
                         grossVal = netVal;
                     }
-                    const totalVal = (netVal || grossVal || 0); /*
+                    const totalVal = (netVal || grossVal || 0);
 
+                    let qCanc = (kQtdeCanc && row[kQtdeCanc]) ? (parseInt(row[kQtdeCanc], 10) || 0) : 0;
+                    let vCanc = 0;
+                    if (kValCanc && row[kValCanc] !== null && row[kValCanc] !== undefined) {
+                        try { vCanc = parseFloat(String(row[kValCanc]).replace(',', '.')) || 0; } catch(err) { vCanc = Number(row[kValCanc]) || 0; }
                     }
+                    let qEmb = (kQtdeEmb && row[kQtdeEmb]) ? (parseInt(row[kQtdeEmb], 10) || 0) : 0;
+                    let vEmb = 0;
+                    if (kValEmb && row[kValEmb] !== null && row[kValEmb] !== undefined) {
+                        try { vEmb = parseFloat(String(row[kValEmb]).replace(',', '.')) || 0; } catch(err) { vEmb = Number(row[kValEmb]) || 0; }
+                    }
+                    let descVal = 0;
+                    if (kDesconto && row[kDesconto] !== null && row[kDesconto] !== undefined) {
+                        try { descVal = parseFloat(String(row[kDesconto]).replace(',', '.')) || 0; } catch(err) { descVal = Number(row[kDesconto]) || 0; }
+                    }
+                    const prazoVal = (kPrazo && row[kPrazo]) ? String(row[kPrazo]).trim() : '';
 
-                    */ if (grossVal === 0 && netVal === 0) return;
+                    if (grossVal === 0 && netVal === 0 && vCanc === 0 && qCanc === 0 && vEmb === 0 && qEmb === 0) return;
+
+                    let itemStatus = 'A Entregar';
+                    if (totalVal <= 0 && (!kQtde || !row[kQtde] || parseInt(row[kQtde], 10) <= 0)) {
+                        if (vCanc > 0 || qCanc > 0) itemStatus = 'Cancelado';
+                        else if (vEmb > 0 || qEmb > 0) itemStatus = 'Embalado';
+                    } else if (vEmb > 0 || qEmb > 0) {
+                        itemStatus = 'Embalado';
+                    }
 
                     const cleanC = kCnpj ? cleanDigits(row[kCnpj]).padStart(14, '0') : '';
 
@@ -3574,7 +4074,15 @@
                         vn: Math.round((netVal || totalVal) * 100) / 100,
                         v: Math.round(totalVal * 100) / 100,
                         q: (kQtde && row[kQtde]) ? (parseInt(row[kQtde], 10) || 0) : 0,
-                        nf: (kNota && row[kNota]) ? String(row[kNota]).trim() : ''
+                        nf: (kNota && row[kNota]) ? String(row[kNota]).trim() : '',
+                        prazo: prazoVal,
+                        desconto: Math.round(descVal * 100) / 100,
+                        qc: qCanc,
+                        vc: Math.round(vCanc * 100) / 100,
+                        qe: qEmb,
+                        ve: Math.round(vEmb * 100) / 100,
+                        corNome: (kCorNome && row[kCorNome]) ? String(row[kCorNome]).trim() : '',
+                        status: itemStatus
                     });
                 });
 
@@ -3617,6 +4125,7 @@
                     try {
                         const docId = isExtrato ? 'extrato_new_era' : 'billing_new_era';
                         await window.db.collection('settings').doc(docId).set({
+                            version: CURRENT_BILLING_VERSION,
                             list: parsed,
                             lastUpdated: formattedFileDate,
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3779,6 +4288,11 @@
         const isBoth = (currentKpiDisplayMode === 'both');
 
         // KPI 1: Faturamento Realizado
+        const uniqueFatNfs = new Set();
+        bData.forEach(it => { if (it.nf) uniqueFatNfs.add(it.nf); });
+        const uniqueExtOrders = new Set();
+        eData.forEach(it => { if (it.nf) uniqueExtOrders.add(it.nf); });
+
         const cardTotal = document.getElementById('kpi-card-total');
         if (cardTotal) {
             cardTotal.style.display = 'block';
@@ -3787,18 +4301,18 @@
             const titleEl = document.getElementById('kpi-total-title');
             const revEl = document.getElementById('kpi-total-revenue');
             const subEl = document.getElementById('kpi-total-sub');
-            const footEl = document.getElementById('kpi-total-footer');
+            const footEl = document.getElementById('kpi-total-orders');
             if (titleEl) titleEl.textContent = isPiecesOnly ? 'Faturamento Realizado (Peças)' : 'Faturamento Realizado';
             if (revEl) revEl.textContent = isPiecesOnly ? `${numberFormatter.format(fatPieces)} pçs` : formatBRL(fatTotal);
             if (subEl) {
                 if (isBoth) {
-                    subEl.style.display = 'inline-block';
-                    subEl.textContent = `${numberFormatter.format(fatPieces)} peças`;
+                    subEl.style.display = 'inline-flex';
+                    subEl.innerHTML = `<i class='bx bx-package'></i> ${numberFormatter.format(fatPieces)} pçs`;
                 } else {
                     subEl.style.display = 'none';
                 }
             }
-            if (footEl) footEl.textContent = 'vendas faturadas no período';
+            if (footEl) footEl.textContent = `${numberFormatter.format(uniqueFatNfs.size || bData.length)} notas faturadas no período`;
         }
 
         // KPI 2: A Entregar (Carteira)
@@ -3809,21 +4323,39 @@
             cardPieces.classList.add('highlight-blue');
             const titleEl = document.getElementById('kpi-pieces-title');
             const valEl = document.getElementById('kpi-total-pieces-val');
+            const subEl = document.getElementById('kpi-pieces-sub');
             const footEl = document.getElementById('kpi-pieces-footer');
             if (titleEl) titleEl.textContent = isPiecesOnly ? 'A Entregar (Peças)' : 'A Entregar (Carteira)';
             if (valEl) valEl.textContent = isPiecesOnly ? `${numberFormatter.format(extPieces)} pçs` : formatBRL(extTotal);
+            if (subEl) {
+                if (isBoth) {
+                    subEl.innerHTML = `<i class='bx bx-package'></i> ${numberFormatter.format(extPieces)} pçs`;
+                    subEl.style.display = 'inline-flex';
+                } else {
+                    subEl.style.display = 'none';
+                }
+            }
             if (footEl) footEl.textContent = isBoth ? `${numberFormatter.format(extPieces)} peças programadas` : (isPiecesOnly ? 'pedidos programados em carteira' : 'valor em carteira a entregar');
         }
 
-        // KPI 3: Total Geral Previsto
+        // KPI: Total Planejado
         const cardOrders = document.getElementById('kpi-card-orders');
         if (cardOrders) {
             cardOrders.style.display = 'block';
             const titleEl = document.getElementById('kpi-orders-title');
             const valEl = document.getElementById('kpi-unique-orders-val');
+            const subEl = document.getElementById('kpi-orders-sub');
             const footEl = document.getElementById('kpi-orders-footer');
-            if (titleEl) titleEl.textContent = isPiecesOnly ? 'Total Geral Previsto (Peças)' : 'Total Geral Previsto';
+            if (titleEl) titleEl.textContent = isPiecesOnly ? 'Total Planejado (Peças)' : 'Total Planejado';
             if (valEl) valEl.textContent = isPiecesOnly ? `${numberFormatter.format(grandPieces)} pçs` : formatBRL(grandTotal);
+            if (subEl) {
+                if (isBoth) {
+                    subEl.innerHTML = `<i class='bx bx-package'></i> ${numberFormatter.format(grandPieces)} pçs`;
+                    subEl.style.display = 'inline-flex';
+                } else {
+                    subEl.style.display = 'none';
+                }
+            }
             if (footEl) footEl.textContent = isBoth ? `${numberFormatter.format(grandPieces)} peças consolidadas` : (isPiecesOnly ? 'volume consolidado faturado + carteira' : 'projeção consolidada de vendas');
         }
 
@@ -3844,28 +4376,61 @@
             if (footEl) footEl.textContent = 'conversão geral de vendas';
         }
 
-        // KPI 5: Lojas Faturadas
+        // KPI 5 & 6: Lojas Faturadas / Lojas em Carteira (ou Pedidos & Notas / Mix de SKUs quando houver 1 único CNPJ)
+        const allCompClientsSet = new Set([...cnpjsFat, ...cnpjsExt]);
         const cardClients = document.getElementById('kpi-card-clients');
-        if (cardClients) {
-            cardClients.style.display = 'block';
-            const titleEl = document.getElementById('kpi-clients-title');
-            const valEl = document.getElementById('kpi-active-clients');
-            const footEl = document.getElementById('kpi-clients-coverage');
-            if (titleEl) titleEl.textContent = 'Lojas Faturadas';
-            if (valEl) valEl.textContent = cnpjsFat.size.toString();
-            if (footEl) footEl.textContent = 'clientes com faturamento emitido';
-        }
-
-        // KPI 6: Lojas em Carteira
         const cardGroups = document.getElementById('kpi-card-groups');
-        if (cardGroups) {
-            cardGroups.style.display = 'block';
-            const titleEl = document.getElementById('kpi-groups-title');
-            const valEl = document.getElementById('kpi-active-groups');
-            const footEl = document.getElementById('kpi-groups-coverage');
-            if (titleEl) titleEl.textContent = 'Lojas em Carteira';
-            if (valEl) valEl.textContent = cnpjsExt.size.toString();
-            if (footEl) footEl.textContent = 'clientes com pedidos a entregar';
+
+        if (allCompClientsSet.size === 1) {
+            const uniqueCompSkus = new Set();
+            const uniqueCompCats = new Set();
+            [...bData, ...eData].forEach(it => {
+                const sku = (it.p || it.c_prod || it.d_prod || '').toString().trim();
+                if (sku) uniqueCompSkus.add(sku);
+                const cat = (it.sg || it.cl || '').toString().trim();
+                if (cat && cat !== '-') uniqueCompCats.add(cat);
+            });
+
+            if (cardClients) {
+                cardClients.style.display = 'block';
+                const titleEl = document.getElementById('kpi-clients-title');
+                const valEl = document.getElementById('kpi-active-clients');
+                const footEl = document.getElementById('kpi-clients-coverage');
+                if (titleEl) titleEl.textContent = 'Pedidos & Notas (Loja)';
+                if (valEl) valEl.textContent = `${uniqueExtOrders.size} Ped. / ${uniqueFatNfs.size} NFs`;
+                if (footEl) footEl.textContent = `${eData.length} itens carteira • ${bData.length} itens fat.`;
+            }
+
+            if (cardGroups) {
+                cardGroups.style.display = 'block';
+                const titleEl = document.getElementById('kpi-groups-title');
+                const valEl = document.getElementById('kpi-active-groups');
+                const footEl = document.getElementById('kpi-groups-coverage');
+                const catsCount = Math.max(uniqueCompCats.size, 1);
+                if (titleEl) titleEl.textContent = 'Mix de Produtos (SKUs)';
+                if (valEl) valEl.textContent = `${numberFormatter.format(uniqueCompSkus.size)} SKUs`;
+                if (footEl) footEl.textContent = `em ${catsCount} ${catsCount === 1 ? 'categoria trabalhada' : 'categorias trabalhadas'}`;
+            }
+        } else {
+            if (cardClients) {
+                cardClients.style.display = 'block';
+                const titleEl = document.getElementById('kpi-clients-title');
+                const valEl = document.getElementById('kpi-active-clients');
+                const footEl = document.getElementById('kpi-clients-coverage');
+                if (titleEl) titleEl.textContent = 'Lojas Faturadas';
+                if (valEl) valEl.textContent = cnpjsFat.size.toString();
+                if (footEl) footEl.textContent = 'clientes com faturamento emitido';
+            }
+
+            if (cardGroups) {
+                cardGroups.style.display = 'block';
+                const titleEl = document.getElementById('kpi-groups-title');
+                const valEl = document.getElementById('kpi-active-groups');
+                const footEl = document.getElementById('kpi-groups-coverage');
+                if (titleEl) titleEl.textContent = 'Lojas em Carteira';
+                if (valEl) valEl.textContent = cnpjsExt.size.toString();
+                if (footEl) footEl.textContent = 'clientes com pedidos a entregar';
+            }
         }
 
         const cardMonth = document.getElementById('kpi-card-month');
@@ -3973,7 +4538,87 @@
             }
         }
 
+        // KPI 9: Embalado (Confronto)
+        const cardPackaged = document.getElementById('kpi-card-packaged');
+        if (cardPackaged) {
+            let totalEmbaladoVal = 0;
+            let totalEmbaladoPcs = 0;
+            eData.forEach(item => {
+                totalEmbaladoVal += item.ve || 0;
+                totalEmbaladoPcs += item.qe || 0;
+            });
+
+            cardPackaged.style.display = 'block';
+            const elPackVal = document.getElementById('kpi-packaged-val');
+            const elPackSub = document.getElementById('kpi-packaged-sub');
+            const elPackFoot = document.getElementById('kpi-packaged-footer');
+            if (elPackVal) {
+                elPackVal.textContent = isPiecesOnly 
+                    ? (numberFormatter.format(totalEmbaladoPcs) + ' pçs')
+                    : formatBRL(totalEmbaladoVal);
+            }
+            if (elPackSub) {
+                if (isBoth) {
+                    elPackSub.innerHTML = "<i class='bx bx-package'></i> " + numberFormatter.format(totalEmbaladoPcs) + " pçs";
+                    elPackSub.style.display = 'inline-flex';
+                } else {
+                    elPackSub.style.display = 'none';
+                }
+            }
+            if (elPackFoot) {
+                elPackFoot.textContent = numberFormatter.format(totalEmbaladoPcs) + ' pçs prontas para expedição';
+            }
+        }
+
+        // KPI 10: Cancelado (Confronto)
+        const cardCanceled = document.getElementById('kpi-card-canceled');
+        if (cardCanceled) {
+            let totalCanceladoVal = 0;
+            let totalCanceladoPcs = 0;
+            eData.forEach(item => {
+                totalCanceladoVal += item.vc || 0;
+                totalCanceladoPcs += item.qc || 0;
+            });
+
+            cardCanceled.style.display = 'block';
+            const elCancVal = document.getElementById('kpi-canceled-val');
+            const elCancSub = document.getElementById('kpi-canceled-sub');
+            const elCancFoot = document.getElementById('kpi-canceled-footer');
+            const baseTotal = grandTotal + totalCanceladoVal;
+            const pctCanc = baseTotal > 0 ? (totalCanceladoVal / baseTotal * 100) : 0;
+
+            if (elCancVal) {
+                elCancVal.textContent = isPiecesOnly 
+                    ? (numberFormatter.format(totalCanceladoPcs) + ' pçs')
+                    : formatBRL(totalCanceladoVal);
+            }
+            if (elCancSub) {
+                if (isBoth) {
+                    elCancSub.innerHTML = "<i class='bx bx-x-circle'></i> " + numberFormatter.format(totalCanceladoPcs) + " pçs";
+                    elCancSub.style.display = 'inline-flex';
+                } else {
+                    elCancSub.style.display = 'none';
+                }
+            }
+            if (elCancFoot) {
+                elCancFoot.textContent = pctCanc.toFixed(1).replace('.', ',') + '% de cancelamento no período';
+            }
+        }
+
+        // KPI 11: Prazo & Desconto (Condição Comercial da Carteira no Confronto)
+        let commSourceItems = eData;
+        if ((!commSourceItems || commSourceItems.length === 0) && hasActiveClientSelection()) {
+            const rawExt = getExtratoData();
+            commSourceItems = rawExt.filter(it => {
+                const cMatch = resolveClientForItem(it, clientsMap);
+                const cKey = it.c || (cMatch && cMatch['CNPJ']) || (it.cli ? `CLI_${it.cli}` : it.f);
+                return cKey && allCompClientsSet.has(cKey);
+            });
+        }
+        renderCommercialKpiCard(commSourceItems, clientsMap);
+
         adjustKpiTextFit();
+        ensureKpiEyeButtons();
     }
 
     window.setComparisonChartDisplayMode = function(mode) {
@@ -4324,6 +4969,10 @@
                     fatQ: 0,
                     extV: 0,
                     extQ: 0,
+                    cancV: 0,
+                    cancQ: 0,
+                    embV: 0,
+                    embQ: 0,
                     fatOrders: new Set(),
                     extOrders: new Set(),
                     fatItemsList: [],
@@ -4343,6 +4992,10 @@
             } else {
                 rec.extV += v;
                 rec.extQ += q;
+                rec.cancV = (rec.cancV || 0) + (item.vc || 0);
+                rec.cancQ = (rec.cancQ || 0) + (item.qc || 0);
+                rec.embV = (rec.embV || 0) + (item.ve || 0);
+                rec.embQ = (rec.embQ || 0) + (item.qe || 0);
                 if (item.nf) rec.extOrders.add(item.nf);
                 if (rec.extItemsList.length < 50) rec.extItemsList.push(item);
             }
@@ -4549,7 +5202,11 @@
                     fatV: 0,
                     fatQ: 0,
                     extV: 0,
-                    extQ: 0
+                    extQ: 0,
+                    cancV: 0,
+                    cancQ: 0,
+                    embV: 0,
+                    embQ: 0
                 });
             }
 
@@ -4572,6 +5229,10 @@
             } else {
                 rec.extV += v;
                 rec.extQ += q;
+                rec.cancV = (rec.cancV || 0) + (item.vc || 0);
+                rec.cancQ = (rec.cancQ || 0) + (item.qc || 0);
+                rec.embV = (rec.embV || 0) + (item.ve || 0);
+                rec.embQ = (rec.embQ || 0) + (item.qe || 0);
             }
         };
 
@@ -4635,7 +5296,7 @@
     function renderCompDetailBoxHtml(row) {
         return `
             <tr class="comp-detail-row" id="comp-detail-${row.key}">
-                <td colspan="10" style="padding: 0.75rem 1rem; background: rgba(15, 23, 42, 0.45);">
+                <td colspan="12" style="padding: 0.75rem 1rem; background: rgba(15, 23, 42, 0.45);">
                     <div class="comp-detail-box">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                             <!-- Coluna 1: Pedidos a Entregar -->
@@ -4660,7 +5321,7 @@
                                     <span style="font-size: 0.75rem; color: #34d399;" class="font-mono">${formatBRL(row.fatV)} | ${row.fatQ.toLocaleString('pt-BR')} pçs</span>
                                 </div>
                                 <div style="max-height: 180px; overflow-y: auto;" class="custom-scrollbar">
-                                    ${renderDetailItemsTable(row.fatItemsList, 'Data Ã£o', 'NF')}
+                                    ${renderDetailItemsTable(row.fatItemsList, 'Data Emissão', 'NF')}
                                 </div>
                             </div>
                         </div>
@@ -4685,7 +5346,7 @@
         }
 
         // Atualizar classes e ícones dos cabeçalhos
-        const cnpjCols = ['cnpj', 'fantasia', 'rede', 'fatV', 'fatQ', 'extV', 'extQ', 'totalV', 'pctFat'];
+        const cnpjCols = ['cnpj', 'fantasia', 'rede', 'fatV', 'fatQ', 'extV', 'extQ', 'cancV', 'cancQ', 'totalV', 'pctFat'];
         cnpjCols.forEach(c => {
             const th = document.getElementById(`th-cnpj-${c}`);
             if (th) {
@@ -4720,10 +5381,19 @@
 
         filtered.sort(compareItems);
 
+        // Se houver apenas 1 loja filtrada, expande automaticamente o resumo e a loja
+        if (filtered.length === 1) {
+            compMasterSummaryExpanded = true;
+            const singleStore = filtered[0];
+            const gName = (singleStore.rede || singleStore.grupo || singleStore.fantasia || 'Sem Grupo').trim() || 'Sem Grupo';
+            compExpandedGroups.add(gName);
+            compExpandedCnpjs.add(singleStore.key);
+        }
+
         if (filtered.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <td colspan="12" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
                         <i class='bx bx-search-alt' style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.5;"></i>
                         Nenhum CNPJ ou loja encontrado com os critérios selecionados.
                     </td>
@@ -4736,15 +5406,22 @@
 
         // Linha de Total Consolidado das lojas filtradas
         let sumFatV = 0, sumFatQ = 0, sumExtV = 0, sumExtQ = 0, sumTotalV = 0;
+        let sumCancV = 0, sumCancQ = 0, sumEmbV = 0, sumEmbQ = 0;
         filtered.forEach(row => {
             sumFatV += row.fatV || 0;
             sumFatQ += row.fatQ || 0;
             sumExtV += row.extV || 0;
             sumExtQ += row.extQ || 0;
             sumTotalV += row.totalV || 0;
+            sumCancV += row.cancV || 0;
+            sumCancQ += row.cancQ || 0;
+            sumEmbV += row.embV || 0;
+            sumEmbQ += row.embQ || 0;
         });
-        const sumPctFat = sumTotalV > 0 ? (sumFatV / sumTotalV * 100) : 0;
-        const sumPctExt = sumTotalV > 0 ? (sumExtV / sumTotalV * 100) : 0;
+        const sumGrossTotal = sumTotalV + sumCancV;
+        const sumPctFat = sumGrossTotal > 0 ? (sumFatV / sumGrossTotal * 100) : 0;
+        const sumPctExt = sumGrossTotal > 0 ? (sumExtV / sumGrossTotal * 100) : 0;
+        const sumPctCanc = sumGrossTotal > 0 ? (sumCancV / sumGrossTotal * 100) : 0;
 
         // Sincronizar o botao do cabecalho do card (Recolher / Expandir)
         const cardToggleIcon = document.getElementById('icon-toggle-comp-card');
@@ -4760,14 +5437,13 @@
         if (tableThead) tableThead.style.display = ''; // Cabecalho thead sempre visivel
 
         const masterSummaryRowHtml = `
-            <tr class="comp-row comp-master-summary-row" onclick="toggleCompMasterSummary()" style="cursor: pointer; background: rgba(59, 130, 246, 0.12); border-bottom: 2px solid rgba(59, 130, 246, 0.3);">
+            <tr class="comp-row comp-master-summary-row" onclick="toggleCompMasterSummary()" style="cursor: pointer; background: rgba(59, 130, 246, 0.14); border-top: 2px solid rgba(59, 130, 246, 0.35);">
                 <td class="font-mono" style="font-weight: 800; font-size: 0.80rem; white-space: nowrap; color: #fbbf24;">
-                    <i class='bx ${compMasterSummaryExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}' style="font-size: 1.15rem; margin-right: 4px; vertical-align: middle; color: #fbbf24;"></i>
-                    <i class='bx bx-calculator' style="color: #fbbf24; margin-right: 2px;"></i> TOTAL
+                    <i class='bx bx-calculator' style="color: #fbbf24; margin-right: 4px;"></i> TOTAL
                 </td>
                 <td>
-                    <div style="font-weight: 700; color: #fbbf24; font-size: 0.78rem;">${filtered.length} ${filtered.length === 1 ? 'Loja' : 'Lojas'} Consolidadas</div>
-                    <div style="font-size: 0.70rem; color: var(--text-secondary);">${compMasterSummaryExpanded ? 'Clique para recolher resumo' : 'Clique para expandir detalhamento por loja'}</div>
+                    <div style="font-weight: 700; color: #fbbf24; font-size: 0.78rem;">${filtered.length} ${filtered.length === 1 ? 'Loja Consolidada' : 'Lojas Consolidadas'}</div>
+                    <div style="font-size: 0.70rem; color: var(--text-secondary);">Soma geral da seleção</div>
                 </td>
                 <td style="font-size: 0.76rem; font-weight: 600;">
                     <span class="badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24; padding: 2px 7px; border-radius: 4px;">TOTAL</span>
@@ -4776,226 +5452,95 @@
                 <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${sumFatQ.toLocaleString('pt-BR')}</td>
                 <td style="text-align: right; font-weight: 700; color: #60a5fa; font-size: 0.78rem;" class="font-mono">${formatBRL(sumExtV)}</td>
                 <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${sumExtQ.toLocaleString('pt-BR')}</td>
+                <td style="text-align: right; font-weight: 700; color: #f87171; font-size: 0.78rem;" class="font-mono">${sumCancV > 0 ? formatBRL(sumCancV) : '-'}</td>
+                <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #f87171;" class="font-mono">${sumCancQ > 0 ? sumCancQ.toLocaleString('pt-BR') : '-'}</td>
                 <td style="text-align: right; font-weight: 700; color: #fbbf24; font-size: 0.78rem;" class="font-mono">${formatBRL(sumTotalV)}</td>
                 <td>
                     <div class="comp-progress-wrap">
                         <div class="comp-progress-bar">
-                            <div class="comp-bar-fat" style="width: ${sumPctFat.toFixed(1)}%;"></div>
-                            <div class="comp-bar-ext" style="width: ${sumPctExt.toFixed(1)}%;"></div>
+                            <div class="comp-bar-fat" style="width: ${sumPctFat.toFixed(1)}%; background: #10b981;" title="Faturado: ${sumPctFat.toFixed(1)}%"></div>
+                            <div class="comp-bar-ext" style="width: ${sumPctExt.toFixed(1)}%; background: #3b82f6;" title="A Entregar: ${sumPctExt.toFixed(1)}%"></div>
+                            <div class="comp-bar-canc" style="width: ${sumPctCanc.toFixed(1)}%; background: #ef4444;" title="Cancelado: ${sumPctCanc.toFixed(1)}%"></div>
                         </div>
                         <div class="comp-progress-labels" style="font-size: 0.72rem;">
                             <span style="color: #34d399; font-weight: 700;">${sumPctFat.toFixed(0)}%</span>
                             <span style="color: #60a5fa; font-weight: 700;">${sumPctExt.toFixed(0)}%</span>
+                            ${sumCancV > 0 ? `<span style="color: #f87171; font-weight: 700;">${sumPctCanc.toFixed(0)}%</span>` : ''}
                         </div>
                     </div>
                 </td>
                 <td style="text-align: center;" onclick="event.stopPropagation()">
-                    <button type="button" class="btn-comp-detail btn-icon-only" onclick="toggleCompMasterSummary()" title="${compMasterSummaryExpanded ? 'Recolher resumo' : 'Expandir lojas'}">
+                    <button type="button" class="btn-comp-detail btn-icon-only" onclick="toggleCompMasterSummary()" title="${compMasterSummaryExpanded ? 'Recolher lista' : 'Expandir lista'}">
                         <i class='bx ${compMasterSummaryExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}'></i>
                     </button>
                 </td>
             </tr>
         `;
         const tfoot = document.getElementById('comp-tfoot-cnpj');
-        if (tfoot) tfoot.innerHTML = '';
+        if (tfoot) tfoot.innerHTML = masterSummaryRowHtml;
         if (!compMasterSummaryExpanded) {
-            tbody.innerHTML = masterSummaryRowHtml;
+            tbody.innerHTML = '';
             return;
         }
 
-        let html = masterSummaryRowHtml;
+        let html = '';
 
-        if (compCnpjGroupByGroup) {
-            // Agrupamento por Grupo / Rede
-            const groupMap = new Map();
-            filtered.forEach(row => {
-                const gName = (row.rede || row.grupo || row.fantasia || 'Sem Grupo').trim() || 'Sem Grupo';
-                if (!groupMap.has(gName)) {
-                    groupMap.set(gName, {
-                        groupName: gName,
-                        rede: row.rede || row.grupo || gName,
-                        stores: [],
-                        fatV: 0,
-                        fatQ: 0,
-                        extV: 0,
-                        extQ: 0,
-                        totalV: 0,
-                        totalQ: 0
-                    });
-                }
-                const gObj = groupMap.get(gName);
-                if (!gObj.rede && (row.rede || row.grupo)) {
-                    gObj.rede = row.rede || row.grupo;
-                }
-                gObj.stores.push(row);
-                gObj.fatV += (row.fatV || 0);
-                gObj.fatQ += (row.fatQ || 0);
-                gObj.extV += (row.extV || 0);
-                gObj.extQ += (row.extQ || 0);
-                gObj.totalV += (row.totalV || 0);
-                gObj.totalQ += (row.totalQ || 0);
-            });
+        // Lista direta por CNPJ (sem agrupamento intermediário por Rede/Grupo)
+        filtered.forEach(row => {
+            const isExpanded = compExpandedCnpjs.has(row.key);
+            const clientTitle = row.fantasia || row.razao || 'Cliente sem nome';
+            const clientSub = (row.razao && row.fantasia && row.razao.toUpperCase() !== row.fantasia.toUpperCase()) ? row.razao : '';
+            const storeGross = (row.totalV || 0) + (row.cancV || 0);
+            const storePctFat = storeGross > 0 ? (row.fatV / storeGross * 100) : 0;
+            const storePctExt = storeGross > 0 ? (row.extV / storeGross * 100) : 0;
+            const storePctCanc = storeGross > 0 ? ((row.cancV || 0) / storeGross * 100) : 0;
 
-            const groupsList = Array.from(groupMap.values()).map(g => {
-                const pctFat = g.totalV > 0 ? (g.fatV / g.totalV * 100) : 0;
-                const pctExt = g.totalV > 0 ? (g.extV / g.totalV * 100) : 0;
-                return { ...g, pctFat, pctExt };
-            });
-
-            // Ordenar os grupos pelo mesmo critério
-            groupsList.sort((a, b) => {
-                if (['cnpj', 'fantasia', 'rede'].includes(compCnpjSortCol)) {
-                    let res = a.groupName.localeCompare(b.groupName, 'pt-BR', { sensitivity: 'base' });
-                    return (compCnpjSortDir === 'desc') ? -res : res;
-                } else {
-                    let numA = a[compCnpjSortCol] !== undefined ? (a[compCnpjSortCol] || 0) : (a.totalV || 0);
-                    let numB = b[compCnpjSortCol] !== undefined ? (b[compCnpjSortCol] || 0) : (b.totalV || 0);
-                    let res = numB - numA;
-                    return (compCnpjSortDir === 'asc') ? -res : res;
-                }
-            });
-
-            groupsList.forEach(grp => {
-                const isGroupExpanded = compExpandedGroups.has(grp.groupName);
-                const countStores = grp.stores.length;
-
-                html += `
-                    <tr class="comp-row comp-group-row" onclick="toggleCompGroup('${escapeHTML(grp.groupName)}')">
-                        <td class="font-mono text-accent" style="font-weight: 700; font-size: 0.8rem; white-space: nowrap;">
-                            <i class='bx ${isGroupExpanded ? 'bx-chevron-down' : 'bx-chevron-right'}' style="font-size: 1rem; margin-right: 4px; vertical-align: middle; color: #60a5fa;"></i>
-                            <span style="color: #60a5fa;">${escapeHTML(grp.groupName)}</span>
-                        </td>
-                        <td>
-                            <div style="font-weight: 700; color: var(--text-primary); font-size: 0.82rem;">${escapeHTML(grp.groupName)}</div>
-                            <div style="font-size: 0.72rem; color: var(--text-secondary);">${countStores} ${countStores === 1 ? 'loja vinculada' : 'lojas vinculadas'}</div>
-                        </td>
-                        <td style="font-size: 0.76rem; font-weight: 600; color: #cbd5e1;">
-                            <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #a5b4fc; padding: 2px 7px; border-radius: 4px;">${escapeHTML(grp.rede || grp.groupName)}</span>
-                        </td>
-                        <td style="text-align: right; font-weight: 700; color: #34d399;" class="font-mono">${formatBRL(grp.fatV)}</td>
-                        <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${grp.fatQ.toLocaleString('pt-BR')}</td>
-                        <td style="text-align: right; font-weight: 700; color: #60a5fa;" class="font-mono">${formatBRL(grp.extV)}</td>
-                        <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${grp.extQ.toLocaleString('pt-BR')}</td>
-                        <td style="text-align: right; font-weight: 800; color: #fbbf24;" class="font-mono">${formatBRL(grp.totalV)}</td>
-                        <td>
-                            <div class="comp-progress-wrap">
-                                <div class="comp-progress-bar">
-                                    <div class="comp-bar-fat" style="width: ${grp.pctFat.toFixed(1)}%;" title="Faturado: ${grp.pctFat.toFixed(1)}%"></div>
-                                    <div class="comp-bar-ext" style="width: ${grp.pctExt.toFixed(1)}%;" title="A Entregar: ${grp.pctExt.toFixed(1)}%"></div>
-                                </div>
-                                <div class="comp-progress-labels">
-                                    <span style="color: #34d399;">${grp.pctFat.toFixed(0)}%</span>
-                                    <span style="color: #60a5fa;">${grp.pctExt.toFixed(0)}%</span>
-                                </div>
+            html += `
+                <tr class="comp-row" id="comp-row-${row.key}" onclick="toggleCompDetail('${row.key}')" style="cursor: pointer;">
+                    <td class="font-mono text-accent" style="font-weight: 600; font-size: 0.78rem; white-space: nowrap;">${escapeHTML(row.cnpjFormatted)}</td>
+                    <td>
+                        <div style="font-weight: 600; color: var(--text-primary); font-size: 0.8rem;">
+                            <span>${escapeHTML(clientTitle)}</span>
+                        </div>
+                        ${clientSub ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">${escapeHTML(clientSub)}</div>` : ''}
+                    </td>
+                    <td style="font-size: 0.76rem;">
+                        <div style="font-weight: 500; color: #cbd5e1;">${escapeHTML(row.rede || '-')}</div>
+                        ${row.cidade ? `<div style="font-size: 0.70rem; color: var(--text-secondary);">${escapeHTML(row.cidade)}</div>` : ''}
+                    </td>
+                    <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(row.fatV)}</td>
+                    <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.fatQ.toLocaleString('pt-BR')}</td>
+                    <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(row.extV)}</td>
+                    <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.extQ.toLocaleString('pt-BR')}</td>
+                    <td style="text-align: right; font-weight: 600; color: #f87171;" class="font-mono">${row.cancV > 0 ? formatBRL(row.cancV) : '-'}</td>
+                    <td style="text-align: right; font-size: 0.78rem; color: #f87171;" class="font-mono">${row.cancQ > 0 ? row.cancQ.toLocaleString('pt-BR') : '-'}</td>
+                    <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(row.totalV)}</td>
+                    <td>
+                        <div class="comp-progress-wrap">
+                            <div class="comp-progress-bar">
+                                <div class="comp-bar-fat" style="width: ${storePctFat.toFixed(1)}%; background: #10b981;" title="Faturado: ${storePctFat.toFixed(1)}%"></div>
+                                <div class="comp-bar-ext" style="width: ${storePctExt.toFixed(1)}%; background: #3b82f6;" title="A Entregar: ${storePctExt.toFixed(1)}%"></div>
+                                <div class="comp-bar-canc" style="width: ${storePctCanc.toFixed(1)}%; background: #ef4444;" title="Cancelado: ${storePctCanc.toFixed(1)}%"></div>
                             </div>
-                        </td>
-                        <td style="text-align: center;" onclick="event.stopPropagation()">
-                            <button type="button" class="btn-comp-detail btn-icon-only" onclick="toggleCompGroup('${escapeHTML(grp.groupName)}')" title="${isGroupExpanded ? 'Recolher lojas' : 'Expandir lojas'}">
-                                <i class='bx ${isGroupExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}'></i>
-                            </button>
-                        </td>
-                    </tr>
-                `;
-
-                if (isGroupExpanded) {
-                    grp.stores.forEach(row => {
-                        const isExpanded = compExpandedCnpjs.has(row.key);
-                        const clientTitle = row.fantasia || row.razao || 'Loja sem nome';
-                        const clientSub = (row.razao && row.fantasia && row.razao.toUpperCase() !== row.fantasia.toUpperCase()) ? row.razao : '';
-
-                        html += `
-                            <tr class="comp-row comp-store-subrow" id="comp-row-${row.key}">
-                                <td class="font-mono text-accent" style="font-weight: 500; font-size: 0.76rem; padding-left: 1.25rem; white-space: nowrap;">
-                                    <i class='bx bx-subdirectory-right' style="color: rgba(255,255,255,0.4); margin-right: 4px;"></i>${escapeHTML(row.cnpjFormatted)}
-                                </td>
-                                <td>
-                                    <div style="font-weight: 600; color: var(--text-primary); font-size: 0.8rem;">${escapeHTML(clientTitle)}</div>
-                                    ${clientSub ? `<div style="font-size: 0.70rem; color: var(--text-secondary);">${escapeHTML(clientSub)}</div>` : ''}
-                                </td>
-                                <td style="font-size: 0.74rem;">
-                                    <div style="font-weight: 500; color: #cbd5e1;">${escapeHTML(row.rede || grp.rede || grp.groupName || '-')}</div>
-                                    ${row.cidade ? `<div style="font-size: 0.70rem; color: var(--text-secondary);">${escapeHTML(row.cidade)}</div>` : ''}
-                                </td>
-                                <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(row.fatV)}</td>
-                                <td style="text-align: right; font-size: 0.74rem; color: #94a3b8;" class="font-mono">${row.fatQ.toLocaleString('pt-BR')}</td>
-                                <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(row.extV)}</td>
-                                <td style="text-align: right; font-size: 0.74rem; color: #94a3b8;" class="font-mono">${row.extQ.toLocaleString('pt-BR')}</td>
-                                <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(row.totalV)}</td>
-                                <td>
-                                    <div class="comp-progress-wrap">
-                                        <div class="comp-progress-bar">
-                                            <div class="comp-bar-fat" style="width: ${row.pctFat.toFixed(1)}%;"></div>
-                                            <div class="comp-bar-ext" style="width: ${row.pctExt.toFixed(1)}%;"></div>
-                                        </div>
-                                        <div class="comp-progress-labels">
-                                            <span style="color: #34d399;">${row.pctFat.toFixed(0)}%</span>
-                                            <span style="color: #60a5fa;">${row.pctExt.toFixed(0)}%</span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td style="text-align: center;">
-                                    <button type="button" class="btn-comp-detail btn-icon-only" onclick="toggleCompDetail('${row.key}')" title="Ver pedidos em carteira e notas fiscais">
-                                        <i class='bx ${isExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}'></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        `;
-
-                        if (isExpanded) {
-                            html += renderCompDetailBoxHtml(row);
-                        }
-                    });
-                }
-            });
-        } else {
-            // Modo plano (todas as lojas em lista corrida)
-            filtered.forEach(row => {
-                const isExpanded = compExpandedCnpjs.has(row.key);
-                const clientTitle = row.fantasia || row.razao || 'Cliente sem nome';
-                const clientSub = (row.razao && row.fantasia && row.razao.toUpperCase() !== row.fantasia.toUpperCase()) ? row.razao : '';
-                const redeText = escapeHTML(row.rede || row.cidade || '-');
-
-                html += `
-                    <tr class="comp-row" id="comp-row-${row.key}">
-                        <td class="font-mono text-accent" style="font-weight: 600; font-size: 0.78rem; white-space: nowrap;">${escapeHTML(row.cnpjFormatted)}</td>
-                        <td>
-                            <div style="font-weight: 600; color: var(--text-primary);">${escapeHTML(clientTitle)}</div>
-                            ${clientSub ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">${escapeHTML(clientSub)}</div>` : ''}
-                        </td>
-                        <td style="font-size: 0.76rem;">
-                            <div style="font-weight: 500; color: #cbd5e1;">${escapeHTML(row.rede || '-')}</div>
-                            ${row.cidade ? `<div style="font-size: 0.70rem; color: var(--text-secondary);">${escapeHTML(row.cidade)}</div>` : ''}
-                        </td>
-                        <td style="text-align: right; font-weight: 600; color: #34d399;" class="font-mono">${formatBRL(row.fatV)}</td>
-                        <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.fatQ.toLocaleString('pt-BR')}</td>
-                        <td style="text-align: right; font-weight: 600; color: #60a5fa;" class="font-mono">${formatBRL(row.extV)}</td>
-                        <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">${row.extQ.toLocaleString('pt-BR')}</td>
-                        <td style="text-align: right; font-weight: 700; color: #fbbf24;" class="font-mono">${formatBRL(row.totalV)}</td>
-                        <td>
-                            <div class="comp-progress-wrap">
-                                <div class="comp-progress-bar">
-                                    <div class="comp-bar-fat" style="width: ${row.pctFat.toFixed(1)}%;"></div>
-                                    <div class="comp-bar-ext" style="width: ${row.pctExt.toFixed(1)}%;"></div>
-                                </div>
-                                <div class="comp-progress-labels">
-                                    <span style="color: #34d399;">${row.pctFat.toFixed(0)}%</span>
-                                    <span style="color: #60a5fa;">${row.pctExt.toFixed(0)}%</span>
-                                </div>
+                            <div class="comp-progress-labels">
+                                <span style="color: #34d399;">${storePctFat.toFixed(0)}%</span>
+                                <span style="color: #60a5fa;">${storePctExt.toFixed(0)}%</span>
+                                ${row.cancV > 0 ? `<span style="color: #f87171;">${storePctCanc.toFixed(0)}%</span>` : ''}
                             </div>
-                        </td>
-                        <td style="text-align: center;">
-                            <button type="button" class="btn-comp-detail btn-icon-only" onclick="toggleCompDetail('${row.key}')" title="Ver pedidos em carteira e notas fiscais">
-                                <i class='bx ${isExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}'></i>
-                            </button>
-                        </td>
-                    </tr>
-                `;
+                        </div>
+                    </td>
+                    <td style="text-align: center;" onclick="event.stopPropagation()">
+                        <button type="button" class="btn-comp-detail btn-icon-only" onclick="toggleCompDetail('${row.key}')" title="Ver pedidos em carteira e notas fiscais">
+                            <i class='bx ${isExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}'></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
 
-                if (isExpanded) {
-                    html += renderCompDetailBoxHtml(row);
-                }
-            });
-        }
+            if (isExpanded) {
+                html += renderCompDetailBoxHtml(row);
+            }
+        });
 
         tbody.innerHTML = html;
     }
@@ -5003,6 +5548,7 @@
         if (!items || items.length === 0) {
             return `<div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; padding: 1rem;">Nenhum registro para este cliente.</div>`;
         }
+        const isExtrato = (docHeader === 'Pedido' || currentDatasetType === 'extrato');
         let out = `
             <table style="width: 100%; border-collapse: collapse; font-size: 0.72rem; text-align: left;">
                 <thead>
@@ -5010,6 +5556,7 @@
                         <th style="padding: 3px 6px;">${docHeader}</th>
                         <th style="padding: 3px 6px;">${dateHeader}</th>
                         <th style="padding: 3px 6px;">Produto</th>
+                        ${isExtrato ? `<th style="padding: 3px 6px;">Prazo</th><th style="padding: 3px 6px;">Desc</th><th style="padding: 3px 6px;">Status</th>` : ''}
                         <th style="padding: 3px 6px; text-align: right;">Qtd</th>
                         <th style="padding: 3px 6px; text-align: right;">Valor</th>
                     </tr>
@@ -5019,11 +5566,24 @@
         items.forEach(it => {
             const v = it.v || it.vg || 0;
             const q = it.q || 0;
+            let statusBadge = '';
+            if (it.status === 'Cancelado' || it.qc > 0) {
+                statusBadge = `<span class="badge" style="background: rgba(239,68,68,0.15); color: #f87171; padding: 1px 5px; border-radius: 3px; font-size: 0.68rem;">Cancelado</span>`;
+            } else if (it.status === 'Embalado' || it.qe > 0) {
+                statusBadge = `<span class="badge" style="background: rgba(56,189,248,0.15); color: #38bdf8; padding: 1px 5px; border-radius: 3px; font-size: 0.68rem;">Embalado</span>`;
+            } else {
+                statusBadge = `<span class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 1px 5px; border-radius: 3px; font-size: 0.68rem;">A Entregar</span>`;
+            }
             out += `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
                     <td style="padding: 3px 6px;" class="font-mono">${escapeHTML(it.nf || '-')}</td>
                     <td style="padding: 3px 6px;" class="font-mono">${escapeHTML(it.d ? it.d.split(' ')[0] : '-')}</td>
                     <td style="padding: 3px 6px; max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(it.desc || '')}">${escapeHTML(it.p || it.desc || '-')}</td>
+                    ${isExtrato ? `
+                        <td style="padding: 3px 6px; white-space: nowrap;" title="${escapeHTML(it.prazo || '-')}">${escapeHTML(it.prazo || '-')}</td>
+                        <td style="padding: 3px 6px;" class="font-mono">${it.desconto ? it.desconto + '%' : '-'}</td>
+                        <td style="padding: 3px 6px;">${statusBadge}</td>
+                    ` : ''}
                     <td style="padding: 3px 6px; text-align: right;" class="font-mono">${q}</td>
                     <td style="padding: 3px 6px; text-align: right; font-weight: 600;" class="font-mono">${formatBRL(v)}</td>
                 </tr>
@@ -5154,14 +5714,14 @@
         `;
 
         const tfoot = document.getElementById('comp-tfoot-month');
-        if (tfoot) tfoot.innerHTML = '';
+        if (tfoot) tfoot.innerHTML = monthMasterSummaryRowHtml;
 
         if (!compMasterSummaryExpanded) {
-            tbody.innerHTML = monthMasterSummaryRowHtml;
+            tbody.innerHTML = '';
             return;
         }
 
-        tbody.innerHTML = monthMasterSummaryRowHtml + html;
+        tbody.innerHTML = html;
     }
 
     // Ordenação e Agrupamento da Tabela por Data
@@ -5282,8 +5842,11 @@
             </tr>
         `;
 
+        const tfoot = document.getElementById('comp-tfoot-date');
+        if (tfoot) tfoot.innerHTML = dateMasterSummaryRowHtml;
+
         if (!compMasterSummaryExpanded) {
-            tbody.innerHTML = dateMasterSummaryRowHtml;
+            tbody.innerHTML = '';
             return;
         }
 
@@ -5479,7 +6042,7 @@
             });
         }
 
-        tbody.innerHTML = dateMasterSummaryRowHtml + html;
+        tbody.innerHTML = html;
     }
 
     window.switchComparisonSubTab = function(tabName) {
@@ -5830,14 +6393,14 @@
             </tr>
         `;
 
-        if (tfoot) tfoot.innerHTML = '';
+        if (tfoot) tfoot.innerHTML = prodMasterSummaryRowHtml;
 
         if (!compMasterSummaryExpanded) {
-            tbody.innerHTML = prodMasterSummaryRowHtml;
+            tbody.innerHTML = '';
             return;
         }
 
-        tbody.innerHTML = prodMasterSummaryRowHtml + rowsHtml;
+        tbody.innerHTML = rowsHtml;
     }
 
     function updateCompProductKpis(productList) {
@@ -5970,6 +6533,7 @@
                 ${heroExtHtml}
             </div>
         `;
+        ensureKpiEyeButtons();
     }
 
     function renderCompProductRankings(productList, bData, eData, clientsMap) {
@@ -6000,6 +6564,11 @@
                         <div class="ranking-product-thumb-container"><div class="ranking-product-thumb-placeholder" style="display: flex;"><i class='bx bx-purchase-tag-alt'></i></div></div>
                     `;
 
+                    const prodGross = (item.totalV || 0) + (item.cancV || 0);
+                    const prodPctFat = prodGross > 0 ? (item.fatV / prodGross * 100) : 0;
+                    const prodPctExt = prodGross > 0 ? (item.extV / prodGross * 100) : 0;
+                    const prodPctCanc = prodGross > 0 ? ((item.cancV || 0) / prodGross * 100) : 0;
+
                     html += `
                         <div class="ranking-row-item">
                             <div class="ranking-row-top">
@@ -6008,25 +6577,31 @@
                                     ${thumbHtml}
                                     <div class="ranking-item-info">
                                         <span class="ranking-item-name" title="${escapeHTML(item.desc)}">${escapeHTML(item.desc)}</span>
-                                        <span class="ranking-item-sub font-mono">${escapeHTML(item.code)}${item.cor ? ` &bull; Cor: ${escapeHTML(item.cor)}` : ''} &bull; ${escapeHTML(item.sub || '')}</span>
+                                        <div style="margin-top: 2px;">
+                                            <span class="ranking-item-sub font-mono">${escapeHTML(item.code)}${item.cor ? ` &bull; Cor: ${escapeHTML(item.cor)}` : ''} &bull; ${escapeHTML(item.sub || '')}</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="ranking-item-right comp-rank-split-val">
                                     <span class="val-tot">${formatBRL(item.totalV)}</span>
                                     <div class="comp-rank-split-sub">
-                                        <span class="val-fat">Fat: ${formatBRL(item.fatV)}</span>
-                                        <span class="val-ext">Entr: ${formatBRL(item.extV)}</span>
+                                        <span class="val-fat" style="color: #34d399;">Fat: ${formatBRL(item.fatV)} (${(item.fatQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                        <span class="val-ext" style="color: #60a5fa;">Entr: ${formatBRL(item.extV)} (${(item.extQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                        ${item.cancV > 0 ? `<span class="val-canc" style="color: #f87171; font-weight: 600;"><i class='bx bx-x-circle'></i> Canc: ${formatBRL(item.cancV)} (${(item.cancQ || 0).toLocaleString('pt-BR')} pçs)</span>` : ''}
+                                        ${item.embQ > 0 ? `<span class="val-emb" style="color: #38bdf8; font-weight: 600;"><i class='bx bx-package'></i> Emb: ${(item.embQ || 0).toLocaleString('pt-BR')} pçs</span>` : ''}
                                     </div>
                                 </div>
                             </div>
                             <div class="comp-progress-wrap" style="margin-top: 5px;">
                                 <div class="comp-progress-bar">
-                                    <div class="comp-bar-fat" style="width: ${item.pctFat.toFixed(1)}%;"></div>
-                                    <div class="comp-bar-ext" style="width: ${item.pctExt.toFixed(1)}%;"></div>
+                                    <div class="comp-bar-fat" style="width: ${prodPctFat.toFixed(1)}%; background: #10b981;" title="Faturado: ${prodPctFat.toFixed(1)}%"></div>
+                                    <div class="comp-bar-ext" style="width: ${prodPctExt.toFixed(1)}%; background: #3b82f6;" title="A Entregar: ${prodPctExt.toFixed(1)}%"></div>
+                                    <div class="comp-bar-canc" style="width: ${prodPctCanc.toFixed(1)}%; background: #ef4444;" title="Cancelado: ${prodPctCanc.toFixed(1)}%"></div>
                                 </div>
                                 <div class="comp-progress-labels">
-                                    <span style="color: #34d399; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctFat.toFixed(0)}% Fat (${(item.fatQ || 0).toLocaleString('pt-BR')} pçs)</span>
-                                    <span style="color: #60a5fa; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctExt.toFixed(0)}% Entr (${(item.extQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                    <span style="color: #34d399; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${prodPctFat.toFixed(0)}% Fat (${(item.fatQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                    <span style="color: #60a5fa; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${prodPctExt.toFixed(0)}% Entr (${(item.extQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                    ${item.cancV > 0 ? `<span style="color: #f87171; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${prodPctCanc.toFixed(0)}% Canc (${(item.cancQ || 0).toLocaleString('pt-BR')} pçs)</span>` : ''}
                                 </div>
                             </div>
                         </div>
@@ -6037,27 +6612,31 @@
             }
         }
 
-                // 2. Top Grupos de Produto (Consolidado direto de Faturamento e Extrato)
+        // 2. Top Grupos de Produto (Consolidado direto de Faturamento e Extrato)
         if (subContainer) {
             const subMap = {};
             (bData || []).forEach(item => {
-                const s = (item.sub || 'NÃ£o Definido').trim();
-                if (!subMap[s]) subMap[s] = { name: s, fatV: 0, fatQ: 0, extV: 0, extQ: 0 };
+                const s = (item.sub || 'Não Definido').trim();
+                if (!subMap[s]) subMap[s] = { name: s, fatV: 0, fatQ: 0, extV: 0, extQ: 0, cancV: 0, cancQ: 0 };
                 subMap[s].fatV += (item.v || 0);
                 subMap[s].fatQ += (item.q || 0);
             });
             (eData || []).forEach(item => {
-                const s = (item.sub || 'NÃ£o Definido').trim();
-                if (!subMap[s]) subMap[s] = { name: s, fatV: 0, fatQ: 0, extV: 0, extQ: 0 };
+                const s = (item.sub || 'Não Definido').trim();
+                if (!subMap[s]) subMap[s] = { name: s, fatV: 0, fatQ: 0, extV: 0, extQ: 0, cancV: 0, cancQ: 0 };
                 subMap[s].extV += (item.v || 0);
                 subMap[s].extQ += (item.q || 0);
+                subMap[s].cancV += (item.vc || 0);
+                subMap[s].cancQ += (item.qc || 0);
             });
             const subSorted = Object.values(subMap).map(s => {
                 const totalV = s.fatV + s.extV;
                 const totalQ = s.fatQ + s.extQ;
-                const pctFat = totalV > 0 ? (s.fatV / totalV * 100) : 0;
-                const pctExt = totalV > 0 ? (s.extV / totalV * 100) : 0;
-                return { ...s, totalV, totalQ, pctFat, pctExt };
+                const grossV = totalV + (s.cancV || 0);
+                const pctFat = grossV > 0 ? (s.fatV / grossV * 100) : 0;
+                const pctExt = grossV > 0 ? (s.extV / grossV * 100) : 0;
+                const pctCanc = grossV > 0 ? ((s.cancV || 0) / grossV * 100) : 0;
+                return { ...s, totalV, totalQ, grossV, pctFat, pctExt, pctCanc };
             }).sort((a, b) => b.totalV - a.totalV).slice(0, limit);
 
             let html = '<div class="ranking-items-list" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">';
@@ -6077,19 +6656,22 @@
                             <div class="ranking-item-right comp-rank-split-val">
                                 <span class="val-tot">${formatBRL(item.totalV)}</span>
                                 <div class="comp-rank-split-sub">
-                                    <span class="val-fat">Fat: ${formatBRL(item.fatV)}</span>
-                                    <span class="val-ext">Entr: ${formatBRL(item.extV)}</span>
+                                    <span class="val-fat" style="color: #34d399;">Fat: ${formatBRL(item.fatV)} (${(item.fatQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                    <span class="val-ext" style="color: #60a5fa;">Entr: ${formatBRL(item.extV)} (${(item.extQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                    ${item.cancV > 0 ? `<span class="val-canc" style="color: #f87171; font-weight: 600;"><i class='bx bx-x-circle'></i> Canc: ${formatBRL(item.cancV)} (${(item.cancQ || 0).toLocaleString('pt-BR')} pçs)</span>` : ''}
                                 </div>
                             </div>
                         </div>
                         <div class="comp-progress-wrap" style="margin-top: 5px;">
                             <div class="comp-progress-bar">
-                                <div class="comp-bar-fat" style="width: ${item.pctFat.toFixed(1)}%;"></div>
-                                <div class="comp-bar-ext" style="width: ${item.pctExt.toFixed(1)}%;"></div>
+                                <div class="comp-bar-fat" style="width: ${item.pctFat.toFixed(1)}%; background: #10b981;" title="Faturado: ${item.pctFat.toFixed(1)}%"></div>
+                                <div class="comp-bar-ext" style="width: ${item.pctExt.toFixed(1)}%; background: #3b82f6;" title="A Entregar: ${item.pctExt.toFixed(1)}%"></div>
+                                <div class="comp-bar-canc" style="width: ${item.pctCanc.toFixed(1)}%; background: #ef4444;" title="Cancelado: ${item.pctCanc.toFixed(1)}%"></div>
                             </div>
                             <div class="comp-progress-labels">
                                 <span style="color: #34d399; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctFat.toFixed(0)}% Fat (${(item.fatQ || 0).toLocaleString('pt-BR')} pçs)</span>
                                 <span style="color: #60a5fa; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctExt.toFixed(0)}% Entr (${(item.extQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                ${item.cancV > 0 ? `<span style="color: #f87171; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctCanc.toFixed(0)}% Canc (${(item.cancQ || 0).toLocaleString('pt-BR')} pçs)</span>` : ''}
                             </div>
                         </div>
                     </div>
@@ -6099,27 +6681,31 @@
             subContainer.innerHTML = html;
         }
 
-                // 3. Top DivisÃ£o / Classe (Consolidado direto de Faturamento e Extrato)
+        // 3. Top Divisão / Classe (Consolidado direto de Faturamento e Extrato)
         if (classContainer) {
             const classMap = {};
             (bData || []).forEach(item => {
                 const c = (item.cl || 'Outros').trim();
-                if (!classMap[c]) classMap[c] = { name: c, fatV: 0, fatQ: 0, extV: 0, extQ: 0 };
+                if (!classMap[c]) classMap[c] = { name: c, fatV: 0, fatQ: 0, extV: 0, extQ: 0, cancV: 0, cancQ: 0 };
                 classMap[c].fatV += (item.v || 0);
                 classMap[c].fatQ += (item.q || 0);
             });
             (eData || []).forEach(item => {
                 const c = (item.cl || 'Outros').trim();
-                if (!classMap[c]) classMap[c] = { name: c, fatV: 0, fatQ: 0, extV: 0, extQ: 0 };
+                if (!classMap[c]) classMap[c] = { name: c, fatV: 0, fatQ: 0, extV: 0, extQ: 0, cancV: 0, cancQ: 0 };
                 classMap[c].extV += (item.v || 0);
                 classMap[c].extQ += (item.q || 0);
+                classMap[c].cancV += (item.vc || 0);
+                classMap[c].cancQ += (item.qc || 0);
             });
             const classSorted = Object.values(classMap).map(c => {
                 const totalV = c.fatV + c.extV;
                 const totalQ = c.fatQ + c.extQ;
-                const pctFat = totalV > 0 ? (c.fatV / totalV * 100) : 0;
-                const pctExt = totalV > 0 ? (c.extV / totalV * 100) : 0;
-                return { ...c, totalV, totalQ, pctFat, pctExt };
+                const grossV = totalV + (c.cancV || 0);
+                const pctFat = grossV > 0 ? (c.fatV / grossV * 100) : 0;
+                const pctExt = grossV > 0 ? (c.extV / grossV * 100) : 0;
+                const pctCanc = grossV > 0 ? ((c.cancV || 0) / grossV * 100) : 0;
+                return { ...c, totalV, totalQ, grossV, pctFat, pctExt, pctCanc };
             }).sort((a, b) => b.totalV - a.totalV).slice(0, limit);
 
             let html = '<div class="ranking-items-list" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">';
@@ -6139,19 +6725,22 @@
                             <div class="ranking-item-right comp-rank-split-val">
                                 <span class="val-tot">${formatBRL(item.totalV)}</span>
                                 <div class="comp-rank-split-sub">
-                                    <span class="val-fat">Fat: ${formatBRL(item.fatV)}</span>
-                                    <span class="val-ext">Entr: ${formatBRL(item.extV)}</span>
+                                    <span class="val-fat" style="color: #34d399;">Fat: ${formatBRL(item.fatV)} (${(item.fatQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                    <span class="val-ext" style="color: #60a5fa;">Entr: ${formatBRL(item.extV)} (${(item.extQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                    ${item.cancV > 0 ? `<span class="val-canc" style="color: #f87171; font-weight: 600;"><i class='bx bx-x-circle'></i> Canc: ${formatBRL(item.cancV)} (${(item.cancQ || 0).toLocaleString('pt-BR')} pçs)</span>` : ''}
                                 </div>
                             </div>
                         </div>
                         <div class="comp-progress-wrap" style="margin-top: 5px;">
                             <div class="comp-progress-bar">
-                                <div class="comp-bar-fat" style="width: ${item.pctFat.toFixed(1)}%;"></div>
-                                <div class="comp-bar-ext" style="width: ${item.pctExt.toFixed(1)}%;"></div>
+                                <div class="comp-bar-fat" style="width: ${item.pctFat.toFixed(1)}%; background: #10b981;" title="Faturado: ${item.pctFat.toFixed(1)}%"></div>
+                                <div class="comp-bar-ext" style="width: ${item.pctExt.toFixed(1)}%; background: #3b82f6;" title="A Entregar: ${item.pctExt.toFixed(1)}%"></div>
+                                <div class="comp-bar-canc" style="width: ${item.pctCanc.toFixed(1)}%; background: #ef4444;" title="Cancelado: ${item.pctCanc.toFixed(1)}%"></div>
                             </div>
                             <div class="comp-progress-labels">
                                 <span style="color: #34d399; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctFat.toFixed(0)}% Fat (${(item.fatQ || 0).toLocaleString('pt-BR')} pçs)</span>
                                 <span style="color: #60a5fa; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctExt.toFixed(0)}% Entr (${(item.extQ || 0).toLocaleString('pt-BR')} pçs)</span>
+                                ${item.cancV > 0 ? `<span style="color: #f87171; font-size: 0.72rem; font-weight: 500; white-space: nowrap;">${item.pctCanc.toFixed(0)}% Canc (${(item.cancQ || 0).toLocaleString('pt-BR')} pçs)</span>` : ''}
                             </div>
                         </div>
                     </div>
