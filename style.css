@@ -1520,7 +1520,7 @@ body:not(.is-admin) .admin-only {
     width: 100%;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1360px) {
     .db-stats-grid {
         grid-template-columns: repeat(3, 1fr);
     }
@@ -1637,7 +1637,7 @@ body:not(.is-admin) .admin-only {
     align-items: flex-start;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1360px) {
     .dashboard-main-layout {
         flex-direction: column;
         align-items: stretch;
@@ -3782,7 +3782,7 @@ select.cfm-input option {
 
 .indicators-filter-grid-secondary {
     display: grid;
-    grid-template-columns: 1.8fr 1.1fr 1.1fr 1fr 1fr auto;
+    grid-template-columns: 1.5fr 1fr 1fr 1fr 1.15fr 1.05fr auto;
     gap: 0.9rem;
     align-items: flex-end;
     margin-top: 0.85rem;
@@ -3790,9 +3790,9 @@ select.cfm-input option {
     z-index: 10;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1360px) {
     .indicators-filter-grid-secondary {
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) auto;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) auto;
     }
 }
 

@@ -10,11 +10,13 @@
     let availableYears = [];
     let rankingDisplayLimit = 10;
     let currentDatasetType = localStorage.getItem('empresa_indicators_dataset_type') || 'extrato';
-    const CURRENT_BILLING_VERSION = '20261104_extrato_v9';
+    const CURRENT_BILLING_VERSION = '20261105_extrato_v10';
     let currentKpiDisplayMode = localStorage.getItem('empresa_indicators_kpi_mode') || 'both';
     if (!['both', 'values', 'pieces'].includes(currentKpiDisplayMode)) {
         currentKpiDisplayMode = 'both';
     }
+
+    let isIndicatorsModuleInitialized = false;
 
     // Controle de Visibilidade (Olhinho igual senha) dos Cards de KPI
     let hiddenKpiCards = new Set();
@@ -490,7 +492,12 @@
 
     function getDefaultPeriod() {
         const now = new Date();
-        const curYear = now.getFullYear().toString();
+        let curYear = now.getFullYear().toString();
+        if (availableYears && availableYears.length > 0 && !availableYears.includes(curYear)) {
+            curYear = availableYears[0];
+        } else if (!availableYears || availableYears.length === 0) {
+            curYear = '2026';
+        }
         const curSemester = (now.getMonth() >= 6) ? '2' : '1';
         const start = curSemester === '1' ? `${curYear}-01-01` : `${curYear}-07-01`;
         const end = curSemester === '1' ? `${curYear}-06-30` : `${curYear}-12-31`;
@@ -625,6 +632,7 @@
     }
 
     window.initIndicatorsModule = function() {
+        isIndicatorsModuleInitialized = true;
         const savedVersion = localStorage.getItem('empresa_billing_version');
         if (savedVersion !== CURRENT_BILLING_VERSION) {
             localStorage.removeItem('empresa_extrato_new_era_custom');
@@ -898,12 +906,18 @@
         if (dim === 'year' || dim === 'semester') {
             syncDatesWithSelectedYears();
         }
+        if (dim === 'client' || dim === 'group' || dim === 'group-real') {
+            populateNfIndCMS(true);
+        }
         applyIndicatorsFilter();
     };
 
     window.onIndCMSCheckboxChange = function(dim) {
         if (dim === 'year' || dim === 'semester') {
             syncDatesWithSelectedYears();
+        }
+        if (dim === 'client' || dim === 'group' || dim === 'group-real') {
+            populateNfIndCMS(true);
         }
         updateIndCMSLabel(dim);
         applyIndicatorsFilter();
@@ -935,6 +949,7 @@
             'group': 'Todos os Grupos',
             'group-real': 'Todos os Grupos Reais',
             'class': 'Todas as Divisões',
+            'ref': 'Todas as Referências',
             'nf': isExtrato ? 'Todos os Pedidos' : 'Todas as NFs'
         };
 
@@ -947,6 +962,10 @@
                 const semText = val === '1' ? '1\u00BA Semestre' : '2\u00BA Semestre';
                 labelEl.textContent = semText;
                 labelEl.title = semText;
+            } else if (dim === 'ref') {
+                const codeVal = checkedCheckboxes[0].value;
+                labelEl.textContent = codeVal;
+                labelEl.title = codeVal;
             } else {
                 const span = checkedCheckboxes[0].closest('label').querySelector('.ind-cms-option-label') || checkedCheckboxes[0].closest('label');
                 const fullText = span.textContent.trim();
@@ -960,6 +979,8 @@
             } else if (dim === 'nf') {
                 const labelText = isExtrato ? `${count} pedidos` : `${count} NFs`;
                 labelEl.innerHTML = `${labelText} <span class="ind-cms-badge">${count}</span>`;
+            } else if (dim === 'ref') {
+                labelEl.innerHTML = `${count} referências <span class="ind-cms-badge">${count}</span>`;
             } else if (dim === 'year') {
                 const yearVals = Array.from(checkedCheckboxes).map(c => c.value).sort();
                 labelEl.textContent = yearVals.join(', ');
@@ -1178,46 +1199,143 @@
             updateIndCMSLabel('class');
         }
 
-        // 8. NOTA FISCAL / PEDIDO
-        const nfList = document.getElementById('ind-cms-nf-list');
-        if (nfList) {
-            const isExtrato = (currentDatasetType === 'extrato');
-            
-            // Atualizar cabeçalho do filtro de NF/Pedido
-            const nfFilterTitle = document.getElementById('ind-filter-nf-label-title');
-            if (nfFilterTitle) {
-                nfFilterTitle.textContent = isExtrato ? 'Pedido' : 'Nota Fiscal';
-            }
-            const nfSearchInput = document.querySelector('#ind-cms-nf-dropdown .ind-cms-search-input');
-            if (nfSearchInput) {
-                nfSearchInput.placeholder = isExtrato ? 'Pesquisar pedido...' : 'Pesquisar número de NF...';
-            }
+        // 8. REFERÊNCIA (PRODUTO)
+        populateRefIndCMS(false);
 
-            const nfsSet = new Set();
-            billingMasterData.forEach(item => {
-                if (item.nf && item.nf.trim()) {
-                    nfsSet.add(item.nf.trim());
-                }
+        // 9. NOTA FISCAL / PEDIDO (FILTRADO DINAMICAMENTE)
+        populateNfIndCMS(false);
+    }
+
+    // Popula o filtro de Referências (SKU / Produto)
+    function populateRefIndCMS(preserveSelection = false) {
+        const refList = document.getElementById('ind-cms-ref-list');
+        if (!refList) return;
+
+        const prevSelectedRefs = preserveSelection ? getIndCMSSelectedValues('ref') : [];
+
+        const refsMap = new Map();
+        (billingMasterData || []).forEach(item => {
+            const p = (item.p || '').toString().trim();
+            if (!p || p === '-' || p === 'None') return;
+            if (!refsMap.has(p)) {
+                refsMap.set(p, {
+                    code: p,
+                    desc: (item.desc || '').toString().trim()
+                });
+            } else if (!refsMap.get(p).desc && item.desc) {
+                refsMap.get(p).desc = item.desc.toString().trim();
+            }
+        });
+
+        const sortedRefs = Array.from(refsMap.values()).sort((a, b) => a.code.localeCompare(b.code, 'pt-BR'));
+        let refHtml = '';
+        if (sortedRefs.length === 0) {
+            refHtml = `
+                <div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; padding: 0.85rem 0.5rem;">
+                    Nenhuma referência encontrada.
+                </div>
+            `;
+        } else {
+            sortedRefs.forEach(r => {
+                const isChecked = prevSelectedRefs.includes(r.code);
+                const descDisplay = r.desc ? ` - ${r.desc}` : '';
+                const fullTitle = `${r.code}${descDisplay}`;
+                refHtml += `
+                    <label class="ind-cms-option font-mono" title="${escapeHTML(fullTitle)}">
+                        <input type="checkbox" value="${escapeHTML(r.code)}" ${isChecked ? 'checked' : ''} onchange="onIndCMSCheckboxChange('ref')">
+                        <span class="ind-cms-option-label" style="display: flex; flex-direction: column; gap: 1px; font-family: inherit;">
+                            <span style="font-weight: 700; color: #f8fafc;">${escapeHTML(r.code)}</span>
+                            ${r.desc ? `<span style="font-size: 0.70rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">${escapeHTML(r.desc)}</span>` : ''}
+                        </span>
+                    </label>
+                `;
             });
-            const sortedNfs = Array.from(nfsSet).sort((a, b) => b.localeCompare(a));
-            let nfHtml = '';
+        }
+        refList.innerHTML = refHtml;
+        updateIndCMSLabel('ref');
+    }
+
+    // Popula o filtro de Nota Fiscal / Pedido, filtrando dinamicamente pelos clientes selecionados
+    function populateNfIndCMS(preserveSelection = false) {
+        const nfList = document.getElementById('ind-cms-nf-list');
+        if (!nfList) return;
+
+        const isExtrato = (currentDatasetType === 'extrato');
+
+        // Atualizar cabeçalho do filtro de NF/Pedido
+        const nfFilterTitle = document.getElementById('ind-filter-nf-label-title');
+        if (nfFilterTitle) {
+            nfFilterTitle.innerHTML = `<i class='bx bx-receipt'></i> ${isExtrato ? 'Pedido' : 'Nota Fiscal'}`;
+        }
+        const nfSearchInput = document.querySelector('#ind-cms-nf-dropdown .ind-cms-search-input');
+        if (nfSearchInput) {
+            nfSearchInput.placeholder = isExtrato ? 'Pesquisar pedido...' : 'Pesquisar número de NF...';
+        }
+
+        const selectedClients = getIndCMSSelectedValues('client');
+        const selectedGroups = getIndCMSSelectedValues('group');
+        const selectedGroupReals = getIndCMSSelectedValues('group-real');
+        const clientsMap = buildClientsMap();
+
+        let candidateItems = billingMasterData || [];
+
+        // Ao selecionar 1 ou mais clientes, filtra as notas fiscais / pedidos estritamente para esses clientes
+        if (selectedClients.length > 0) {
+            candidateItems = candidateItems.filter(item => {
+                const itemCombined = getClientCombinedName(item, clientsMap);
+                return selectedClients.includes(itemCombined);
+            });
+        } else if (selectedGroups.length > 0 || selectedGroupReals.length > 0) {
+            candidateItems = candidateItems.filter(item => {
+                const clientMatch = resolveClientForItem(item, clientsMap);
+                const itemGrupo = (clientMatch && clientMatch['GRUPO']) ? clientMatch['GRUPO'].trim() : (item.g || item.r || 'Outros');
+                const itemGrupoReal = (clientMatch && (clientMatch['GRUPO REAL'] || clientMatch['GRUPO'])) 
+                    ? (clientMatch['GRUPO REAL'] || clientMatch['GRUPO']).trim() 
+                    : (item.gr || item.g || item.r || 'Outros');
+                if (selectedGroups.length > 0 && !selectedGroups.includes(itemGrupo)) return false;
+                if (selectedGroupReals.length > 0 && !selectedGroupReals.includes(itemGrupoReal)) return false;
+                return true;
+            });
+        }
+
+        const prevSelectedNfs = preserveSelection ? getIndCMSSelectedValues('nf') : [];
+
+        const nfsSet = new Set();
+        candidateItems.forEach(item => {
+            const nfVal = (item.nf || '').toString().trim();
+            if (nfVal) {
+                nfsSet.add(nfVal);
+            }
+        });
+
+        const sortedNfs = Array.from(nfsSet).sort((a, b) => b.localeCompare(a));
+        let nfHtml = '';
+        if (sortedNfs.length === 0) {
+            nfHtml = `
+                <div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; padding: 0.85rem 0.5rem;">
+                    <i class='bx bx-info-circle' style="font-size: 1.1rem; display: block; margin-bottom: 0.25rem; opacity: 0.6;"></i>
+                    ${isExtrato ? 'Nenhum pedido encontrado para o(s) cliente(s) selecionado(s).' : 'Nenhuma NF encontrada para o(s) cliente(s) selecionado(s).'}
+                </div>
+            `;
+        } else {
             sortedNfs.forEach(nf => {
+                const isChecked = prevSelectedNfs.includes(nf);
                 const optText = isExtrato ? escapeHTML(nf) : `NF ${escapeHTML(nf)}`;
                 nfHtml += `
                     <label class="ind-cms-option font-mono" title="${optText}">
-                        <input type="checkbox" value="${escapeHTML(nf)}" onchange="onIndCMSCheckboxChange('nf')">
+                        <input type="checkbox" value="${escapeHTML(nf)}" ${isChecked ? 'checked' : ''} onchange="onIndCMSCheckboxChange('nf')">
                         <span class="ind-cms-option-label">${optText}</span>
                     </label>
                 `;
             });
-            nfList.innerHTML = nfHtml;
-            updateIndCMSLabel('nf');
         }
+        nfList.innerHTML = nfHtml;
+        updateIndCMSLabel('nf');
     }
 
     // Chamado ao abrir a aba Indicadores
     window.renderIndicatorsView = function() {
-        if (!billingMasterData || billingMasterData.length === 0) {
+        if (!isIndicatorsModuleInitialized || !billingMasterData || billingMasterData.length === 0) {
             window.initIndicatorsModule();
         }
         applyIndicatorsFilter();
@@ -1264,7 +1382,7 @@
         }
 
         // Reset demais multi-selects para todos desmarcados (significa TODOS)
-        ['client', 'group', 'group-real', 'class', 'nf'].forEach(dim => {
+        ['client', 'group', 'group-real', 'class', 'ref', 'nf'].forEach(dim => {
             const list = document.getElementById(`ind-cms-${dim}-list`);
             if (list) {
                 list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
@@ -1274,6 +1392,7 @@
             }
         });
 
+        populateNfIndCMS(false);
         applyIndicatorsFilter();
     };
 
@@ -1378,6 +1497,7 @@
         const selectedGroups = getIndCMSSelectedValues('group');
         const selectedGroupReals = getIndCMSSelectedValues('group-real');
         const selectedClasses = getIndCMSSelectedValues('class');
+        const selectedRefs = getIndCMSSelectedValues('ref');
         const selectedNFs = getIndCMSSelectedValues('nf');
         const startDateVal = document.getElementById('filter-ind-start-date')?.value || '';
         const endDateVal = document.getElementById('filter-ind-end-date')?.value || '';
@@ -1423,6 +1543,9 @@
 
             const itemClass = (item.cl || 'Outros').trim();
             if (selectedClasses.length > 0 && !selectedClasses.includes(itemClass)) return false;
+
+            const itemRef = (item.p || '').toString().trim();
+            if (selectedRefs.length > 0 && !selectedRefs.includes(itemRef)) return false;
 
             const itemNf = (item.nf || '').trim();
             if (selectedNFs.length > 0 && !selectedNFs.includes(itemNf)) return false;
@@ -6805,5 +6928,16 @@
                 ordersContainer.innerHTML = html;
             }
         }
+    }
+
+    // Auto-inicialização imediata caso a página tenha carregado ou sido recarregada na aba Indicadores
+    try {
+        const isIndActive = (sessionStorage.getItem('last_active_tab') === 'indicators') || 
+                            document.getElementById('view-indicators')?.classList.contains('active');
+        if (isIndActive) {
+            window.renderIndicatorsView();
+        }
+    } catch (e) {
+        console.warn('Auto-init Indicadores:', e);
     }
 })();

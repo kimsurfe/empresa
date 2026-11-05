@@ -366,14 +366,26 @@ async function init() {
         checkUserRole();
     }
     
+    // Garantir que o painel lateral esquerdo inicie retraído por padrão
+    if (calendarPanel) {
+        calendarPanel.classList.add('collapsed');
+        const icon = togglePanelBtn?.querySelector('i');
+        if (icon) {
+            icon.classList.remove('bx-chevron-left');
+            icon.classList.add('bx-chevron-right');
+        }
+    }
+
     // Toggle Painel Principal
     togglePanelBtn.addEventListener('click', () => {
         calendarPanel.classList.toggle('collapsed');
         const icon = togglePanelBtn.querySelector('i');
         if (calendarPanel.classList.contains('collapsed')) {
-            icon.classList.replace('bx-chevron-left', 'bx-chevron-right');
+            icon.classList.remove('bx-chevron-left');
+            icon.classList.add('bx-chevron-right');
         } else {
-            icon.classList.replace('bx-chevron-right', 'bx-chevron-left');
+            icon.classList.remove('bx-chevron-right');
+            icon.classList.add('bx-chevron-left');
         }
     });
 

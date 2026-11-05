@@ -21,18 +21,18 @@
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     
     <!-- CSS Customizado -->
-    <link rel="stylesheet" href="style.css?v=85">
+    <link rel="stylesheet" href="style.css?v=87">
 </head>
 <body>
     <div class="app-container">
         <!-- Sidebar / Calendário -->
-        <aside class="calendar-panel" id="calendar-panel">
+        <aside class="calendar-panel collapsed" id="calendar-panel">
             <div class="panel-header">
                 <div class="logo">
                     <i class='bx bx-check-double'></i>
                     <span class="logo-text">Painel</span>
                 </div>
-                <button class="toggle-panel-btn" id="toggle-panel-btn" title="Expandir/Retrair"><i class='bx bx-chevron-left'></i></button>
+                <button class="toggle-panel-btn" id="toggle-panel-btn" title="Expandir/Retrair"><i class='bx bx-chevron-right'></i></button>
             </div>
 
             <nav class="sidebar-main-nav" id="sidebar-main-nav" style="padding: 1rem 0;">
@@ -829,9 +829,33 @@
                             </div>
                         </div>
 
+                        <!-- Filtro Referência (Multi-Select com Busca) -->
+                        <div class="ind-input-group">
+                            <label><i class='bx bx-barcode'></i> Referência</label>
+                            <div class="ind-cms" id="ind-cms-ref">
+                                <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-ref', event)">
+                                    <span class="ind-cms-label" id="ind-cms-ref-label">Todas as Referências</span>
+                                    <i class='bx bx-chevron-down'></i>
+                                </button>
+                                <div class="ind-cms-dropdown hidden" id="ind-cms-ref-dropdown" style="min-width: 290px;">
+                                    <div class="ind-cms-tools">
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('ref', true)">Todas</button>
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('ref', false)">Limpar</button>
+                                    </div>
+                                    <div class="ind-cms-search-box">
+                                        <i class='bx bx-search'></i>
+                                        <input type="text" class="ind-cms-search-input" placeholder="Pesquisar referência ou produto..." oninput="filterIndCMSOptions('ref', this.value)">
+                                    </div>
+                                    <div class="ind-cms-options-list" id="ind-cms-ref-list">
+                                        <!-- Preenchido dinamicamente -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Filtro Nota Fiscal (Multi-Select com Busca) -->
                         <div class="ind-input-group">
-                            <label><i class='bx bx-receipt'></i> Nota Fiscal</label>
+                            <label id="ind-filter-nf-label-title"><i class='bx bx-receipt'></i> Nota Fiscal</label>
                             <div class="ind-cms" id="ind-cms-nf">
                                 <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-nf', event)">
                                     <span class="ind-cms-label" id="ind-cms-nf-label">Todas as NFs</span>
@@ -2371,7 +2395,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js?v=28"></script>
-    <script src="app.js?v=79"></script>
-    <script src="indicators.js?v=101" charset="UTF-8"></script>
+    <script src="indicators.js?v=103" charset="UTF-8"></script>
+    <script src="app.js?v=80"></script>
 </body>
 </html>
