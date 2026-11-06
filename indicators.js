@@ -266,50 +266,135 @@
     let compCnpjSortCol = 'totalV';
     let compCnpjSortDir = 'desc';
 
+    // --------------------------------------------------------------------------
+    // ARMAZENAMENTO ROBUSTO INDEXEDDB (Bypassa o limite de 5MB do localStorage)
+    // --------------------------------------------------------------------------
+    const IDB_NAME = 'EmpresaIndicatorsDB';
+    const IDB_VERSION = 1;
+    const IDB_STORE = 'datasets';
+
+    let memoryBillingCustom = null;
+    let memoryExtratoCustom = null;
+
+    function openIndicatorsIDB() {
+        return new Promise((resolve, reject) => {
+            if (!window.indexedDB) {
+                return reject(new Error('IndexedDB não suportado'));
+            }
+            const req = window.indexedDB.open(IDB_NAME, IDB_VERSION);
+            req.onupgradeneeded = function(e) {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(IDB_STORE)) {
+                    db.createObjectStore(IDB_STORE);
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async function idbGetDataset(key) {
+        try {
+            const db = await openIndicatorsIDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(IDB_STORE, 'readonly');
+                const store = tx.objectStore(IDB_STORE);
+                const req = store.get(key);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => resolve(null);
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function idbSetDataset(key, value) {
+        try {
+            const db = await openIndicatorsIDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE, 'readwrite');
+                const store = tx.objectStore(IDB_STORE);
+                const req = store.put(value, key);
+                req.onsuccess = () => resolve(true);
+                req.onerror = () => reject(req.error);
+            });
+        } catch (e) {
+            console.warn('Erro ao salvar no IndexedDB:', e);
+            return false;
+        }
+    }
+
+    async function idbRemoveDataset(key) {
+        try {
+            const db = await openIndicatorsIDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(IDB_STORE, 'readwrite');
+                const store = tx.objectStore(IDB_STORE);
+                const req = store.delete(key);
+                req.onsuccess = () => resolve(true);
+                req.onerror = () => resolve(false);
+            });
+        } catch (e) {
+            return false;
+        }
+    }
+
     function getExtratoData() {
         const savedVersion = localStorage.getItem('empresa_billing_version');
         if (savedVersion !== CURRENT_BILLING_VERSION) {
             return (window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA && Array.isArray(window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA)) ? [...window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA] : [];
+        }
+        if (memoryExtratoCustom && Array.isArray(memoryExtratoCustom) && memoryExtratoCustom.length > 0) {
+            return memoryExtratoCustom;
         }
         const savedCustom = localStorage.getItem('empresa_extrato_new_era_custom');
         let parsed = null;
         if (savedCustom) {
             try { parsed = JSON.parse(savedCustom); } catch(e) {}
         }
-        return (parsed && Array.isArray(parsed) && parsed.length > 0 && parsed[0].prazo !== undefined)
-            ? parsed
-            : (window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA && Array.isArray(window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA) ? [...window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA] : []);
+        if (parsed && Array.isArray(parsed) && parsed.length > 0 && parsed[0].prazo !== undefined) {
+            memoryExtratoCustom = parsed;
+            return parsed;
+        }
+        return (window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA && Array.isArray(window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA)) ? [...window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA] : [];
     }
 
     function getBillingData() {
+        if (memoryBillingCustom && Array.isArray(memoryBillingCustom) && memoryBillingCustom.length > 0) {
+            return memoryBillingCustom;
+        }
         const savedCustom = localStorage.getItem('empresa_billing_new_era_custom');
         let parsed = null;
         if (savedCustom) {
             try {
                 parsed = JSON.parse(savedCustom);
                 if (Array.isArray(parsed) && parsed.length > 0 && !parsed[0].mod) {
-                    localStorage.removeItem('empresa_billing_new_era_custom');
+                    try { localStorage.removeItem('empresa_billing_new_era_custom'); } catch(e) {}
                     parsed = null;
                 }
             } catch(e) {}
         }
-        return (parsed && Array.isArray(parsed) && parsed.length > 0)
-            ? parsed
-            : (window.INITIAL_BILLING_NEW_ERA && Array.isArray(window.INITIAL_BILLING_NEW_ERA) ? [...window.INITIAL_BILLING_NEW_ERA] : []);
+        if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+            memoryBillingCustom = parsed;
+            return parsed;
+        }
+        return (window.INITIAL_BILLING_NEW_ERA && Array.isArray(window.INITIAL_BILLING_NEW_ERA) ? [...window.INITIAL_BILLING_NEW_ERA] : []);
     }
 
     function updateUploadButtonLabel(type) {
         const uploadBtn = document.getElementById('btn-upload-billing-header');
         if (!uploadBtn) return;
         if (type === 'extrato') {
+            uploadBtn.style.display = 'inline-flex';
             uploadBtn.innerHTML = "<i class='bx bx-upload'></i> Atualizar Saldo (.xlsx)";
             uploadBtn.title = "Importar ou atualizar planilha de Saldo / Extrato de Pedidos (.xlsx)";
         } else if (type === 'billing') {
+            uploadBtn.style.display = 'inline-flex';
             uploadBtn.innerHTML = "<i class='bx bx-upload'></i> Atualizar Faturamento (.xlsx)";
             uploadBtn.title = "Importar ou atualizar planilha de Faturamento (.xlsx)";
         } else {
-            uploadBtn.innerHTML = "<i class='bx bx-upload'></i> Atualizar Planilha (.xlsx)";
-            uploadBtn.title = "Importar planilha de Saldo ou Faturamento (.xlsx)";
+            // Aba Saldo X Faturamento: Oculta o botão de importação para não confundir as planilhas
+            uploadBtn.style.display = 'none';
         }
     }
 
@@ -639,6 +724,8 @@
             localStorage.removeItem('empresa_extrato_last_updated');
             localStorage.removeItem('empresa_indicators_kpi_order');
             localStorage.setItem('empresa_billing_version', CURRENT_BILLING_VERSION);
+            idbRemoveDataset('empresa_extrato_new_era_custom');
+            idbRemoveDataset('empresa_billing_new_era_custom');
 
             if (window.db && window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA && window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA.length > 0) {
                 try {
@@ -738,9 +825,13 @@
                 if (doc.exists && doc.data().list && Array.isArray(doc.data().list)) {
                     const remote = doc.data().list;
                     if (remote.length > 0) {
-                        localStorage.setItem('empresa_billing_new_era_custom', JSON.stringify(remote));
+                        memoryBillingCustom = remote;
+                        idbSetDataset('empresa_billing_new_era_custom', remote);
+                        try {
+                            localStorage.setItem('empresa_billing_new_era_custom', JSON.stringify(remote));
+                        } catch(e) {}
                         if (doc.data().lastUpdated) {
-                            localStorage.setItem('empresa_billing_last_updated', doc.data().lastUpdated);
+                            try { localStorage.setItem('empresa_billing_last_updated', doc.data().lastUpdated); } catch(e) {}
                         }
                         if (currentDatasetType === 'billing') {
                             billingMasterData = remote;
@@ -762,9 +853,13 @@
                         return;
                     }
                     if (remote.length > 0 && remote[0].prazo !== undefined) {
-                        localStorage.setItem('empresa_extrato_new_era_custom', JSON.stringify(remote));
+                        memoryExtratoCustom = remote;
+                        idbSetDataset('empresa_extrato_new_era_custom', remote);
+                        try {
+                            localStorage.setItem('empresa_extrato_new_era_custom', JSON.stringify(remote));
+                        } catch(e) {}
                         if (doc.data().lastUpdated) {
-                            localStorage.setItem('empresa_extrato_last_updated', doc.data().lastUpdated);
+                            try { localStorage.setItem('empresa_extrato_last_updated', doc.data().lastUpdated); } catch(e) {}
                         }
                         if (currentDatasetType === 'extrato') {
                             billingMasterData = remote;
@@ -777,25 +872,38 @@
                     }
                 }
             });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         }
+
+        // Carregar dados salvos no IndexedDB de forma assíncrona
+        idbGetDataset('empresa_billing_new_era_custom').then(cached => {
+            if (cached && Array.isArray(cached) && cached.length > 0) {
+                memoryBillingCustom = cached;
+                if (currentDatasetType === 'billing') {
+                    billingMasterData = cached;
+                    computeLatestReportDate();
+                    populateAllIndCMS(false);
+                    applyIndicatorsFilter();
+                } else if (currentDatasetType === 'comparison') {
+                    billingMasterData = [...getBillingData(), ...getExtratoData()];
+                    applyIndicatorsFilter();
+                }
+            }
+        });
+
+        idbGetDataset('empresa_extrato_new_era_custom').then(cached => {
+            if (cached && Array.isArray(cached) && cached.length > 0) {
+                memoryExtratoCustom = cached;
+                if (currentDatasetType === 'extrato') {
+                    billingMasterData = cached;
+                    computeLatestReportDate();
+                    populateAllIndCMS(false);
+                    applyIndicatorsFilter();
+                } else if (currentDatasetType === 'comparison') {
+                    billingMasterData = [...getBillingData(), ...getExtratoData()];
+                    applyIndicatorsFilter();
+                }
+            }
+        });
     };
 
     // -------------------------------------------------------------
@@ -3989,12 +4097,18 @@
     // 5. IMPORTAÇÃO E EXPORTAÇÃO EXCEL
     // --------------------------------------------------------------------------
     window.handleUploadBillingExcel = function(event) {
+        if (currentDatasetType === 'comparison') {
+            window.showNotification('Para importar uma planilha, selecione antes a aba "Saldo" (pedidos a entregar) ou "Faturamento" (histórico faturado).', 'warning');
+            if (event && event.target) event.target.value = '';
+            return;
+        }
         const file = event.target.files[0];
         if (!file) return;
 
         if (!window.XLSX) {
             window.showNotification('Biblioteca Excel não carregada.', 'error');
-    
+            if (event && event.target) event.target.value = '';
+            return;
         }
 
         const reader = new FileReader();
@@ -4226,11 +4340,23 @@
 
                 billingMasterData = parsed;
                 if (isExtrato) {
-                    localStorage.setItem('empresa_extrato_last_updated', formattedFileDate);
-                    localStorage.setItem('empresa_extrato_new_era_custom', JSON.stringify(parsed));
+                    memoryExtratoCustom = parsed;
+                    try { localStorage.setItem('empresa_extrato_last_updated', formattedFileDate); } catch(e) {}
+                    try {
+                        localStorage.setItem('empresa_extrato_new_era_custom', JSON.stringify(parsed));
+                    } catch(e) {
+                        console.warn('Extrato salvo em memória e IndexedDB (localStorage quota excedida).');
+                    }
+                    await idbSetDataset('empresa_extrato_new_era_custom', parsed);
                 } else {
-                    localStorage.setItem('empresa_billing_last_updated', formattedFileDate);
-                    localStorage.setItem('empresa_billing_new_era_custom', JSON.stringify(parsed));
+                    memoryBillingCustom = parsed;
+                    try { localStorage.setItem('empresa_billing_last_updated', formattedFileDate); } catch(e) {}
+                    try {
+                        localStorage.setItem('empresa_billing_new_era_custom', JSON.stringify(parsed));
+                    } catch(e) {
+                        console.warn('Faturamento salvo em memória e IndexedDB (localStorage quota excedida).');
+                    }
+                    await idbSetDataset('empresa_billing_new_era_custom', parsed);
                 }
 
                 // Atualizar botões visuais
@@ -4243,19 +4369,30 @@
                     btnBilling.style.color = !isExtrato ? '#ffffff' : 'var(--text-secondary)';
                 }
 
-                // Sincronizar Firestore se disponível
+                // Sincronizar Firestore se disponível (respeitando limite de 1MB do Firestore)
                 if (window.db) {
                     try {
                         const docId = isExtrato ? 'extrato_new_era' : 'billing_new_era';
-                        await window.db.collection('settings').doc(docId).set({
-                            version: CURRENT_BILLING_VERSION,
-                            list: parsed,
-                            lastUpdated: formattedFileDate,
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            updatedBy: localStorage.getItem('empresa_auth_user') || 'Usuário'
-                        });
+                        const jsonStr = JSON.stringify(parsed);
+                        if (jsonStr.length < 850000) {
+                            await window.db.collection('settings').doc(docId).set({
+                                version: CURRENT_BILLING_VERSION,
+                                list: parsed,
+                                lastUpdated: formattedFileDate,
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                                updatedBy: localStorage.getItem('empresa_auth_user') || 'Usuário'
+                            });
+                        } else {
+                            await window.db.collection('settings').doc(`${docId}_meta`).set({
+                                version: CURRENT_BILLING_VERSION,
+                                lastUpdated: formattedFileDate,
+                                totalRows: parsed.length,
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                                updatedBy: localStorage.getItem('empresa_auth_user') || 'Usuário'
+                            });
+                        }
                     } catch(dbErr) {
-                        console.warn('Erro ao salvar no Firestore:', dbErr);
+                        console.warn('Sync Firestore ignorado (tamanho excedente):', dbErr);
                     }
                 }
 
