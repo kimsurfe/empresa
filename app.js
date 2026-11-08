@@ -558,6 +558,7 @@ function switchTab(tab) {
         if (viewDashboard) viewDashboard.classList.add('active');
         currentViewBrand = null;
         renderDashboard();
+        if (typeof window.renderExecutiveDashboard === 'function') window.renderExecutiveDashboard();
     } else if(tab === 'day') {
         if (window.logUserAccess) window.logUserAccess('Calendário Diário');
         tabDay.classList.add('active');
@@ -671,6 +672,7 @@ function setupGlobalListeners() {
             updateDashboardFilterBrands();
             if(currentViewBrand) renderBrandTasks();
             renderDashboard();
+        if (typeof window.renderExecutiveDashboard === 'function') window.renderExecutiveDashboard();
         }
     });
 
@@ -817,7 +819,8 @@ function setupGlobalListeners() {
         window.allGlobalTasks = allTasks;
         renderKanban();
         renderCalendar(); // Re-renderiza para atualizar os ícones de prazos
-        renderDashboard(); // Atualiza o Dashboard em tempo real!
+        renderDashboard();
+        if (typeof window.renderExecutiveDashboard === 'function') window.renderExecutiveDashboard(); // Atualiza o Dashboard em tempo real!
         if(currentViewBrand) {
             renderBrandCalendar(); // Atualiza o calendário da marca (concluídas, riscadas, etc.)
             renderBrandTasks();    // Atualiza a lista de tarefas do dia selecionado
@@ -857,6 +860,7 @@ function setupGlobalListeners() {
             }
         }
         renderDashboard();
+        if (typeof window.renderExecutiveDashboard === 'function') window.renderExecutiveDashboard();
     });
 }
 

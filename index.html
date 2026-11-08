@@ -160,12 +160,165 @@
 
             <!-- VIEW: DASHBOARD -->
             <div id="view-dashboard" class="view-container active">
-                <div class="dashboard-header-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; width: 100%;">
-                    <div class="view-title-group">
-                        <h1 class="dashboard-title" style="font-size: 1.6rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem; margin: 0;"><i class='bx bx-grid-alt' style="color: var(--accent-color);"></i> Painel de Operações</h1>
-                        <span class="subtitle" style="color: var(--text-secondary); font-size: 0.9rem;">Visão rápida e inteligente das tarefas e do dia</span>
+
+                <!-- BLOCO 1: CABECALHO EXECUTIVO E SELETOR MULTI-MARCAS -->
+                <div class="db-executive-header">
+                    <div>
+                        <div class="db-badge-date">
+                            <span class="db-badge-pill">Briefing Executivo Multi-Marcas</span>
+                            <span class="db-date-text">&bull; KR Gest&atilde;o de Marcas</span>
+                        </div>
+                        <h1 class="db-main-title">
+                            <i class='bx bx-grid-alt' style="color: var(--accent-color);"></i> Painel Executivo &amp; Operacional
+                        </h1>
+                        <p class="db-subtitle">
+                            Consolidado de faturamento, pedidos em carteira, positiva&ccedil;&atilde;o e a&ccedil;&otilde;es do dia.
+                        </p>
                     </div>
-                    <!-- Filtros Rápidos -->
+
+                    <!-- Pilulas Multi-Marcas -->
+                    <div class="db-brand-pills-bar">
+                        <span class="db-filter-label"><i class='bx bx-filter-alt'></i> Marca:</span>
+                        <button type="button" class="db-brand-pill active" data-brand="all" onclick="setDashboardBrand('all')">Todas (Consolidado)</button>
+                        <button type="button" class="db-brand-pill" data-brand="NEW ERA" onclick="setDashboardBrand('NEW ERA')"><span class="db-pill-dot" style="background:#10b981;"></span> New Era</button>
+                        <button type="button" class="db-brand-pill" data-brand="VANS" onclick="setDashboardBrand('VANS')"><span class="db-pill-dot" style="background:#3b82f6;"></span> Vans</button>
+                        <button type="button" class="db-brand-pill" data-brand="MCD" onclick="setDashboardBrand('MCD')"><span class="db-pill-dot" style="background:#f59e0b;"></span> MCD</button>
+                        <button type="button" class="db-brand-pill" data-brand="MORMAII" onclick="setDashboardBrand('MORMAII')"><span class="db-pill-dot" style="background:#ec4899;"></span> Mormaii</button>
+                        <button type="button" class="db-brand-pill" data-brand="EVOKE" onclick="setDashboardBrand('EVOKE')"><span class="db-pill-dot" style="background:#8b5cf6;"></span> Evoke</button>
+                        <button type="button" class="db-brand-pill" data-brand="STANCE" onclick="setDashboardBrand('STANCE')"><span class="db-pill-dot" style="background:#06b6d4;"></span> Stance</button>
+                        <button type="button" class="db-brand-pill" data-brand="STEP DEFEND" onclick="setDashboardBrand('STEP DEFEND')"><span class="db-pill-dot" style="background:#14b8a6;"></span> Step Defend</button>
+                    </div>
+                </div>
+
+                <!-- BLOCO 2: MINI-CARDS EXECUTIVOS DE KPIS -->
+                <div class="db-kpis-grid">
+                    <!-- KPI 1: Faturamento Realizado -->
+                    <div class="db-kpi-card border-kpi-emerald">
+                        <div class="db-kpi-top">
+                            <span class="db-kpi-title">Faturamento Realizado</span>
+                            <i class='bx bx-trending-up db-kpi-icon text-success'></i>
+                        </div>
+                        <div class="db-kpi-val" id="db-kpi-fat-val">R$ 0,00</div>
+                        <div class="db-kpi-bottom">
+                            <span class="text-success"><i class='bx bx-check-circle'></i> 2026/2</span>
+                            <span class="db-kpi-sub" id="db-kpi-fat-sub">0 pe&ccedil;as faturadas</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 2: Carteira / Saldo a Entregar -->
+                    <div class="db-kpi-card border-kpi-blue">
+                        <div class="db-kpi-top">
+                            <span class="db-kpi-title">Carteira a Entregar (Saldo)</span>
+                            <i class='bx bx-package db-kpi-icon text-info'></i>
+                        </div>
+                        <div class="db-kpi-val text-info" id="db-kpi-saldo-val">R$ 0,00</div>
+                        <div class="db-kpi-bottom">
+                            <span class="text-info"><i class='bx bx-time-five'></i> Embarque programado</span>
+                            <span class="db-kpi-sub" id="db-kpi-saldo-sub">0 pe&ccedil;as em fila</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 3: Projecao Total -->
+                    <div class="db-kpi-card border-kpi-indigo">
+                        <div class="db-kpi-top">
+                            <span class="db-kpi-title">Proje&ccedil;&atilde;o Consolidada</span>
+                            <i class='bx bx-target-lock db-kpi-icon' style="color: #818cf8;"></i>
+                        </div>
+                        <div class="db-kpi-val" style="color: #c7d2fe;" id="db-kpi-proj-val">R$ 0,00</div>
+                        <div class="db-kpi-bottom">
+                            <span class="db-kpi-sub" id="db-kpi-proj-sub">0% da meta estimada</span>
+                            <span style="color: var(--text-secondary); font-size: 0.72rem;">Fat + Saldo</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 4: Positivacao de Carteira -->
+                    <div class="db-kpi-card border-kpi-amber">
+                        <div class="db-kpi-top">
+                            <span class="db-kpi-title">Positiva&ccedil;&atilde;o da Base</span>
+                            <i class='bx bx-store-alt db-kpi-icon text-warning'></i>
+                        </div>
+                        <div class="db-kpi-val text-warning" id="db-kpi-pos-val">0 Lojas</div>
+                        <div class="db-kpi-bottom">
+                            <span class="db-kpi-sub" id="db-kpi-pos-sub">0% de cobertura</span>
+                            <span style="color: #f87171; font-size: 0.72rem; cursor: pointer;" onclick="if(window.switchTab) window.switchTab('clients');"><i class='bx bx-search'></i> Ver Lojas</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BLOCO 3: GRID CENTRAL (TERMOMETRO MULTI-MARCAS & RADAR DE ACAO COMERCIAL) -->
+                <div class="db-middle-grid">
+                    <!-- Termometro Multi-Marcas -->
+                    <div class="db-panel-box">
+                        <div class="db-panel-box-header">
+                            <div>
+                                <h3 class="db-panel-box-title"><i class='bx bx-slider-alt' style="color: var(--accent-color);"></i> Term&ocirc;metro Multi-Marcas</h3>
+                                <span class="db-panel-box-sub">Faturamento entregue vs Carteira a faturar</span>
+                            </div>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);"><span style="color: #10b981;">&#9632;</span> Fat &bull; <span style="color: #3b82f6;">&#9632;</span> Saldo</span>
+                        </div>
+                        <div class="db-thermo-container" id="db-thermo-list">
+                            <!-- Injetado dinamicamente via dashboard.js -->
+                        </div>
+                    </div>
+
+                    <!-- Radar de Acao Comercial -->
+                    <div class="db-panel-box">
+                        <div class="db-panel-box-header">
+                            <div>
+                                <h3 class="db-panel-box-title"><i class='bx bx-radar' style="color: #f43f5e;"></i> Radar de A&ccedil;&atilde;o Comercial</h3>
+                                <span class="db-panel-box-sub">Oportunidades imediatas &amp; aten&ccedil;&atilde;o da equipe</span>
+                            </div>
+                            <button type="button" class="btn-ranking-toggle" onclick="if(window.switchTab) window.switchTab('indicators');" style="padding: 2px 6px;">
+                                Abrir Indicadores <i class='bx bx-right-arrow-alt'></i>
+                            </button>
+                        </div>
+                        <div class="db-radar-container">
+                            <!-- Alerta: Clientes em Risco -->
+                            <div class="db-radar-alert-card db-radar-alert-rose">
+                                <i class='bx bx-error-circle' style="color: #ef4444; font-size: 1.3rem; margin-top: 2px;"></i>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; font-size: 0.85rem; color: #fca5a5;" id="db-radar-critical-count">0 Lojas em Risco (+60d sem faturar)</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Clientes ativos sem compras no semestre 2026/2:</div>
+                                    <div id="db-radar-critical-list" style="display: flex; flex-wrap: wrap;">
+                                        <!-- Clientes em risco -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Alerta: Pedidos Embalados / Prontos -->
+                            <div class="db-radar-alert-card db-radar-alert-sky">
+                                <i class='bx bx-box' style="color: #38bdf8; font-size: 1.3rem; margin-top: 2px;"></i>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; font-size: 0.85rem; color: #7dd3fc;" id="db-radar-emb-val">R$ 0,00 prontos para faturamento</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);" id="db-radar-emb-sub">0 pe&ccedil;as embaladas na f&aacute;brica aguardando libera&ccedil;&atilde;o financeira ou agendamento de entrega.</div>
+                                </div>
+                            </div>
+
+                            <!-- Top Produto em Destaque -->
+                            <div class="db-top-product-card">
+                                <img id="db-top-product-img" class="db-top-product-thumb" src="https://via.placeholder.com/60?text=NEW+ERA" alt="Top Produto" onerror="this.src='https://via.placeholder.com/60?text=NE'">
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="font-size: 0.7rem; color: var(--accent-color); font-weight: 700; text-transform: uppercase;">Top 1 Produto em Alta</div>
+                                    <div id="db-top-product-desc" style="font-size: 0.82rem; font-weight: 600; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">-</div>
+                                    <div style="font-size: 0.72rem; color: var(--text-secondary); display: flex; gap: 0.75rem; margin-top: 2px;">
+                                        <span>C&oacute;d: <strong id="db-top-product-code" style="color: #cbd5e1;">-</strong></span>
+                                        <span>Total: <strong id="db-top-product-val" style="color: #34d399;">R$ 0,00</strong></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BLOCO 4: OPERACAO DIARIA & TAREFAS (COM FILTROS E SELETOR DE DIA) -->
+                <div class="dashboard-header-bar" style="display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem; width: 100%; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 1.5rem;">
+                    <div class="view-title-group">
+                        <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                            <i class='bx bx-check-square' style="color: var(--accent-color);"></i> Opera&ccedil;&atilde;o Di&aacute;ria &bull; Tarefas &amp; Agenda
+                        </h2>
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">Acompanhamento de pend&ecirc;ncias e compromissos do dia</span>
+                    </div>
+                    <!-- Filtros Rapidos de Tarefas -->
                     <div class="dashboard-quick-filters" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;" id="dashboard-quick-filters-container">
                         <!-- Custom Multi-Select: Priority -->
                         <div class="custom-multi-select" id="cms-priority">
@@ -175,7 +328,7 @@
                             </button>
                             <div class="cms-dropdown hidden">
                                 <label class="cms-option"><input type="checkbox" value="high" onchange="updateCMSLabel('cms-priority'); renderDashboard();"> Alta Prioridade</label>
-                                <label class="cms-option"><input type="checkbox" value="medium" onchange="updateCMSLabel('cms-priority'); renderDashboard();"> Média Prioridade</label>
+                                <label class="cms-option"><input type="checkbox" value="medium" onchange="updateCMSLabel('cms-priority'); renderDashboard();"> M&eacute;dia Prioridade</label>
                                 <label class="cms-option"><input type="checkbox" value="low" onchange="updateCMSLabel('cms-priority'); renderDashboard();"> Baixa Prioridade</label>
                             </div>
                         </div>
@@ -183,7 +336,7 @@
                         <!-- Custom Multi-Select: Assignee -->
                         <div class="custom-multi-select" id="cms-assignee">
                             <button class="cms-btn" onclick="toggleCustomSelect('cms-assignee', event)">
-                                <span class="cms-label">Todos Responsáveis</span>
+                                <span class="cms-label">Todos Respons&aacute;veis</span>
                                 <i class='bx bx-chevron-down'></i>
                             </button>
                             <div class="cms-dropdown hidden" id="cms-assignee-list">
@@ -210,16 +363,15 @@
                             </button>
                             <div class="cms-dropdown hidden">
                                 <label class="cms-option"><input type="radio" name="period-filter" value="today" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();"> Hoje</label>
-                                <label class="cms-option"><input type="radio" name="period-filter" value="tomorrow" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();"> Amanhã</label>
+                                <label class="cms-option"><input type="radio" name="period-filter" value="tomorrow" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();"> Amanh&atilde;</label>
                                 <label class="cms-option"><input type="radio" name="period-filter" value="week" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();" checked> Esta Semana</label>
-                                <label class="cms-option"><input type="radio" name="period-filter" value="month" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();"> Este Mês</label>
+                                <label class="cms-option"><input type="radio" name="period-filter" value="month" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();"> Este M&ecirc;s</label>
                                 <label class="cms-option"><input type="radio" name="period-filter" value="all" onchange="updateCMSLabelSingle('cms-period'); renderDashboard();"> Todas as Datas</label>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Seletor de Dia do Dashboard (Navegação Diária) -->
                 <div class="db-day-selector-card" style="background: rgba(30, 41, 59, 0.45); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 14px; padding: 1.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; width: 100%; margin-bottom: 1.5rem; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);">
                     <div class="db-day-nav" style="display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 600px;">
                         <button class="nav-day-arrow" onclick="navigateDashboardDay(-1)" title="Dia Anterior" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;"><i class='bx bx-chevron-left' style="font-size: 1.5rem;"></i></button>
@@ -2733,6 +2885,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js?v=28"></script>
     <script src="indicators.js?v=125" charset="UTF-8"></script>
-    <script src="app.js?v=84"></script>
+    <script src="dashboard.js?v=1" charset="UTF-8"></script>
+    <script src="app.js?v=85"></script>
 </body>
 </html>
