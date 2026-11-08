@@ -131,6 +131,129 @@
     let currentCompProductList = [];
     let currentCompProductSearch = '';
     let currentCompProductSort = 'total_desc';
+
+    // --------------------------------------------------------------------------
+    // ESTADO E PLUGINS DE DATALABELS / VALORES COMPACTOS NOS GRÃFICOS
+    // --------------------------------------------------------------------------
+    let showCompMonthlyValues = false;
+    window.toggleCompMonthlyValues = function() {
+        showCompMonthlyValues = !showCompMonthlyValues;
+        const btn = document.getElementById('btn-toggle-comp-monthly-val');
+        const icon = document.getElementById('icon-toggle-comp-monthly-val');
+        const label = document.getElementById('label-toggle-comp-monthly-val');
+        if (btn) btn.classList.toggle('active', showCompMonthlyValues);
+        if (icon) icon.className = showCompMonthlyValues ? 'bx bx-hide' : 'bx bx-show';
+        if (label) label.textContent = showCompMonthlyValues ? 'Ocultar Valores' : 'Mostrar Valores';
+        if (chartCompMonthlyInstance) chartCompMonthlyInstance.update();
+    };
+
+    let showDailyChartValues = false;
+    window.toggleDailyChartValues = function() {
+        showDailyChartValues = !showDailyChartValues;
+        const btn = document.getElementById('btn-toggle-daily-val');
+        const icon = document.getElementById('icon-toggle-daily-val');
+        const label = document.getElementById('label-toggle-daily-val');
+        if (btn) btn.classList.toggle('active', showDailyChartValues);
+        if (icon) icon.className = showDailyChartValues ? 'bx bx-hide' : 'bx bx-show';
+        if (label) label.textContent = showDailyChartValues ? 'Ocultar Valores' : 'Mostrar Valores';
+        if (chartDailyInstance) chartDailyInstance.update();
+    };
+
+    window.billingMasterNfIndex = new Map();
+    function initBillingMasterNfIndex() {
+        if (window.billingMasterNfIndex && window.billingMasterNfIndex.size > 0) return;
+        const master = window.INITIAL_BILLING_NEW_ERA;
+        if (!Array.isArray(master)) return;
+        master.forEach(it => {
+            const nf = (it.nf || '').toString().trim();
+            if (nf && /\d/.test(nf) && !/programad/i.test(nf)) {
+                const cleanC = cleanDigits(it.c);
+                const cli = (it.cli || '').toString().trim();
+                const fant = (it.f || '').toString().trim().toUpperCase();
+                const d = (it.d || '').toString().trim();
+                const p = (it.p || '').toString().trim();
+                const cor = (it.cor || '').toString().trim();
+
+                if (d) {
+                    if (cleanC) {
+                        window.billingMasterNfIndex.set(cleanC + '_' + d, nf);
+                        if (p) window.billingMasterNfIndex.set(cleanC + '_' + d + '_' + p + '_' + cor, nf);
+                    }
+                    if (cli) {
+                        window.billingMasterNfIndex.set('CLI_' + cli + '_' + d, nf);
+                        if (p) window.billingMasterNfIndex.set('CLI_' + cli + '_' + d + '_' + p + '_' + cor, nf);
+                    }
+                    if (fant) {
+                        window.billingMasterNfIndex.set('FANT_' + fant + '_' + d, nf);
+                        if (p) window.billingMasterNfIndex.set('FANT_' + fant + '_' + d + '_' + p + '_' + cor, nf);
+                    }
+                }
+            }
+        });
+    }
+
+        function isCleanValidNf(nfStr) {
+        if (!nfStr) return false;
+        const str = nfStr.toString().trim();
+        if (!str || str === '-' || /programad/i.test(str)) return false;
+        return /\d/.test(str);
+    }
+
+    function getCleanNfNumber(item) {
+        if (!item) return '';
+        let val = (item.nf || item.nota || item.notafiscal || item.numNf || '').toString().trim();
+        if (!isCleanValidNf(val)) {
+            const altDoc = (item.doc || item.numero || item.num || '').toString().trim();
+            if (altDoc && /\d/.test(altDoc) && !/programad/i.test(altDoc)) {
+                return altDoc;
+            }
+            initBillingMasterNfIndex();
+            if (window.billingMasterNfIndex && window.billingMasterNfIndex.size > 0) {
+                const cleanC = cleanDigits(item.c);
+                const cli = (item.cli || '').toString().trim();
+                const fant = (item.f || '').toString().trim().toUpperCase();
+                const d = (item.d || '').toString().trim();
+                const p = (item.p || '').toString().trim();
+                const cor = (item.cor || '').toString().trim();
+
+                const candidateKeys = [];
+                if (cleanC && d && p) candidateKeys.push(cleanC + '_' + d + '_' + p + '_' + cor);
+                if (cli && d && p) candidateKeys.push('CLI_' + cli + '_' + d + '_' + p + '_' + cor);
+                if (fant && d && p) candidateKeys.push('FANT_' + fant + '_' + d + '_' + p + '_' + cor);
+                if (cleanC && d) candidateKeys.push(cleanC + '_' + d);
+                if (cli && d) candidateKeys.push('CLI_' + cli + '_' + d);
+                if (fant && d) candidateKeys.push('FANT_' + fant + '_' + d);
+
+                for (let i = 0; i < candidateKeys.length; i++) {
+                    const k = candidateKeys[i];
+                    if (window.billingMasterNfIndex.has(k)) {
+                        return window.billingMasterNfIndex.get(k);
+                    }
+                }
+            }
+            return '';
+        }
+        return val;
+    }
+
+    function formatBRLNoCents(val) {
+        return 'R$ ' + Math.round(val || 0).toLocaleString('pt-BR');
+    }
+
+    function formatCompactChartValue(val, isPieces) {
+        if (!val || val <= 0) return '';
+        if (isPieces) {
+            return val >= 1000 ? (val / 1000).toFixed(val % 1000 === 0 ? 0 : 1) + 'k' : '' + Math.round(val);
+        } else {
+            if (val >= 1000000) {
+                return 'R$ ' + (val / 1000000).toFixed(val % 1000000 === 0 ? 0 : 1) + 'M';
+            } else if (val >= 1000) {
+                return 'R$ ' + Math.round(val / 1000) + 'k';
+            } else {
+                return 'R$ ' + Math.round(val);
+            }
+        }
+    }
     let compProductSortCol = 'totalV';
     let compProductSortDir = 'desc';
     let compRankingDisplayLimit = 10;
@@ -194,10 +317,16 @@
         }
     };
 
+    let compCardSectionExpanded = true;
     window.toggleComparisonCardSection = function() {
         const body = document.getElementById('comp-tables-collapsible-body');
-        if (body) body.style.display = 'block';
-        window.toggleCompMasterSummary();
+        compCardSectionExpanded = !compCardSectionExpanded;
+        const icon = document.getElementById('icon-toggle-comp-card');
+        const label = document.getElementById('label-toggle-comp-card');
+        if (body) body.style.display = compCardSectionExpanded ? 'block' : 'none';
+        if (icon) icon.className = compCardSectionExpanded ? 'bx bx-chevron-up' : 'bx bx-chevron-down';
+        if (label) label.textContent = compCardSectionExpanded ? 'Recolher' : 'Expandir';
+
     };
 
 
@@ -256,7 +385,7 @@
         renderCompCnpjTable();
     };
 
-    // Estado de Ordenação e Agrupamento das Tabelas de Confronto
+    // Estado de OrdenÃ£o e Agrupamento das Tabelas de Confronto
     let compDateSortCol = 'date';
     let compDateSortDir = 'asc'; // 'asc' (crescente do mês/data) ou 'desc'
     let compDateGroupByMonth = true; // Por padrão agrupa pelo mês
@@ -267,7 +396,7 @@
     let compCnpjSortDir = 'desc';
 
     // --------------------------------------------------------------------------
-    // ARMAZENAMENTO ROBUSTO INDEXEDDB (Bypassa o limite de 5MB do localStorage)
+    // ARMAZEnÃ£o ROBUSTO INDEXEDDB (Byp\u00E7ssa o limite de 5MB do localStorage)
     // --------------------------------------------------------------------------
     const IDB_NAME = 'EmpresaIndicatorsDB';
     const IDB_VERSION = 1;
@@ -360,25 +489,39 @@
     }
 
     function getBillingData() {
+        initBillingMasterNfIndex();
+        let data = null;
         if (memoryBillingCustom && Array.isArray(memoryBillingCustom) && memoryBillingCustom.length > 0) {
-            return memoryBillingCustom;
+            data = memoryBillingCustom;
+        } else {
+            const savedCustom = localStorage.getItem('empresa_billing_new_era_custom');
+            let parsed = null;
+            if (savedCustom) {
+                try {
+                    parsed = JSON.parse(savedCustom);
+                    if (Array.isArray(parsed) && parsed.length > 0 && !parsed[0].mod) {
+                        try { localStorage.removeItem('empresa_billing_new_era_custom'); } catch(e) {}
+                        parsed = null;
+                    }
+                } catch(e) {}
+            }
+            if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+                memoryBillingCustom = parsed;
+                data = parsed;
+            } else {
+                data = (window.INITIAL_BILLING_NEW_ERA && Array.isArray(window.INITIAL_BILLING_NEW_ERA)) ? [...window.INITIAL_BILLING_NEW_ERA] : [];
+            }
         }
-        const savedCustom = localStorage.getItem('empresa_billing_new_era_custom');
-        let parsed = null;
-        if (savedCustom) {
-            try {
-                parsed = JSON.parse(savedCustom);
-                if (Array.isArray(parsed) && parsed.length > 0 && !parsed[0].mod) {
-                    try { localStorage.removeItem('empresa_billing_new_era_custom'); } catch(e) {}
-                    parsed = null;
+
+        if (Array.isArray(data)) {
+            data.forEach(item => {
+                if (!isCleanValidNf(item.nf)) {
+                    const recNf = getCleanNfNumber(item);
+                    item.nf = isCleanValidNf(recNf) ? recNf : '';
                 }
-            } catch(e) {}
+            });
         }
-        if (parsed && Array.isArray(parsed) && parsed.length > 0) {
-            memoryBillingCustom = parsed;
-            return parsed;
-        }
-        return (window.INITIAL_BILLING_NEW_ERA && Array.isArray(window.INITIAL_BILLING_NEW_ERA) ? [...window.INITIAL_BILLING_NEW_ERA] : []);
+        return data;
     }
 
     function updateUploadButtonLabel(type) {
@@ -397,6 +540,82 @@
             uploadBtn.style.display = 'none';
         }
     }
+
+        // --------------------------------------------------------------------------
+    // nÃ£o ENTRE SUB-ABAS DOS INDICADORES
+    // --------------------------------------------------------------------------
+    window.switchIndicatorsSubTab = function(tabKey) {
+        const validTabs = ['overview', 'confronto', 'recorrencia', 'produtos', 'auditoria'];
+        if (!tabKey || !validTabs.includes(tabKey)) {
+            tabKey = sessionStorage.getItem('empresa_indicators_subtab') || 'overview';
+        }
+        if (!validTabs.includes(tabKey)) tabKey = 'overview';
+
+        sessionStorage.setItem('empresa_indicators_subtab', tabKey);
+
+        validTabs.forEach(t => {
+            const btn = document.getElementById('btn-subtab-' + t);
+            if (btn) {
+                if (t === tabKey) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            }
+            const pane = document.getElementById('subtab-pane-' + t);
+            if (pane) {
+                if (t === tabKey) {
+                    pane.classList.add('active');
+                } else {
+                    pane.classList.remove('active');
+                }
+            }
+        });
+
+        // Garantir visibilidade interna dos containers quando a respectiva sub-aba for aberta
+        const compTables = document.getElementById('comparison-tables-section');
+        if (compTables) compTables.style.display = 'block';
+
+        const compAging = document.getElementById('comparison-aging-section');
+        if (compAging) compAging.style.display = 'block';
+
+        const auditSec = document.getElementById('indicators-audit-section');
+        if (auditSec) auditSec.style.display = 'block';
+
+        const stdProdSec = document.getElementById('std-products-ranking-section');
+        const compProdSec = document.getElementById('comparison-products-section');
+        if (stdProdSec && compProdSec) {
+            if (currentDatasetType === 'comparison') {
+                stdProdSec.style.display = 'none';
+                compProdSec.style.display = 'block';
+            } else {
+                stdProdSec.style.display = 'block';
+                compProdSec.style.display = 'none';
+            }
+        }
+
+        // Redimensionar grÃ¡ficos das sub-abas para evitar achatamento do canvas ap\u00E7s display: none
+        setTimeout(() => {
+            try {
+                if (tabKey === 'overview') {
+                    if (chartComparisonInstance && typeof chartComparisonInstance.resize === 'function') chartComparisonInstance.resize();
+                    if (chartCompMonthlyInstance && typeof chartCompMonthlyInstance.resize === 'function') chartCompMonthlyInstance.resize();
+                    if (chartCompDailyInstance && typeof chartCompDailyInstance.resize === 'function') chartCompDailyInstance.resize();
+                    if (chartCompClassesInstance && typeof chartCompClassesInstance.resize === 'function') chartCompClassesInstance.resize();
+                    if (chartBrandRevenueInstance && typeof chartBrandRevenueInstance.resize === 'function') chartBrandRevenueInstance.resize();
+                    if (chartMonthlyRevenueInstance && typeof chartMonthlyRevenueInstance.resize === 'function') chartMonthlyRevenueInstance.resize();
+                    if (chartDivisionRevenueInstance && typeof chartDivisionRevenueInstance.resize === 'function') chartDivisionRevenueInstance.resize();
+                    if (chartGroupRevenueInstance && typeof chartGroupRevenueInstance.resize === 'function') chartGroupRevenueInstance.resize();
+                } else if (tabKey === 'recorrencia') {
+                    if (chartCompAgingInstance && typeof chartCompAgingInstance.resize === 'function') {
+                        chartCompAgingInstance.resize();
+                    }
+                }
+            } catch (errResize) {
+                console.warn('[Indicators] Erro ao redimensionar grÃ¡ficos da sub-aba:', errResize);
+            }
+        }, 60);
+    };
 
     window.switchIndicatorsDataset = function(type) {
         updateUploadButtonLabel(type);
@@ -427,22 +646,23 @@
         const indAuditSec = document.getElementById('indicators-audit-section');
         const compChartsSec = document.getElementById('comparison-charts-section');
         const compTablesSec = document.getElementById('comparison-tables-section');
+        const compAgingSec = document.getElementById('comparison-aging-section');
         const compProdSec = document.getElementById('comparison-products-section');
 
         if (type === 'comparison') {
             if (indChartsSec) indChartsSec.style.display = 'none';
-            if (indRankSec) indRankSec.style.display = 'none';
-            if (indAuditSec) indAuditSec.style.display = 'none';
             if (compChartsSec) compChartsSec.style.display = 'grid';
+            if (indRankSec) indRankSec.style.display = 'block';
             if (compTablesSec) compTablesSec.style.display = 'block';
+            if (compAgingSec) compAgingSec.style.display = 'block';
             if (compProdSec) compProdSec.style.display = 'block';
             billingMasterData = [...getBillingData(), ...getExtratoData()];
         } else {
             if (indChartsSec) indChartsSec.style.display = 'grid';
-            if (indRankSec) indRankSec.style.display = 'block';
             if (compChartsSec) compChartsSec.style.display = 'none';
-            if (compTablesSec) compTablesSec.style.display = 'none';
-            if (compProdSec) compProdSec.style.display = 'none';
+            if (indRankSec) indRankSec.style.display = 'block';
+            if (compTablesSec) compTablesSec.style.display = 'block';
+            if (compAgingSec) compAgingSec.style.display = 'block';
 
             if (type === 'extrato') {
                 billingMasterData = getExtratoData();
@@ -770,21 +990,22 @@
         const indAuditSec = document.getElementById('indicators-audit-section');
         const compChartsSec = document.getElementById('comparison-charts-section');
         const compTablesSec = document.getElementById('comparison-tables-section');
+        const compAgingSec = document.getElementById('comparison-aging-section');
         const compProdSec = document.getElementById('comparison-products-section');
 
         if (currentDatasetType === 'comparison') {
             if (indChartsSec) indChartsSec.style.display = 'none';
-            if (indRankSec) indRankSec.style.display = 'none';
-            if (indAuditSec) indAuditSec.style.display = 'none';
             if (compChartsSec) compChartsSec.style.display = 'grid';
+            if (indRankSec) indRankSec.style.display = 'block';
             if (compTablesSec) compTablesSec.style.display = 'block';
+            if (compAgingSec) compAgingSec.style.display = 'block';
             if (compProdSec) compProdSec.style.display = 'block';
         } else {
             if (indChartsSec) indChartsSec.style.display = 'grid';
-            if (indRankSec) indRankSec.style.display = 'block';
             if (compChartsSec) compChartsSec.style.display = 'none';
-            if (compTablesSec) compTablesSec.style.display = 'none';
-            if (compProdSec) compProdSec.style.display = 'none';
+            if (indRankSec) indRankSec.style.display = 'block';
+            if (compTablesSec) compTablesSec.style.display = 'block';
+            if (compAgingSec) compAgingSec.style.display = 'block';
         }
 
         try {
@@ -811,6 +1032,7 @@
         populateAllIndCMS(true);
         window.applyKpiCardsOrder();
         setupKpiCardsDragAndDrop();
+        window.switchIndicatorsSubTab();
 
         // Sincronizar configuração de exibição dos KPIs (Valores / Peças / Os Dois)
         const kpiModeSelect = document.getElementById('filter-ind-kpi-mode');
@@ -1081,7 +1303,7 @@
                 labelEl.title = fullText;
             }
         } else {
-            // Mais de 1 selecionado: exibe contagem limpa e elegante sem estourar o layout
+            // Mais de 1 selecionÃ£o: exibe contagem limpa e elegante sem estourar o layout
             if (dim === 'client') {
                 labelEl.innerHTML = `${count} lojas selecionadas <span class="ind-cms-badge">${count}</span>`;
             } else if (dim === 'nf') {
@@ -1590,14 +1812,16 @@
         const indAuditSec = document.getElementById('indicators-audit-section');
         const compChartsSec = document.getElementById('comparison-charts-section');
         const compTablesSec = document.getElementById('comparison-tables-section');
+        const compAgingSec = document.getElementById('comparison-aging-section');
         const compProdSec = document.getElementById('comparison-products-section');
 
         if (indChartsSec) indChartsSec.style.display = isComp ? 'none' : 'grid';
-        if (indRankSec) indRankSec.style.display = isComp ? 'none' : 'block';
-        if (indAuditSec && isComp) indAuditSec.style.display = 'none';
         if (compChartsSec) compChartsSec.style.display = isComp ? 'grid' : 'none';
-        if (compTablesSec) compTablesSec.style.display = isComp ? 'block' : 'none';
+        if (indRankSec) indRankSec.style.display = 'block';
+        if (compTablesSec) compTablesSec.style.display = 'block';
+        if (compAgingSec) compAgingSec.style.display = 'block';
         if (compProdSec) compProdSec.style.display = isComp ? 'block' : 'none';
+        if (indAuditSec) indAuditSec.style.display = 'block';
         const selectedBrands = getIndCMSSelectedValues('brand');
         const selectedYears = getIndCMSSelectedValues('year');
         const selectedSemesters = getIndCMSSelectedValues('semester');
@@ -1680,13 +1904,32 @@
             updateComparisonKpis(bFiltered, eFiltered, clientsMap);
             renderComparisonCharts(bFiltered, eFiltered, clientsMap);
             renderComparisonConfrontation(bFiltered, eFiltered, clientsMap);
+            renderComparisonAgingSection(bFiltered, eFiltered, clientsMap);
+            renderRankings(billingFilteredData, clientsMap);
+            renderAuditSection(billingFilteredData, clientsMap);
             window.applyKpiCardsOrder();
             setupKpiCardsDragAndDrop();
+            window.switchIndicatorsSubTab();
             return;
     
         }
 
+        if (currentDatasetType === 'billing') {
+            if (!billingMasterData || billingMasterData.length === 0) {
+                billingMasterData = getBillingData();
+            }
+        } else if (currentDatasetType === 'extrato') {
+            if (!billingMasterData || billingMasterData.length === 0) {
+                billingMasterData = getExtratoData();
+            }
+        }
+
         billingFilteredData = billingMasterData.filter(runItemFilter);
+        if (currentDatasetType === 'billing') {
+            lastCompFilteredBilling = billingFilteredData;
+        } else if (currentDatasetType === 'extrato') {
+            lastCompFilteredExtrato = billingFilteredData;
+        }
 
         // Atualizar subtítulo com indicação da métrica e data do último relatório atualizado
         if (subtitleEl) {
@@ -1704,6 +1947,7 @@
         renderAuditSection(billingFilteredData, clientsMap);
         window.applyKpiCardsOrder();
         setupKpiCardsDragAndDrop();
+        window.switchIndicatorsSubTab();
     };
 
     // --------------------------------------------------------------------------
@@ -1868,7 +2112,9 @@
             totalEmbaladoPcs += (item.qe || 0);
 
             const clientMatch = resolveClientForItem(item, clientsMap);
-            const clientKey = item.c || (clientMatch && clientMatch['CNPJ']) || (item.cli ? `CLI_${item.cli}` : item.f);
+            const rawClientCnpj = item.c || (clientMatch && clientMatch['CNPJ']) || '';
+            const cleanClientC = cleanDigits(rawClientCnpj);
+            const clientKey = cleanClientC ? cleanClientC.padStart(14, '0') : (item.cli ? `CLI_${item.cli}` : item.f);
             if (clientKey) {
                 activeClientsSet.add(clientKey);
             }
@@ -2405,7 +2651,9 @@
             const rawExt = getExtratoData();
             const matchedExt = rawExt.filter(it => {
                 const cMatch = resolveClientForItem(it, clientsMap);
-                const cKey = it.c || (cMatch && cMatch['CNPJ']) || (it.cli ? `CLI_${it.cli}` : it.f);
+                const rawC = it.c || (cMatch && cMatch['CNPJ']) || '';
+                const cleanC = cleanDigits(rawC);
+                const cKey = cleanC ? cleanC.padStart(14, '0') : (it.cli ? `CLI_${it.cli}` : it.f);
                 return cKey && activeClientsSet.has(cKey);
             });
             renderCommercialKpiCard(matchedExt, clientsMap);
@@ -2656,7 +2904,8 @@
                         }
                     }
                 }
-            }
+            },
+            plugins: [dailyDataLabelsPlugin]
         });
     }
 
@@ -2672,7 +2921,7 @@
         // Atualizar títulos dos gráficos e seções conforme o modo (Extrato/Booking vs Faturamento)
         const elDailyTitle = document.getElementById('chart-daily-title-text');
         const elDailySub = document.getElementById('chart-daily-subtitle');
-        if (elDailyTitle) elDailyTitle.textContent = isExtrato ? 'Planejamento Diário de Booking' : 'Evolução Diária do Faturamento';
+        if (elDailyTitle) elDailyTitle.textContent = isExtrato ? 'Planejamento de Programação' : 'Evolução Diária do Faturamento';
         if (elDailySub) elDailySub.textContent = isExtrato ? 'Entregas programadas por dia com curva de tendência e pontos interativos' : 'Faturamento por dia com curva de tendência e pontos interativos';
 
         const elMonthlyTitle = document.getElementById('chart-monthly-title-text');
@@ -2738,6 +2987,47 @@
         renderCommercialGroupChart(data, clientsMap);
     }
 
+        const dailyDataLabelsPlugin = {
+        id: 'dailyDataLabels',
+        afterDatasetsDraw(chart) {
+            if (!showDailyChartValues) return;
+            const ctx = chart.ctx;
+            const meta = chart.getDatasetMeta(0);
+            if (!meta || !meta.data) return;
+
+            ctx.save();
+            ctx.font = '600 10px Inter, system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            const isPieces = (currentKpiDisplayMode === 'pieces');
+
+            meta.data.forEach((element, index) => {
+                const val = chart.data.datasets[0].data[index];
+                if (!val || val <= 0) return;
+                const text = formatCompactChartValue(val, isPieces);
+                if (!text) return;
+
+                const x = element.x;
+                const y = element.y - 6;
+                const padX = 4;
+                const padY = 2;
+                const textWidth = ctx.measureText(text).width;
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+                ctx.beginPath();
+                if (typeof ctx.roundRect === 'function') {
+                    ctx.roundRect(x - (textWidth / 2) - padX, y - 11 - padY, textWidth + (padX * 2), 13 + (padY * 2), 3);
+                } else {
+                    ctx.rect(x - (textWidth / 2) - padX, y - 11 - padY, textWidth + (padX * 2), 13 + (padY * 2));
+                }
+                ctx.fill();
+
+                ctx.fillStyle = (currentDatasetType === 'extrato') ? '#93c5fd' : '#6ee7b7';
+                ctx.fillText(text, x, y);
+            });
+            ctx.restore();
+        }
+    };
+
     function renderDailyChart(data) {
         const canvas = document.getElementById('chart-daily-revenue');
         if (!canvas) return;
@@ -2767,6 +3057,17 @@
         const countBadge = document.getElementById('chart-daily-count');
         if (countBadge) {
             countBadge.textContent = isExtrato ? `${sortedDays.length} datas programadas` : `${sortedDays.length} dias faturados`;
+        }
+
+        const titleDailyEl = document.getElementById('chart-daily-title-text');
+        const subtitleDailyEl = document.getElementById('chart-daily-subtitle-text');
+        if (titleDailyEl) {
+            titleDailyEl.textContent = isExtrato ? 'Planejamento de Programação' : 'Evolução Diária do Faturamento';
+        }
+        if (subtitleDailyEl) {
+            subtitleDailyEl.textContent = isExtrato
+                ? 'Programação diária de entregas por data com curva de tendência e pontos interativos'
+                : 'Faturamento por dia com curva de tend\u00EAncia e pontos interativos';
         }
 
         if (chartDailyInstance) {
@@ -2849,7 +3150,8 @@
                         }
                     }
                 }
-            }
+            },
+            plugins: [dailyDataLabelsPlugin]
         });
     }
 
@@ -2944,7 +3246,8 @@
                         }
                     }
                 }
-            }
+            },
+            plugins: [dailyDataLabelsPlugin]
         });
     }
 
@@ -3051,7 +3354,8 @@
                         ticks: { color: '#f8fafc', font: { size: 11, weight: '500' } }
                     }
                 }
-            }
+            },
+            plugins: [dailyDataLabelsPlugin]
         });
     }
 
@@ -3158,7 +3462,8 @@
                         ticks: { color: '#f8fafc', font: { size: 11, weight: '500' } }
                     }
                 }
-            }
+            },
+            plugins: [dailyDataLabelsPlugin]
         });
     }
 
@@ -3207,7 +3512,7 @@
                     code: pCode,
                     desc: pDesc,
                     cor: isSkuMode ? pCor : '',
-                    name: pDesc || pCode || 'Produto sem descriÃ§Ã£o',
+                    name: pDesc || pCode || 'Produto sem descrição',
                     q: 0,
                     v: 0
                 };
@@ -3248,11 +3553,11 @@
                     <div class="comp-product-hero-desc" title="${escapeHTML(topValProd.desc)}">${escapeHTML(topValProd.desc)}</div>
                     <div class="comp-product-hero-val" style="color: #34d399;">
                         <span>${formatBRL(topValProd.v)}</span>
-                        <span style="font-size: 0.74rem; color: var(--text-secondary); font-weight: normal;">&bull; ${topValProd.q.toLocaleString('pt-BR')} pÃ§s</span>
+                        <span style="font-size: 0.74rem; color: var(--text-secondary); font-weight: normal;">&bull; ${topValProd.q.toLocaleString('pt-BR')} p\u00E7s</span>
                     </div>
                 </div>
             </div>
-        ` : `<div style="color: var(--text-secondary); font-size: 0.82rem; padding: 0.75rem 0;">Nenhum produto registrado no perÃ­odo.</div>`;
+        ` : `<div style="color: var(--text-secondary); font-size: 0.82rem; padding: 0.75rem 0;">Nenhum produto registrado no período.</div>`;
 
         const heroQtyHtml = topQtyProd ? `
             <div class="comp-product-hero-card">
@@ -3262,11 +3567,11 @@
                     <div class="comp-product-hero-desc" title="${escapeHTML(topQtyProd.desc)}">${escapeHTML(topQtyProd.desc)}</div>
                     <div class="comp-product-hero-val" style="color: #60a5fa;">
                         <span>${formatBRL(topQtyProd.v)}</span>
-                        <span style="font-size: 0.74rem; color: var(--text-secondary); font-weight: normal;">&bull; ${topQtyProd.q.toLocaleString('pt-BR')} pÃ§s</span>
+                        <span style="font-size: 0.74rem; color: var(--text-secondary); font-weight: normal;">&bull; ${topQtyProd.q.toLocaleString('pt-BR')} p\u00E7s</span>
                     </div>
                 </div>
             </div>
-        ` : `<div style="color: var(--text-secondary); font-size: 0.82rem; padding: 0.75rem 0;">Nenhum produto registrado no perÃ­odo.</div>`;
+        ` : `<div style="color: var(--text-secondary); font-size: 0.82rem; padding: 0.75rem 0;">Nenhum produto registrado no período.</div>`;
 
         const avgPcs = totalSkus > 0 ? (totalPieces / totalSkus).toFixed(1) : 0;
 
@@ -3282,18 +3587,18 @@
                 </div>
                 <div class="kpi-footer" style="flex-direction: column; align-items: flex-start; gap: 0.35rem;">
                     <div style="font-size: 0.78rem; color: var(--text-secondary);">
-                        ${isExtrato ? `${totalPieces.toLocaleString('pt-BR')} pçs pendentes na carteira` : `${totalPieces.toLocaleString('pt-BR')} pçs faturadas no perÃ­odo`}
+                        ${isExtrato ? `${totalPieces.toLocaleString('pt-BR')} pçs pendentes na carteira` : `${totalPieces.toLocaleString('pt-BR')} pçs faturadas no período`}
                     </div>
                     <div style="font-size: 0.73rem; color: #a5b4fc;">
-                        MÃ©dia de ${avgPcs} pçs por referÃªncia
+                        Média de ${avgPcs} pçs por referência
                     </div>
                 </div>
             </div>
 
-            <!-- KPI 2: Volume FÃ­sico de PeÃ§as -->
+            <!-- KPI 2: Volume FÃ­sico de Pe\u00E7as -->
             <div class="kpi-card highlight-amber">
                 <div class="kpi-header">
-                    <span class="kpi-title">${isExtrato ? 'Saldo de PeÃ§as a Entregar' : 'Volume de PeÃ§as Faturadas'}</span>
+                    <span class="kpi-title">${isExtrato ? 'Saldo de Pe\u00E7as a Entregar' : 'Volume de Pe\u00E7as Faturadas'}</span>
                     <div class="kpi-icon-badge"><i class='bx bx-package'></i></div>
                 </div>
                 <div class="kpi-value-container">
@@ -3312,16 +3617,16 @@
             <div class="kpi-card highlight-green">
                 <div class="kpi-header">
                     <span class="kpi-title">${isExtrato ? 'Top Produto a Entregar' : 'Top Produto Faturado'}</span>
-                    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">${isExtrato ? 'Maior Demanda' : 'LÃ­der Faturamento'}</span>
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">${isExtrato ? 'Maior Demanda' : 'Líder Faturamento'}</span>
                 </div>
                 ${heroValHtml}
             </div>
 
-            <!-- KPI 4: Produto LÃ­der em PeÃ§as -->
+            <!-- KPI 4: Produto LÃ­der em Pe\u00E7as -->
             <div class="kpi-card highlight-blue">
                 <div class="kpi-header">
-                    <span class="kpi-title">${isExtrato ? 'Produto Mais Demandado' : 'Maior Volume em PeÃ§as'}</span>
-                    <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">LÃ­der em PeÃ§as</span>
+                    <span class="kpi-title">${isExtrato ? 'Produto Mais Demandado' : 'Maior Volume em Pe\u00E7as'}</span>
+                    <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">Líder em Peças</span>
                 </div>
                 ${heroQtyHtml}
             </div>
@@ -3492,6 +3797,240 @@
         if (modal) modal.classList.add('hidden');
     };
 
+    // ==========================================================================
+    // MODAL DETALHAMENTO DE PRODUTOS DA NOTA FISCAL / PEDIDO
+    // ==========================================================================
+    window.openNfItemsModal = function(nfOrDocNum, clientName, dateStr) {
+        if (!nfOrDocNum) return;
+        const cleanDoc = nfOrDocNum.toString().trim().replace(/^(NF|Pedido)\s*/i, '');
+        if (!cleanDoc) return;
+
+        const modal = document.getElementById('nf-items-modal');
+        const titleEl = document.getElementById('nf-modal-title');
+        const subEl = document.getElementById('nf-modal-subtitle');
+        const typeBadgeEl = document.getElementById('nf-modal-type-badge');
+        const iconWrapEl = document.getElementById('nf-modal-icon-wrap');
+        const iconEl = document.getElementById('nf-modal-icon');
+        const tbodyEl = document.getElementById('nf-modal-tbody');
+        const totItemsEl = document.getElementById('nf-modal-tot-items');
+        const totPiecesEl = document.getElementById('nf-modal-tot-pieces');
+        const totValEl = document.getElementById('nf-modal-tot-val');
+
+        if (!modal || !tbodyEl) return;
+
+        // Coleta todos os registros de faturamento e extrato disponíveis
+        let allRecords = [];
+        try {
+            if (typeof getBillingData === 'function') {
+                allRecords = allRecords.concat(getBillingData() || []);
+            }
+        } catch (e) {}
+        if (allRecords.length === 0 && window.INITIAL_BILLING_NEW_ERA) {
+            allRecords = allRecords.concat(window.INITIAL_BILLING_NEW_ERA || []);
+        }
+
+        let extratoRecords = [];
+        try {
+            if (typeof getExtratoData === 'function') {
+                extratoRecords = extratoRecords.concat(getExtratoData() || []);
+            }
+        } catch (e) {}
+        if (extratoRecords.length === 0 && window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA) {
+            extratoRecords = extratoRecords.concat(window.INITIAL_EXTRATO_PEDIDOS_NEW_ERA || []);
+        }
+
+        const cleanDigitsOnly = cleanDoc.replace(/\D/g, '');
+
+        // 1. Tentar encontrar nos registros de faturamento (Nota Fiscal)
+        let matched = allRecords.filter(item => {
+            const itNf = (getCleanNfNumber(item) || item.nf || '').toString().trim();
+            if (!itNf) return false;
+            if (itNf === cleanDoc) return true;
+            if (itNf.replace(/^0+/, '') === cleanDoc.replace(/^0+/, '')) return true;
+            if (cleanDigitsOnly && itNf.replace(/\D/g, '') === cleanDigitsOnly) return true;
+            return false;
+        });
+
+        let isExtratoDoc = false;
+        // 2. Se nÃ£o achou no faturamento, busca no extrato (Pedido em Carteira)
+        if (matched.length === 0) {
+            matched = extratoRecords.filter(item => {
+                const itDoc = (item.ped || item.pedido || item.nf || '').toString().trim();
+                if (!itDoc) return false;
+                if (itDoc === cleanDoc) return true;
+                if (itDoc.replace(/^0+/, '') === cleanDoc.replace(/^0+/, '')) return true;
+                if (cleanDigitsOnly && itDoc.replace(/\D/g, '') === cleanDigitsOnly) return true;
+                return false;
+            });
+            if (matched.length > 0) isExtratoDoc = true;
+        }
+
+        // 3. Fallback de resiliÃªncia: se nÃ£o achou por cÃ³digo direto mas temos loja e data
+        if (matched.length === 0 && (clientName || dateStr)) {
+            const clientsMap = (typeof buildClientsMap === 'function') ? buildClientsMap() : {};
+            matched = allRecords.filter(item => {
+                const cMatch = resolveClientForItem(item, clientsMap);
+                const fant = cMatch ? (cMatch['FANTASIA'] || cMatch['NOME FANTASIA']) : (item.f || item.z || '');
+                const clientOk = (!clientName || fant.toLowerCase().includes(clientName.toLowerCase()) || (item.z && item.z.toLowerCase().includes(clientName.toLowerCase())));
+                const dateOk = (!dateStr || item.d === dateStr);
+                return clientOk && dateOk;
+            });
+            if (matched.length === 0) {
+                matched = extratoRecords.filter(item => {
+                    const cMatch = resolveClientForItem(item, clientsMap);
+                    const fant = cMatch ? (cMatch['FANTASIA'] || cMatch['NOME FANTASIA']) : (item.f || item.z || '');
+                    const clientOk = (!clientName || fant.toLowerCase().includes(clientName.toLowerCase()) || (item.z && item.z.toLowerCase().includes(clientName.toLowerCase())));
+                    const dateOk = (!dateStr || item.d === dateStr);
+                    return clientOk && dateOk;
+                });
+                if (matched.length > 0) isExtratoDoc = true;
+            }
+        }
+
+        // Título e cabeçalho do modal
+        const docLabel = isExtratoDoc ? 'Pedido em Carteira' : 'Nota Fiscal';
+        if (titleEl) titleEl.textContent = `${docLabel} nº ${cleanDoc}`;
+        if (typeBadgeEl) {
+            if (isExtratoDoc) {
+                typeBadgeEl.textContent = 'Carteira / A Entregar';
+                typeBadgeEl.style.background = 'rgba(59, 130, 246, 0.15)';
+                typeBadgeEl.style.color = '#60a5fa';
+            } else {
+                typeBadgeEl.textContent = 'Faturado';
+                typeBadgeEl.style.background = 'rgba(16, 185, 129, 0.15)';
+                typeBadgeEl.style.color = '#34d399';
+            }
+        }
+        if (iconWrapEl && iconEl) {
+            if (isExtratoDoc) {
+                iconWrapEl.style.background = 'rgba(59, 130, 246, 0.15)';
+                iconWrapEl.style.color = '#60a5fa';
+                iconEl.className = 'bx bx-package';
+            } else {
+                iconWrapEl.style.background = 'rgba(16, 185, 129, 0.15)';
+                iconWrapEl.style.color = '#34d399';
+                iconEl.className = 'bx bx-receipt';
+            }
+        }
+
+        const firstItem = matched[0];
+        const storeName = clientName || (firstItem ? (firstItem.f || firstItem.z || 'Loja') : 'Loja');
+        const dateIssued = dateStr || (firstItem ? (firstItem.d || '-') : '-');
+        if (subEl) subEl.innerHTML = `Loja: <strong>${escapeHTML(storeName)}</strong> &bull; Emissão: <strong>${escapeHTML(dateIssued)}</strong>`;
+
+        if (matched.length === 0) {
+            tbodyEl.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-secondary);">
+                        <i class='bx bx-search-alt' style="font-size: 2.2rem; color: rgba(255,255,255,0.25); display: block; margin-bottom: 0.5rem;"></i>
+                        Não foram localizados itens detalhados com o código <strong>${escapeHTML(cleanDoc)}</strong> na base de faturamento/extrato carregada.
+                    </td>
+                </tr>
+            `;
+            if (totItemsEl) totItemsEl.textContent = '0';
+            if (totPiecesEl) totPiecesEl.textContent = '0 pçs';
+            if (totValEl) totValEl.textContent = 'R$ 0,00';
+            modal.classList.remove('hidden');
+            return;
+        }
+
+        // Agrupar itens por SKU (código + cor) para somar quantidades e valores
+        const skuMap = new Map();
+        let totalPieces = 0;
+        let totalVal = 0;
+
+        matched.forEach(it => {
+            const code = (it.p || it.code || 'SEM_COD').toString().trim();
+            const cor = (it.cor || '').toString().trim();
+            const key = `${code}__${cor}`;
+            const q = it.q || 0;
+            const v = it.v || it.vg || it.vn || 0;
+            const desc = it.desc || it.name || 'Produto New Era';
+            const corNome = it.corNome || '';
+
+            totalPieces += q;
+            totalVal += v;
+
+            if (!skuMap.has(key)) {
+                skuMap.set(key, {
+                    code,
+                    cor,
+                    corNome,
+                    desc,
+                    q: 0,
+                    v: 0
+                });
+            }
+            const agg = skuMap.get(key);
+            agg.q += q;
+            agg.v += v;
+        });
+
+        const skuList = Array.from(skuMap.values()).sort((a, b) => b.v - a.v);
+
+        let html = '';
+        skuList.forEach(sku => {
+            const urls = getProductImageUrls(sku.code, sku.cor);
+            const unitPrice = sku.q > 0 ? (sku.v / sku.q) : 0;
+            const fallbacksAttr = urls.fallbacks && urls.fallbacks.length > 0 ? `data-fallbacks="${urls.fallbacks.join('|')}"` : '';
+
+            const thumbHtml = urls.primaryUrl ? `
+                <div class="ranking-product-thumb-container" onclick="openProductImageModal('${escapeHTML(sku.code)}', '${escapeHTML(sku.cor)}', '${escapeHTML(sku.desc)}')" title="Clique para ampliar a foto do produto" style="width: 42px; height: 42px; cursor: pointer; margin: 0 auto;">
+                    <img class="ranking-product-thumb-img" src="${urls.primaryUrl}" alt="${escapeHTML(sku.desc)}" loading="lazy" ${fallbacksAttr} onerror="onRankingProductImgError(this)" />
+                    <div class="ranking-product-thumb-placeholder" style="display: none;"><i class='bx bx-image-alt'></i></div>
+                </div>
+            ` : `
+                <div class="ranking-product-thumb-container" style="width: 42px; height: 42px; margin: 0 auto;">
+                    <div class="ranking-product-thumb-placeholder" style="display: flex;"><i class='bx bx-purchase-tag-alt'></i></div>
+                </div>
+            `;
+
+            const corHtml = sku.cor ? `
+                <span class="badge" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; color: #f1f5f9;">
+                    ${escapeHTML(sku.cor)}${sku.corNome ? ` - ${escapeHTML(sku.corNome)}` : ''}
+                </span>
+            ` : '<span style="color: var(--text-secondary);">-</span>';
+
+            html += `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background-color 0.15s ease;">
+                    <td style="padding: 6px 8px; text-align: center; vertical-align: middle;">
+                        ${thumbHtml}
+                    </td>
+                    <td style="padding: 6px 8px; vertical-align: middle;">
+                        <span class="font-mono font-bold" style="color: #60a5fa; cursor: pointer;" onclick="openProductImageModal('${escapeHTML(sku.code)}', '${escapeHTML(sku.cor)}', '${escapeHTML(sku.desc)}')" title="Clique para ver a foto">${escapeHTML(sku.code)}</span>
+                    </td>
+                    <td style="padding: 6px 8px; vertical-align: middle; color: #f8fafc;" title="${escapeHTML(sku.desc)}">
+                        ${escapeHTML(sku.desc)}
+                    </td>
+                    <td style="padding: 6px 8px; text-align: center; vertical-align: middle;">
+                        ${corHtml}
+                    </td>
+                    <td style="padding: 6px 8px; text-align: right; vertical-align: middle; font-weight: 600; color: #f8fafc;" class="font-mono">
+                        ${sku.q.toLocaleString('pt-BR')}
+                    </td>
+                    <td style="padding: 6px 8px; text-align: right; vertical-align: middle; color: var(--text-secondary);" class="font-mono">
+                        ${formatBRL(unitPrice)}
+                    </td>
+                    <td style="padding: 6px 8px; text-align: right; vertical-align: middle; font-weight: 700; color: #34d399;" class="font-mono">
+                        ${formatBRL(sku.v)}
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbodyEl.innerHTML = html;
+        if (totItemsEl) totItemsEl.textContent = skuList.length.toString();
+        if (totPiecesEl) totPiecesEl.textContent = `${totalPieces.toLocaleString('pt-BR')} pçs`;
+        if (totValEl) totValEl.textContent = formatBRL(totalVal);
+
+        modal.classList.remove('hidden');
+    };
+
+    window.closeNfItemsModal = function() {
+        const modal = document.getElementById('nf-items-modal');
+        if (modal) modal.classList.add('hidden');
+    };
+
     function renderRankingListHTML(items, totalRevenue, nameLabel, totalPieces = 0, isProduct = false) {
         if (!items || items.length === 0) {
             return `
@@ -3521,6 +4060,8 @@
                 </div>
             `;
         }
+
+        const isNfList = (nameLabel === 'Nota Fiscal' || nameLabel === 'Pedido');
 
         html += '<div class="ranking-items-list" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">';
         displayedItems.forEach((item, idx) => {
@@ -3552,14 +4093,17 @@
                 rightValueHTML = `<span class="ranking-item-value">${formatBRL(itemVal)}</span>`;
             }
 
+            const nfClickAttr = isNfList ? `onclick="window.openNfItemsModal('${escapeHTML(item.rawNf || item.name)}', '${escapeHTML(item.fantasia || '')}', '${escapeHTML(item.date || '')}')" title="Clique para ver os produtos, fotos, quantidades e valores desta nota/pedido"` : '';
+            const nfClass = isNfList ? 'nf-clickable' : '';
+
             html += `
-                <div class="ranking-row-item">
+                <div class="ranking-row-item ${nfClass}" ${nfClickAttr}>
                     <div class="ranking-row-top">
                         <div class="ranking-item-left">
                             <span class="ranking-pos-badge ${posBadgeClass}">${pos}º</span>
                             ${isProduct ? renderProductThumbHTML(item) : ''}
                             <div class="ranking-item-info">
-                                <span class="ranking-item-name" title="${escapeHTML(item.name)}">${escapeHTML(item.name)}</span>
+                                <span class="ranking-item-name" style="${isNfList ? 'color: #60a5fa; cursor: pointer;' : ''}" title="${escapeHTML(item.name)}">${isNfList ? `<i class='bx bx-receipt' style="font-size:0.9em; vertical-align:middle; margin-right:2px;"></i>` : ''}${escapeHTML(item.name)}</span>
                                 ${item.sub ? `<div class="ranking-item-sub" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 3px;">${item.sub}</div>` : ''}
                             </div>
                         </div>
@@ -3605,7 +4149,9 @@
         const clientTotals = {};
         data.forEach(item => {
             const clientMatch = resolveClientForItem(item, clientsMap);
-            const cnpj = item.c || (clientMatch && clientMatch['CNPJ']) || '';
+            const rawCnpj = item.c || (clientMatch && clientMatch['CNPJ']) || '';
+            const cleanC = cleanDigits(rawCnpj);
+            const cnpj = cleanC ? cleanC.padStart(14, '0') : '';
             const key = cnpj || (item.cli ? `CLI_${item.cli}` : (item.f || 'Cliente sem nome'));
 
             const fantasia = (clientMatch && (clientMatch['FANTASIA'] || clientMatch['NOME FANTASIA'])) 
@@ -3634,7 +4180,8 @@
                     q: 0
                 };
             }
-            clientTotals[key].v += (item.v || 0);
+            const itemV = (item.v !== undefined && item.v !== null) ? item.v : ((item.vg !== undefined && item.vg !== null) ? item.vg : (item.vn || 0));
+            clientTotals[key].v += itemV;
             clientTotals[key].q += (item.q || 0);
         });
 
@@ -3864,42 +4411,116 @@
         container.innerHTML = renderRankingListHTML(sorted, totalRevenue, 'Classe Produto', totalPieces);
     }
 
+    let compRankingNfMode = 'billing'; // 'billing' (Notas Fiscais faturadas) ou 'extrato' (Pedidos em carteira)
+    window.setCompRankingNfMode = function(mode) {
+        compRankingNfMode = mode;
+        const clientsMap = (typeof buildClientsMap === 'function') ? buildClientsMap() : {};
+        const totalRevenue = billingFilteredData.reduce((acc, curr) => acc + (curr.v || 0), 0);
+        const totalPieces = billingFilteredData.reduce((acc, curr) => acc + (curr.q || 0), 0);
+        renderTopNFs(billingFilteredData, clientsMap, totalRevenue, totalPieces);
+    };
+
     // TOP NOTAS FISCAIS / PEDIDOS EM CARTEIRA
     function renderTopNFs(data, clientsMap, totalRevenue, totalPieces = 0) {
         const container = document.getElementById('ranking-nfs-container');
-        if (!container) return;
+        const overviewContainer = document.getElementById('ranking-nfs-overview-container');
+        if (!container && !overviewContainer) return;
 
-        const isExtrato = (currentDatasetType === 'extrato');
-        const defaultName = isExtrato ? 'Sem Número de Pedido' : 'Sem Número de NF';
+        const isComparison = (currentDatasetType === 'comparison');
+        let isExtrato = (currentDatasetType === 'extrato');
+
+        // Controles de alternancia no modo confronto
+        const toggleEl = document.getElementById('comp-ranking-nf-toggle');
+        const toggleOvEl = document.getElementById('comp-ranking-nf-toggle-overview');
+        [toggleEl, toggleOvEl].forEach(t => {
+            if (t) t.style.display = isComparison ? 'inline-flex' : 'none';
+        });
+
+        if (isComparison) {
+            isExtrato = (compRankingNfMode === 'extrato');
+            const btnFat = document.getElementById('btn-comp-nf-mode-fat');
+            const btnExt = document.getElementById('btn-comp-nf-mode-ext');
+            const btnFatOv = document.getElementById('btn-comp-nf-mode-fat-ov');
+            const btnExtOv = document.getElementById('btn-comp-nf-mode-ext-ov');
+            if (btnFat) btnFat.classList.toggle('active', !isExtrato);
+            if (btnExt) btnExt.classList.toggle('active', isExtrato);
+            if (btnFatOv) btnFatOv.classList.toggle('active', !isExtrato);
+            if (btnExtOv) btnExtOv.classList.toggle('active', isExtrato);
+        }
+
+        let activeData = [];
+        if (isComparison) {
+            if (isExtrato) {
+                activeData = (lastCompFilteredExtrato && lastCompFilteredExtrato.length > 0)
+                    ? lastCompFilteredExtrato
+                    : data.filter(it => it.status !== undefined);
+            } else {
+                activeData = (lastCompFilteredBilling && lastCompFilteredBilling.length > 0)
+                    ? lastCompFilteredBilling
+                    : data.filter(it => it.status === undefined);
+            }
+        } else if (isExtrato) {
+            activeData = data.filter(it => it.status !== undefined); if (activeData.length === 0) activeData = data;
+        } else {
+            // Em modo Faturamento: garante que NENHUM pedido a entregar entre
+            activeData = (lastCompFilteredBilling && lastCompFilteredBilling.length > 0)
+                ? lastCompFilteredBilling
+                : data.filter(it => it.status === undefined);
+            if (activeData.length === 0 && Array.isArray(data) && data.length > 0) {
+                activeData = data;
+            }
+        }
+
+        const defaultName = isExtrato ? 'Sem N\u00FAmero de Pedido' : 'Sem N\u00FAmero de NF';
         const prefixName = isExtrato ? 'Pedido ' : 'NF ';
         const titleTextEl = document.getElementById('ranking-nfs-title-text');
+        const titleTextOverviewEl = document.getElementById('ranking-nfs-overview-title-text');
         const iconEl = document.getElementById('ranking-nfs-icon');
+        const iconOverviewEl = document.getElementById('ranking-nfs-overview-icon');
         const badgeEl = document.getElementById('ranking-nfs-badge');
+        const badgeOverviewEl = document.getElementById('ranking-nfs-overview-badge');
         const prodSubEl = document.getElementById('products-ranking-subtitle');
 
-        if (titleTextEl) {
-            titleTextEl.textContent = isExtrato ? 'Pedidos' : 'Notas Fiscais';
-        }
-        if (iconEl) {
-            iconEl.className = isExtrato ? 'bx bx-receipt' : 'bx bx-receipt';
-        }
-        if (badgeEl) {
-            badgeEl.textContent = isExtrato ? 'A Entregar' : 'Faturamento';
-            badgeEl.style.background = isExtrato ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)';
-            badgeEl.style.color = isExtrato ? '#60a5fa' : '#34d399';
-            badgeEl.style.borderColor = isExtrato ? 'rgba(59, 130, 246, 0.3)' : 'rgba(16, 185, 129, 0.3)';
-        }
+        const titleText = isExtrato ? 'Pedidos em Carteira' : 'Notas Fiscais';
+        if (titleTextEl) titleTextEl.textContent = titleText;
+        if (titleTextOverviewEl) titleTextOverviewEl.textContent = titleText;
+
+        if (iconEl) iconEl.className = isExtrato ? 'bx bx-package' : 'bx bx-receipt';
+        if (iconOverviewEl) iconOverviewEl.className = isExtrato ? 'bx bx-package' : 'bx bx-receipt';
+
+        const badgeText = isExtrato ? 'A Entregar' : 'Faturamento';
+        const badgeBg = isExtrato ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+        const badgeColor = isExtrato ? '#60a5fa' : '#34d399';
+        const badgeBorder = isExtrato ? 'rgba(59, 130, 246, 0.3)' : 'rgba(16, 185, 129, 0.3)';
+
+        [badgeEl, badgeOverviewEl].forEach(b => {
+            if (b) {
+                b.textContent = badgeText;
+                b.style.background = badgeBg;
+                b.style.color = badgeColor;
+                b.style.borderColor = badgeBorder;
+            }
+        });
+
         if (prodSubEl) {
-            prodSubEl.textContent = isExtrato
-                ? 'Referências mais vendidas, modelos, divisões e maiores pedidos em carteira'
-                : 'Referências mais vendidas, modelos, divisões e maiores notas fiscais emitidas';
+            prodSubEl.textContent = isExtrato ? "Refer\u00EAncias mais vendidas, modelos, divis\u00F5es e maiores pedidos em carteira" : "Refer\u00EAncias mais vendidas, modelos, divis\u00F5es e maiores notas fiscais emitidas";
         }
 
         const nfTotals = {};
 
-        data.forEach(item => {
-            const nfNum = (item.nf || '').trim();
-            const key = nfNum || `S_NF_${item.d}_${item.c || item.cli || Math.random()}`;
+        activeData.forEach(item => {
+            let nfNum = '';
+            if (isExtrato) {
+                nfNum = (item.ped || item.pedido || item.nf || '').toString().trim();
+                if (/programad/i.test(nfNum) || !/\d/.test(nfNum)) nfNum = '';
+            } else {
+                nfNum = getCleanNfNumber(item) || (item.nf || '').trim();
+                if (!isCleanValidNf(nfNum)) {
+                    nfNum = '';
+                }
+            }
+
+            const key = nfNum ? (prefixName + nfNum) : ('DOC_' + (item.d || '') + '_' + (item.f || '') + '_' + Math.random());
 
             if (!nfTotals[key]) {
                 const clientMatch = resolveClientForItem(item, clientsMap);
@@ -3908,7 +4529,8 @@
                     : (item.f || item.z || 'Cliente');
 
                 nfTotals[key] = {
-                    name: nfNum ? `${prefixName}${nfNum}` : defaultName,
+                    name: nfNum ? (prefixName + nfNum) : (isExtrato ? 'Pedido s/ Número' : 'NF s/ Número'),
+                    rawNf: nfNum,
                     date: item.d || '-',
                     fantasia: fantasia,
                     prazo: item.prazo || '',
@@ -3921,7 +4543,8 @@
                     v: 0
                 };
             }
-            nfTotals[key].v += (item.v || 0);
+            const itemV = (item.v !== undefined && item.v !== null) ? item.v : ((item.vg !== undefined && item.vg !== null) ? item.vg : (item.vn || 0));
+            nfTotals[key].v += itemV;
             nfTotals[key].q += (item.q || 0);
             nfTotals[key].qc += (item.qc || 0);
             nfTotals[key].vc += (item.vc || 0);
@@ -3934,6 +4557,9 @@
             }
         });
 
+        const activeRevenue = activeData.reduce((acc, curr) => acc + ((curr.v !== undefined && curr.v !== null) ? curr.v : ((curr.vg !== undefined && curr.vg !== null) ? curr.vg : (curr.vn || 0))), 0);
+        const activePieces = activeData.reduce((acc, curr) => acc + (curr.q || 0), 0);
+
         const sorted = Object.values(nfTotals).sort((a, b) => {
             return currentKpiDisplayMode === 'pieces' ? (b.q - a.q) : (b.v - a.v);
         }).map(it => {
@@ -3942,30 +4568,31 @@
             if (it.fantasia && it.fantasia !== 'Cliente' && it.fantasia !== 'Cliente s/ Cadastro') parts.push(it.fantasia);
             const badges = [];
             if (parts.length > 0) {
-                badges.push(`<span style="color: #94a3b8; font-size: 0.74rem;">${escapeHTML(parts.join(' \u2022 '))}</span>`);
+                badges.push('<span style="color: #94a3b8; font-size: 0.74rem;">' + escapeHTML(parts.join(' \u2022 ')) + '</span>');
             }
             if (it.prazo) {
-                badges.push(`<span class="badge-prazo" style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-time'></i> Prazo: ${escapeHTML(it.prazo)}</span>`);
+                badges.push('<span class="badge-prazo" style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class=\'bx bx-time\'></i> Prazo: ' + escapeHTML(it.prazo) + '</span>');
             }
             if (it.desconto > 0) {
-                badges.push(`<span class="badge-desconto" style="background: rgba(245, 158, 11, 0.15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-purchase-tag'></i> Desc: ${it.desconto}%</span>`);
+                badges.push('<span class="badge-desconto" style="background: rgba(245, 158, 11, 0.15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class=\'bx bx-purchase-tag\'></i> Desc: ' + it.desconto + '%</span>');
             }
             if (it.qe > 0) {
-                badges.push(`<span class="badge-embalado" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-package'></i> Emb: ${it.qe} pçs</span>`);
+                badges.push('<span class="badge-embalado" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class=\'bx bx-package\'></i> Emb: ' + it.qe + ' p\u00E7s</span>');
             }
             if (it.qc > 0) {
-                badges.push(`<span class="badge-cancelado" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-x-circle'></i> Canc: ${it.qc} pçs</span>`);
+                badges.push('<span class="badge-cancelado" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class=\'bx bx-x-circle\'></i> Canc: ' + it.qc + ' p\u00E7s</span>');
             }
             it.sub = badges.join(' ');
             return it;
         });
 
         const rankNameLabel = isExtrato ? 'Pedido' : 'Nota Fiscal';
-        container.innerHTML = renderRankingListHTML(sorted, totalRevenue, rankNameLabel, totalPieces);
+        const html = renderRankingListHTML(sorted, activeRevenue, rankNameLabel, activePieces);
+        if (container) container.innerHTML = html;
+        if (overviewContainer) overviewContainer.innerHTML = html;
     }
 
-    // --------------------------------------------------------------------------
-    // 4. SEÇÃO DE AUDITORIA (CNPJs / CLIENTES NÃO VINCULADOS)
+        // 4. SEÇÃO DE AUDITORIA (CNPJs / CLIENTES NÃO VINCULADOS)
     // --------------------------------------------------------------------------
     function renderAuditSection(data, clientsMap) {
         const sectionEl = document.getElementById('indicators-audit-section');
@@ -4149,7 +4776,22 @@
                 const kNet = findKey('net') || findKey('valor líquido') || findKey('valor liquido');
                 
                 // Pedido ou Nota Fiscal
-                const kNota = findKey('pedido') || findKey('nota') || findKey('nf') || findKey('pedido cliente');
+                const cleanColKeys = keys.filter(k => {
+                    const lk = k.toLowerCase();
+                    return !lk.includes('tipo') && !lk.includes('natureza') && !lk.includes('programa') && !lk.includes('operac');
+                });
+                const kNota = (currentDatasetType === 'extrato')
+                    ? (keys.find(k => k.trim().toLowerCase() === 'pedido')
+                        || keys.find(k => k.trim().toLowerCase() === 'número pedido' || k.trim().toLowerCase() === 'numero pedido')
+                        || keys.find(k => k.trim().toLowerCase() === 'pedido cliente')
+                        || cleanColKeys.find(k => k.toLowerCase().includes('pedido') || k.toLowerCase().includes('ordem'))
+                        || cleanColKeys.find(k => k.toLowerCase().includes('nf') || k.toLowerCase().includes('nota')))
+                    : (keys.find(k => k.trim().toLowerCase() === 'nota fiscal')
+                        || keys.find(k => k.trim().toLowerCase() === 'nf')
+                        || keys.find(k => k.trim().toLowerCase() === 'nota')
+                        || keys.find(k => k.trim().toLowerCase() === 'numero nf' || k.trim().toLowerCase() === 'número nf')
+                        || cleanColKeys.find(k => k.toLowerCase().includes('nota fiscal') || k.toLowerCase().includes('nf') || k.toLowerCase().includes('nota'))
+                        || cleanColKeys.find(k => k.toLowerCase().includes('pedido')));
                 
                 const kAno = findKey('ano');
                 const kMes = findKey('mês') || findKey('mes');
@@ -4436,7 +5078,9 @@
 
             const exportRows = billingFilteredData.map(item => {
                 const clientMatch = resolveClientForItem(item, clientsMap);
-                const cnpj = item.c || (clientMatch && clientMatch['CNPJ']) || '';
+                const rawCnpj = item.c || (clientMatch && clientMatch['CNPJ']) || '';
+            const cleanC = cleanDigits(rawCnpj);
+            const cnpj = cleanC ? cleanC.padStart(14, '0') : '';
                 if (isExtrato) {
                     return {
                         'Código CLIFOR': item.cli || '',
@@ -4467,7 +5111,7 @@
                     'Grupo Real': (clientMatch && (clientMatch['GRUPO REAL'] || clientMatch['GRUPO'])) || item.gr || '',
                     'Grupo': (clientMatch && clientMatch['GRUPO']) || item.g || '',
                     'Rede': item.r || '',
-                    'Data EmissÃ£o': item.d || '',
+                    'Data Emissão': item.d || '',
                     'Nota Fiscal': item.nf || '',
                     'Referência Produto': item.p || '',
                     'Cor / Variante': item.cor || '',
@@ -4500,12 +5144,12 @@
 
     function escapeHTML(str) {
         if (str === null || str === undefined) return '';
-        return str.toString()
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
+        return String(str)
+            .split('&').join('&amp;')
+            .split('<').join('&lt;')
+            .split('>').join('&gt;')
+            .split('"').join('&quot;')
+            .split("'").join('&#39;');
     }
 
 
@@ -4527,7 +5171,9 @@
             fatTotal += item.v || 0;
             fatPieces += item.q || 0;
             const cMatch = resolveClientForItem(item, clientsMap);
-            const cnpj = item.c || (cMatch && cMatch['CNPJ']) || (item.cli ? `CLI_${item.cli}` : item.f);
+            const rawC = item.c || (cMatch && cMatch['CNPJ']) || '';
+            const cleanC = cleanDigits(rawC);
+            const cnpj = cleanC ? cleanC.padStart(14, '0') : (item.cli ? `CLI_${item.cli}` : item.f);
             if (cnpj) cnpjsFat.add(cnpj);
         });
 
@@ -4535,7 +5181,9 @@
             extTotal += item.v || 0;
             extPieces += item.q || 0;
             const cMatch = resolveClientForItem(item, clientsMap);
-            const cnpj = item.c || (cMatch && cMatch['CNPJ']) || (item.cli ? `CLI_${item.cli}` : item.f);
+            const rawC = item.c || (cMatch && cMatch['CNPJ']) || '';
+            const cleanC = cleanDigits(rawC);
+            const cnpj = cleanC ? cleanC.padStart(14, '0') : (item.cli ? `CLI_${item.cli}` : item.f);
             if (cnpj) cnpjsExt.add(cnpj);
         });
 
@@ -4871,7 +5519,9 @@
             const rawExt = getExtratoData();
             commSourceItems = rawExt.filter(it => {
                 const cMatch = resolveClientForItem(it, clientsMap);
-                const cKey = it.c || (cMatch && cMatch['CNPJ']) || (it.cli ? `CLI_${it.cli}` : it.f);
+                const rawC = it.c || (cMatch && cMatch['CNPJ']) || '';
+                const cleanC = cleanDigits(rawC);
+                const cKey = cleanC ? cleanC.padStart(14, '0') : (it.cli ? `CLI_${it.cli}` : it.f);
                 return cKey && allCompClientsSet.has(cKey);
             });
         }
@@ -4892,10 +5542,47 @@
         renderComparisonCharts(lastCompFilteredBilling, lastCompFilteredExtrato, clientsMap);
     };
 
-    // Datalabels flutuantes sobre barras desativados a pedido do usuario: os totais consolidados sao exibidos na legenda
     const comparisonDataLabelsPlugin = {
         id: 'compDataLabels',
-        afterDatasetsDraw() {}
+        afterDatasetsDraw(chart) {
+            if (!showCompMonthlyValues) return;
+            const ctx = chart.ctx;
+            ctx.save();
+            ctx.font = '600 10px Inter, system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            const isPieces = (compChartDisplayMode === 'pieces');
+
+            chart.data.datasets.forEach((ds, dsIdx) => {
+                const meta = chart.getDatasetMeta(dsIdx);
+                if (!meta || meta.hidden) return;
+                const isLine = ds.type === 'line' || meta.type === 'line';
+
+                meta.data.forEach((element, idx) => {
+                    const val = ds.data[idx];
+                    if (!val || val <= 0) return;
+                    const text = formatCompactChartValue(val, isPieces);
+                    if (!text) return;
+
+                    const x = element.x;
+                    const y = isLine ? element.y - 7 : element.y - 4;
+                    const padX = 3;
+                    const padY = 2;
+                    const textWidth = ctx.measureText(text).width;
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+                    ctx.beginPath();
+                    if (typeof ctx.roundRect === 'function') {
+                        ctx.roundRect(x - (textWidth / 2) - padX, y - 10 - padY, textWidth + (padX * 2), 12 + (padY * 2), 3);
+                    } else {
+                        ctx.rect(x - (textWidth / 2) - padX, y - 10 - padY, textWidth + (padX * 2), 12 + (padY * 2));
+                    }
+                    ctx.fill();
+
+                    ctx.fillStyle = isLine ? '#fbbf24' : (dsIdx === 0 ? '#6ee7b7' : '#93c5fd');
+                    ctx.fillText(text, x, y);
+                });
+            });
+            ctx.restore();
+        }
     };
 
     function renderComparisonCharts(bData, eData, clientsMap) {
@@ -4911,9 +5598,9 @@
         const totGrandV = totFatV + totExtV;
         const totGrandQ = totFatQ + totExtQ;
 
-        const fatLegendLabel = isPieces ? `${totFatQ.toLocaleString('pt-BR')} pçs` : formatBRL(totFatV);
-        const extLegendLabel = isPieces ? `${totExtQ.toLocaleString('pt-BR')} pçs` : formatBRL(totExtV);
-        const grandLegendLabel = isPieces ? `${totGrandQ.toLocaleString('pt-BR')} pçs` : formatBRL(totGrandV);
+        const fatLegendLabel = isPieces ? `${totFatQ.toLocaleString('pt-BR')} p\u00E7s` : formatBRLNoCents(totFatV);
+        const extLegendLabel = isPieces ? `${totExtQ.toLocaleString('pt-BR')} p\u00E7s` : formatBRLNoCents(totExtV);
+        const grandLegendLabel = isPieces ? `${totGrandQ.toLocaleString('pt-BR')} p\u00E7s` : formatBRLNoCents(totGrandV);
 
         // 1. Confronto Mensal (Faturamento vs A Entregar)
         const ctxMonthly = document.getElementById('chart-comp-monthly')?.getContext('2d');
@@ -5308,7 +5995,9 @@
             const v = item.v || 0;
             const q = item.q || 0;
             const clientMatch = resolveClientForItem(item, clientsMap);
-            const clientKey = item.c || (clientMatch && clientMatch['CNPJ']) || item.cli || item.f;
+            const rawClientCnpj = item.c || (clientMatch && clientMatch['CNPJ']) || '';
+            const cleanClientC = cleanDigits(rawClientCnpj);
+            const clientKey = cleanClientC ? cleanClientC.padStart(14, '0') : (item.cli ? `CLI_${item.cli}` : item.f);
 
             if (isBilling) {
                 rec.fatV += v;
@@ -5595,7 +6284,7 @@
         const tbody = document.getElementById('comp-tbody-cnpj');
         if (!tbody) return;
 
-        // Sincronizar select de ordenação
+        // Sincronizar select de ordenÃ£o
         const sortSelect = document.getElementById('comp-sort-select');
         if (sortSelect) {
             if (compCnpjSortCol === 'totalV' && compCnpjSortDir === 'desc') sortSelect.value = 'total_desc';
@@ -5623,7 +6312,7 @@
 
         let filtered = [...currentCompCnpjList];
 
-        // Comparador de ordenação dinâmico
+        // Comparador de ordenÃ£o dinâmico
         const compareItems = (a, b) => {
             let res = 0;
             if (['cnpj', 'fantasia', 'rede'].includes(compCnpjSortCol)) {
@@ -5826,6 +6515,10 @@
         items.forEach(it => {
             const v = it.v || it.vg || 0;
             const q = it.q || 0;
+            const docNum = (it.nf || it.ped || it.pedido || '').toString().trim();
+            const dateStr = (it.d ? it.d.split(' ')[0] : '-');
+            const prodCode = (it.p || it.desc || '-').toString().trim();
+
             let statusBadge = '';
             if (it.status === 'Cancelado' || it.qc > 0) {
                 statusBadge = `<span class="badge" style="background: rgba(239,68,68,0.15); color: #f87171; padding: 1px 5px; border-radius: 3px; font-size: 0.68rem;">Cancelado</span>`;
@@ -5834,18 +6527,29 @@
             } else {
                 statusBadge = `<span class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 1px 5px; border-radius: 3px; font-size: 0.68rem;">A Entregar</span>`;
             }
+
+            const docCell = docNum ? `
+                <span class="nf-cell-link" onclick="openNfItemsModal('${escapeHTML(docNum)}', '${escapeHTML(it.f || it.z || '')}', '${escapeHTML(dateStr)}')" title="Clique para abrir detalhamento da NF com fotos, referências, quantidades e valores">
+                    <i class='bx bx-receipt'></i> ${escapeHTML(docNum)}
+                </span>
+            ` : '-';
+
+            const prodCell = (it.p) ? `
+                <span style="cursor: pointer; color: #93c5fd; text-decoration: underline; text-decoration-style: dotted;" onclick="openProductImageModal('${escapeHTML(it.p)}', '${escapeHTML(it.cor || '')}', '${escapeHTML(it.desc || '')}')" title="Clique para ver a foto do produto">${escapeHTML(prodCode)}</span>
+            ` : escapeHTML(prodCode);
+
             out += `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                    <td style="padding: 3px 6px;" class="font-mono">${escapeHTML(it.nf || '-')}</td>
-                    <td style="padding: 3px 6px;" class="font-mono">${escapeHTML(it.d ? it.d.split(' ')[0] : '-')}</td>
-                    <td style="padding: 3px 6px; max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(it.desc || '')}">${escapeHTML(it.p || it.desc || '-')}</td>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);" class="${docNum ? 'nf-clickable' : ''}">
+                    <td style="padding: 4px 6px;" class="font-mono">${docCell}</td>
+                    <td style="padding: 4px 6px;" class="font-mono">${escapeHTML(dateStr)}</td>
+                    <td style="padding: 4px 6px; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(it.desc || '')}">${prodCell}</td>
                     ${isExtrato ? `
-                        <td style="padding: 3px 6px; white-space: nowrap;" title="${escapeHTML(it.prazo || '-')}">${escapeHTML(it.prazo || '-')}</td>
-                        <td style="padding: 3px 6px;" class="font-mono">${it.desconto ? it.desconto + '%' : '-'}</td>
-                        <td style="padding: 3px 6px;">${statusBadge}</td>
+                        <td style="padding: 4px 6px; white-space: nowrap;" title="${escapeHTML(it.prazo || '-')}">${escapeHTML(it.prazo || '-')}</td>
+                        <td style="padding: 4px 6px;" class="font-mono">${it.desconto ? it.desconto + '%' : '-'}</td>
+                        <td style="padding: 4px 6px;">${statusBadge}</td>
                     ` : ''}
-                    <td style="padding: 3px 6px; text-align: right;" class="font-mono">${q}</td>
-                    <td style="padding: 3px 6px; text-align: right; font-weight: 600;" class="font-mono">${formatBRL(v)}</td>
+                    <td style="padding: 4px 6px; text-align: right;" class="font-mono">${q}</td>
+                    <td style="padding: 4px 6px; text-align: right; font-weight: 600;" class="font-mono">${formatBRL(v)}</td>
                 </tr>
             `;
         });
@@ -5984,7 +6688,7 @@
         tbody.innerHTML = html;
     }
 
-    // Ordenação e Agrupamento da Tabela por Data
+    // OrdenÃ£o e Agrupamento da Tabela por Data
     window.sortCompDateTable = function(col) {
         if (compDateSortCol === col) {
             compDateSortDir = (compDateSortDir === 'desc') ? 'asc' : 'desc';
@@ -6501,7 +7205,7 @@
         const badge = document.getElementById('comp-product-summary-badge');
         if (!tbody) return;
 
-        // Atualizar headers visuais de ordenação
+        // Atualizar headers visuais de ordenÃ£o
         document.querySelectorAll('#comp-table-product th.sortable').forEach(th => {
             th.classList.remove('active-sort');
             const icon = th.querySelector('.th-sort-icon i');
@@ -7014,12 +7718,14 @@
         if (ordersContainer) {
             const nfsFatMap = {};
             bData.forEach(item => {
-                const num = (item.nf || '').trim();
+                let num = getCleanNfNumber(item) || (item.nf || '').trim();
+                if (/venda\s*programada/i.test(num) || !/\d/.test(num)) num = '';
                 const key = num ? `NF_${num}` : `NF_NO_${item.d}_${item.c || Math.random()}`;
                 if (!nfsFatMap[key]) {
                     const cMatch = resolveClientForItem(item, clientsMap);
                     nfsFatMap[key] = {
                         name: num ? `NF ${num}` : 'NF s/ número',
+                        rawNf: num,
                         date: item.d || '-',
                         client: (cMatch && (cMatch['FANTASIA'] || cMatch['NOME FANTASIA'])) || item.f || item.z || 'Cliente',
                         v: 0,
@@ -7042,13 +7748,13 @@
                     const pos = idx + 1;
                     const posBadgeClass = pos === 1 ? 'pos-1' : (pos === 2 ? 'pos-2' : (pos === 3 ? 'pos-3' : 'pos-other'));
                     html += `
-                        <div class="ranking-row-item">
+                        <div class="ranking-row-item nf-clickable" onclick="openNfItemsModal('${escapeHTML(item.rawNf || item.name)}', '${escapeHTML(item.client)}', '${escapeHTML(item.date)}')" title="Clique para ver os produtos, fotos, quantidades e valores desta nota fiscal">
                             <div class="ranking-row-top">
                                 <div class="ranking-item-left">
                                     <span class="ranking-pos-badge ${posBadgeClass}">${pos}º</span>
                                     <div class="ranking-item-info">
                                         <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                            <span class="ranking-item-name">${escapeHTML(item.name)}</span>
+                                            <span class="ranking-item-name" style="color: #60a5fa; cursor: pointer;"><i class='bx bx-receipt' style="font-size:0.95em; vertical-align:middle; margin-right:2px;"></i>${escapeHTML(item.name)}</span>
                                         </div>
                                         <span class="ranking-item-sub">${escapeHTML(item.date)} &bull; ${escapeHTML(item.client)}</span>
                                     </div>
@@ -7066,6 +7772,911 @@
             }
         }
     }
+
+    // ==========================================================================
+    // 6. ANÁLISE DE RECORRÊNCIA: DIAS SEM FATURAR POR CLIENTE (CNPJ)
+    // ==========================================================================
+
+    let currentCompAgingList = [];
+    let compAgingViewMode = 'rank'; // 'rank' (Top Lojas) ou 'dist' (Distribuição por faixas)
+    let compAgingRankLimit = 15;
+    let compAgingFilterStatus = 'all';
+    let compAgingFilterDays = 'all';
+    let compAgingFilterCarteira = 'all';
+    let compAgingSearchQuery = '';
+    let compAgingSortCol = 'days';
+    let compAgingSortDir = 'desc';
+    let chartCompAgingInstance = null;
+    let agingCardExpanded = true;
+
+    window.toggleAgingCardSection = function() {
+        agingCardExpanded = !agingCardExpanded;
+        const body = document.getElementById('aging-collapsible-body');
+        const icon = document.getElementById('icon-toggle-aging-card');
+        const label = document.getElementById('label-toggle-aging-card');
+        if (body) body.style.display = agingCardExpanded ? 'block' : 'none';
+        if (icon) icon.className = agingCardExpanded ? 'bx bx-chevron-up' : 'bx bx-chevron-down';
+        if (label) label.textContent = agingCardExpanded ? 'Recolher' : 'Expandir';
+    };
+
+    window.setAgingChartView = function(mode) {
+        compAgingViewMode = mode;
+        const btnRank = document.getElementById('btn-aging-view-rank');
+        const btnDist = document.getElementById('btn-aging-view-dist');
+        if (btnRank) btnRank.classList.toggle('active', mode === 'rank');
+        if (btnDist) btnDist.classList.toggle('active', mode === 'dist');
+        applyAgingFiltersAndRender(false);
+    };
+
+    window.onAgingChartLimitChange = function(limit) {
+        compAgingRankLimit = limit;
+        applyAgingFiltersAndRender(false);
+    };
+
+    window.toggleAgingStatusFilter = function(status) {
+        if (status === 'all') {
+            compAgingFilterStatus = 'all';
+        } else if (compAgingFilterStatus === status) {
+            // Clicar na mesma pílula desmarca e volta a mostrar todos
+            compAgingFilterStatus = 'all';
+        } else {
+            compAgingFilterStatus = status;
+        }
+
+        const selectEl = document.getElementById('aging-filter-status');
+        if (selectEl) selectEl.value = compAgingFilterStatus;
+
+        syncAgingStatusPills();
+        applyAgingFiltersAndRender(false);
+    };
+
+    function syncAgingStatusPills() {
+        const statuses = ['all', 'ATIVO', 'NAO_FIDELIZADO', 'INATIVO', 'SEM_CADASTRO'];
+        statuses.forEach(st => {
+            const btn = document.getElementById(`btn-pill-status-${st}`);
+            if (btn) {
+                btn.classList.toggle('active', compAgingFilterStatus === st);
+            }
+        });
+    }
+
+    window.onAgingFiltersChanged = function() {
+        compAgingFilterStatus = document.getElementById('aging-filter-status')?.value || 'all';
+        compAgingFilterDays = document.getElementById('aging-filter-days')?.value || 'all';
+        compAgingFilterCarteira = document.getElementById('aging-filter-carteira')?.value || 'all';
+        syncAgingStatusPills();
+        applyAgingFiltersAndRender(false);
+    };
+
+    window.onAgingSearchInput = function(val) {
+        compAgingSearchQuery = (val || '').trim().toLowerCase();
+        applyAgingFiltersAndRender(false);
+    };
+
+    window.onAgingSortChange = function(val) {
+        if (!val) return;
+        const parts = val.split('_');
+        const dir = parts.pop();
+        const col = parts.join('_');
+        compAgingSortCol = col;
+        compAgingSortDir = dir || 'desc';
+        updateAgingSortHeaders();
+        applyAgingFiltersAndRender(false);
+    };
+
+    window.sortAgingTable = function(col) {
+        if (compAgingSortCol === col) {
+            compAgingSortDir = (compAgingSortDir === 'desc') ? 'asc' : 'desc';
+        } else {
+            compAgingSortCol = col;
+            compAgingSortDir = ['fantasia', 'rede', 'status', 'cnpj'].includes(col) ? 'asc' : 'desc';
+        }
+        const sortSelect = document.getElementById('aging-sort-select');
+        if (sortSelect) {
+            const expectedVal = `${col}_${compAgingSortDir}`;
+            if (Array.from(sortSelect.options).some(o => o.value === expectedVal)) {
+                sortSelect.value = expectedVal;
+            }
+        }
+        updateAgingSortHeaders();
+        applyAgingFiltersAndRender(false);
+    };
+
+    function updateAgingSortHeaders() {
+        document.querySelectorAll('#comp-table-aging th.sortable').forEach(th => {
+            th.classList.remove('active-sort');
+            const icon = th.querySelector('.th-sort-icon i');
+            if (icon) icon.className = 'bx bx-sort';
+        });
+        const activeTh = document.getElementById(`th-aging-${compAgingSortCol}`);
+        if (activeTh) {
+            activeTh.classList.add('active-sort');
+            const icon = activeTh.querySelector('.th-sort-icon i');
+            if (icon) icon.className = (compAgingSortDir === 'asc') ? 'bx bx-sort-up' : 'bx bx-sort-down';
+        }
+    }
+
+    function getBrandStatusBadgeHtml(status) {
+        if (status === 'ATIVO') {
+            return '<span class="client-status-badge status-ativo" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-weight: 600; padding: 2px 7px; border-radius: 6px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px;" title="Cliente Ativo no cadastro da marca"><i class=\'bx bx-check-circle\'></i> Ativo</span>';
+        }
+        if (status === 'NAO_FIDELIZADO') {
+            return '<span class="client-status-badge status-nao-fid" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); font-weight: 600; padding: 2px 7px; border-radius: 6px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px;" title="Cliente Não Fidelizado na marca"><i class=\'bx bx-time\'></i> Não Fidelizado</span>';
+        }
+        if (status === 'INATIVO') {
+            return '<span class="client-status-badge status-inativo" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 600; padding: 2px 7px; border-radius: 6px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px;" title="Cliente Inativo na marca"><i class=\'bx bx-x-circle\'></i> Inativo</span>';
+        }
+        return '<span class="client-status-badge status-sem-cadastro" style="background: rgba(148, 163, 184, 0.12); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.25); font-weight: 600; padding: 2px 7px; border-radius: 6px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px;" title="Sem cadastro na marca"><i class=\'bx bx-minus-circle\'></i> Sem Cadastro</span>';
+    }
+
+    function getDaysBadgeHtml(days) {
+        if (days === null || days === undefined) {
+            return '<span style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); font-weight: 600; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; display: inline-flex; align-items: center; gap: 4px;"><i class=\'bx bx-help-circle\'></i> Sem emissão</span>';
+        }
+        if (days === 0) {
+            return '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; display: inline-flex; align-items: center; gap: 4px;"><i class=\'bx bx-check-double\'></i> Hoje</span>';
+        }
+        if (days <= 30) {
+            return `<span style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; display: inline-flex; align-items: center; gap: 4px;"><i class='bx bx-check'></i> ${days} dias</span>`;
+        }
+        if (days <= 60) {
+            return `<span style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; display: inline-flex; align-items: center; gap: 4px;"><i class='bx bx-time'></i> ${days} dias</span>`;
+        }
+        if (days <= 90) {
+            return `<span style="background: rgba(249, 115, 22, 0.15); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.3); font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; display: inline-flex; align-items: center; gap: 4px;"><i class='bx bx-error'></i> ${days} dias</span>`;
+        }
+        return `<span style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; display: inline-flex; align-items: center; gap: 4px;"><i class='bx bx-error-circle'></i> ${days} dias</span>`;
+    }
+
+    // Abertura garantida e infalível da ficha do cliente
+    window.openAgingClientDetail = function(cleanCnpjOrKey, optFantasia, optRazao) {
+        if (!cleanCnpjOrKey && !optFantasia && !optRazao) return;
+        const clean = cleanDigits(cleanCnpjOrKey);
+        const clean14 = clean ? clean.padStart(14, '0') : '';
+
+        let list = window.clientsMasterData || [];
+        if (!list || list.length === 0) {
+            if (typeof window.initClientsModule === 'function') {
+                window.initClientsModule();
+                list = window.clientsMasterData || [];
+            }
+        }
+        if ((!list || list.length === 0) && window.INITIAL_CLIENTS_DATA) {
+            list = window.INITIAL_CLIENTS_DATA;
+        }
+
+        let client = null;
+        if (clean) {
+            client = list.find(c => {
+                const cCnpj = cleanDigits(c['CNPJ']);
+                return cCnpj === clean || (cCnpj && cCnpj.padStart(14, '0') === clean14);
+            });
+        }
+
+        if (!client) {
+            const rawKey = typeof cleanCnpjOrKey === 'string' ? cleanCnpjOrKey.replace(/^(FANT_|RAZ_|CLI_)/i, '').trim().toLowerCase() : '';
+            const fTarget = (optFantasia || '').trim().toLowerCase();
+            const rTarget = (optRazao || '').trim().toLowerCase();
+
+            client = list.find(c => {
+                const cFant = (c['FANTASIA'] || c['NOME FANTASIA'] || '').trim().toLowerCase();
+                const cRaz = (c['RAZAO SOCIAL'] || c['RAZÃO SOCIAL'] || '').trim().toLowerCase();
+                const cCli = (c['CLIFOR'] || c['CODIGO'] || '').toString().trim().toLowerCase();
+
+                if (rawKey && (cFant === rawKey || cRaz === rawKey || cCli === rawKey)) return true;
+                if (fTarget && cFant && (cFant === fTarget || cFant.includes(fTarget) || fTarget.includes(cFant))) return true;
+                if (rTarget && cRaz && (cRaz === rTarget || cRaz.includes(rTarget) || rTarget.includes(cRaz))) return true;
+                return false;
+            });
+        }
+
+        if (client && typeof window.openClientDetailModal === 'function') {
+            window.openClientDetailModal(client);
+        } else if (clean && typeof window.openClientDetailByCnpj === 'function' && window.openClientDetailByCnpj !== window.openAgingClientDetail) {
+            window.openClientDetailByCnpj(clean);
+        } else {
+            if (typeof window.showNotification === 'function') {
+                window.showNotification('Ficha cadastral não encontrada para ' + (cleanCnpjOrKey || optFantasia || optRazao || '') + '.', 'info');
+            }
+        }
+    };
+
+    function renderComparisonAgingSection(bData, eData, clientsMap) {
+        if (!clientsMap) clientsMap = buildClientsMap();
+        if (!bData) bData = lastCompFilteredBilling || [];
+        if (!eData) eData = lastCompFilteredExtrato || [];
+
+        // 1. Mapear todas as NFs histÃ³ricas do faturamento bruto para identificar a data mÃ¡xima por CNPJ, CLI e Fantasia
+        const rawBilling = getBillingData();
+        const histLatestBillingMap = new Map();
+        rawBilling.forEach(it => {
+            const cleanC = cleanDigits(it.c);
+            const cli = (it.cli || '').toString().trim();
+            const fant = (it.f || '').toString().trim().toUpperCase();
+            const raz = (it.z || '').toString().trim().toUpperCase();
+            const dObj = parseDateBR(it.d);
+            if (!dObj) return;
+            const cleanNf = getCleanNfNumber(it);
+            const validNf = isCleanValidNf(cleanNf) ? cleanNf : (isCleanValidNf(it.nf) ? it.nf.trim() : '');
+
+            const recordHist = (k) => {
+                if (!k) return;
+                const existing = histLatestBillingMap.get(k);
+                if (!existing) {
+                    histLatestBillingMap.set(k, {
+                        dObj: dObj,
+                        dStr: it.d,
+                        nf: validNf || '-',
+                        val: it.v || 0
+                    });
+                } else {
+                    if (dObj > existing.dObj) {
+                        existing.dObj = dObj;
+                        existing.dStr = it.d;
+                        if (validNf) existing.nf = validNf;
+                        existing.val = it.v || 0;
+                    } else if (dObj.getTime() === existing.dObj.getTime()) {
+                        if (validNf && (!existing.nf || existing.nf === '-' || !isCleanValidNf(existing.nf))) {
+                            existing.nf = validNf;
+                        }
+                    }
+                }
+            };
+
+            if (cleanC) recordHist(cleanC);
+            if (cli) recordHist('CLI_' + cli);
+            if (fant) recordHist('FANT_' + fant);
+            if (raz) recordHist('RAZ_' + raz);
+        });
+        // 2. Determinar a marca ativa para checagem de status
+        const selectedBrands = (typeof getIndCMSSelectedValues === 'function') ? getIndCMSSelectedValues('brand') : [];
+        const activeBrandForStatus = (selectedBrands && selectedBrands.length === 1) ? selectedBrands[0] : 'NEW ERA';
+
+        // 3. Compilar lojas presentes no confronto (Faturamento filtrado + Saldo a Entregar filtrado)
+        const agingMap = new Map();
+
+        const processAgingItem = (item, isBilling) => {
+            const clientMatch = resolveClientForItem(item, clientsMap);
+            const rawCnpj = item.c || (clientMatch && clientMatch['CNPJ']) || '';
+            const cleanC = cleanDigits(rawCnpj);
+            const key = cleanC || (item.cli ? `CLI_${item.cli}` : (item.f || 'DESCONHECIDO'));
+
+            if (!agingMap.has(key)) {
+                const fant = (clientMatch && (clientMatch['FANTASIA'] || clientMatch['NOME FANTASIA'])) || item.f || '';
+                const raz = (clientMatch && (clientMatch['RAZAO SOCIAL'] || clientMatch['RAZÃO SOCIAL'])) || item.z || '';
+                const rede = (clientMatch && clientMatch['GRUPO']) || item.r || item.g || '';
+                const cidade = (clientMatch && (clientMatch['CIDADE'] || clientMatch['MUNICÍPIO'])) || item.cid || '';
+
+                let brandStatus = 'SEM_CADASTRO';
+                if (clientMatch && typeof window.getClientBrandStatus === 'function') {
+                    brandStatus = window.getClientBrandStatus(clientMatch, activeBrandForStatus);
+                } else if (clientMatch) {
+                    brandStatus = clientMatch[activeBrandForStatus + '_STATUS'] || clientMatch[activeBrandForStatus] || 'SEM_CADASTRO';
+                }
+
+                const histInfo = (cleanC ? histLatestBillingMap.get(cleanC) : null) || (item.cli ? histLatestBillingMap.get('CLI_' + item.cli) : null) || (fant ? histLatestBillingMap.get('FANT_' + fant.toUpperCase()) : null) || (raz ? histLatestBillingMap.get('RAZ_' + raz.toUpperCase()) : null);
+                const latestDateObj = histInfo ? histInfo.dObj : null;
+                const latestDateStr = histInfo ? histInfo.dStr : null;
+                const latestNf = histInfo ? histInfo.nf : '-';
+
+                agingMap.set(key, {
+                    key,
+                    cnpjClean: cleanC,
+                    cnpjFormatted: cleanC ? formatCNPJMask(cleanC.padStart(14, '0')) : (item.cli ? `Cód ${item.cli}` : '-'),
+                    fantasia: fant,
+                    razao: raz,
+                    rede: rede,
+                    cidade: cidade,
+                    brandStatus: brandStatus,
+                    latestDateObj: latestDateObj,
+                    latestDateStr: latestDateStr,
+                    latestNf: latestNf,
+                    daysWithoutBilling: null,
+                    daysRangeKey: 'no_billing',
+                    fatV: 0,
+                    fatQ: 0,
+                    extV: 0,
+                    extQ: 0,
+                    clientMaster: clientMatch
+                });
+            }
+
+            const rec = agingMap.get(key);
+            if (isBilling) {
+                rec.fatV += (item.v || 0);
+                rec.fatQ += (item.q || 0);
+                const dObj = parseDateBR(item.d);
+                if (dObj && (!rec.latestDateObj || dObj > rec.latestDateObj)) {
+                    rec.latestDateObj = dObj;
+                    rec.latestDateStr = item.d;
+                    const candNf = getCleanNfNumber(item);
+                    if (isCleanValidNf(candNf)) {
+                        rec.latestNf = candNf;
+                    }
+                }
+            } else {
+                rec.extV += (item.v || 0);
+                rec.extQ += (item.q || 0);
+            }
+        };
+
+        bData.forEach(it => processAgingItem(it, true));
+        eData.forEach(it => processAgingItem(it, false));
+
+        // 4. Calcular os dias sem faturamento decorridos até a data de hoje
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        let totalDaysSum = 0;
+        let storesWithDaysCount = 0;
+        let activeDormantCount = 0;
+        let countAtivo = 0, countNaoFid = 0, countInativo = 0, countSemCad = 0;
+        let carteiraTotalVal = 0, carteiraStoresCount = 0, nonActiveCount = 0;
+
+        currentCompAgingList = Array.from(agingMap.values()).map(rec => {
+            if (!isCleanValidNf(rec.latestNf)) {
+                const hNf = rec.cnpjClean ? histLatestBillingMap.get(rec.cnpjClean) : null;
+                if (hNf && isCleanValidNf(hNf.nf)) rec.latestNf = hNf.nf;
+                else rec.latestNf = '-';
+            }
+            if (rec.latestDateObj) {
+                const t1 = new Date(rec.latestDateObj.getFullYear(), rec.latestDateObj.getMonth(), rec.latestDateObj.getDate());
+                const diff = Math.max(0, Math.floor((today.getTime() - t1.getTime()) / (1000 * 60 * 60 * 24)));
+                rec.daysWithoutBilling = diff;
+                totalDaysSum += diff;
+                storesWithDaysCount++;
+                if (diff <= 30) rec.daysRangeKey = '0_30';
+                else if (diff <= 60) rec.daysRangeKey = '31_60';
+                else if (diff <= 90) rec.daysRangeKey = '61_90';
+                else rec.daysRangeKey = '90_plus';
+            } else {
+                rec.daysWithoutBilling = null;
+                rec.daysRangeKey = 'no_billing';
+            }
+
+            if (rec.brandStatus === 'ATIVO') {
+                countAtivo++;
+                if (rec.daysWithoutBilling === null || rec.daysWithoutBilling > 60) {
+                    activeDormantCount++;
+                }
+            } else if (rec.brandStatus === 'NAO_FIDELIZADO') {
+                countNaoFid++;
+                nonActiveCount++;
+            } else if (rec.brandStatus === 'INATIVO') {
+                countInativo++;
+                nonActiveCount++;
+            } else {
+                countSemCad++;
+                nonActiveCount++;
+            }
+
+            if (rec.extV > 0 || rec.extQ > 0) {
+                carteiraTotalVal += rec.extV;
+                carteiraStoresCount++;
+            }
+
+            return rec;
+        });
+
+        // 5. Atualizar mini KPIs e legendas
+        const avgDays = storesWithDaysCount > 0 ? Math.round(totalDaysSum / storesWithDaysCount) : 0;
+        const elAvgDays = document.getElementById('aging-kpi-avg-days');
+        const elDormant = document.getElementById('aging-kpi-active-dormant');
+        const elCarteiraVal = document.getElementById('aging-kpi-carteira-val');
+        const elCarteiraStores = document.getElementById('aging-kpi-carteira-stores');
+        const elNonActive = document.getElementById('aging-kpi-non-active-count');
+        const elTotalBadge = document.getElementById('aging-total-badge');
+        const elCritBadge = document.getElementById('aging-critical-badge');
+
+        if (elAvgDays) elAvgDays.textContent = `${avgDays} dias`;
+        if (elDormant) elDormant.textContent = `${activeDormantCount} ${activeDormantCount === 1 ? 'loja' : 'lojas'}`;
+        if (elCarteiraVal) elCarteiraVal.textContent = formatBRL(carteiraTotalVal);
+        if (elCarteiraStores) elCarteiraStores.textContent = `${carteiraStoresCount} ${carteiraStoresCount === 1 ? 'loja com pedidos' : 'lojas com pedidos'}`;
+        if (elNonActive) elNonActive.textContent = `${nonActiveCount} ${nonActiveCount === 1 ? 'loja' : 'lojas'}`;
+        if (elTotalBadge) elTotalBadge.textContent = `${currentCompAgingList.length} ${currentCompAgingList.length === 1 ? 'Cliente Analisado' : 'Clientes Analisados'}`;
+        
+        if (elCritBadge) {
+            if (activeDormantCount > 0) {
+                elCritBadge.style.display = 'inline-block';
+                elCritBadge.textContent = `${activeDormantCount} Críticos (+60d)`;
+            } else {
+                elCritBadge.style.display = 'none';
+            }
+        }
+
+        const legTot = document.getElementById('aging-legend-total');
+        const legAtivo = document.getElementById('aging-legend-active');
+        const legNaoFid = document.getElementById('aging-legend-nao-fid');
+        const legInat = document.getElementById('aging-legend-inativo');
+        const legSemCad = document.getElementById('aging-legend-sem-cad');
+        if (legTot) legTot.textContent = currentCompAgingList.length;
+        if (legAtivo) legAtivo.textContent = countAtivo;
+        if (legNaoFid) legNaoFid.textContent = countNaoFid;
+        if (legInat) legInat.textContent = countInativo;
+        if (legSemCad) legSemCad.textContent = countSemCad;
+
+        syncAgingStatusPills();
+        applyAgingFiltersAndRender(false);
+    }
+
+    function applyAgingFiltersAndRender(resetFilters = false) {
+        if (resetFilters) {
+            compAgingFilterStatus = 'all';
+            compAgingFilterDays = 'all';
+            compAgingFilterCarteira = 'all';
+            compAgingSearchQuery = '';
+            const sSt = document.getElementById('aging-filter-status');
+            const sDy = document.getElementById('aging-filter-days');
+            const sCt = document.getElementById('aging-filter-carteira');
+            const sSr = document.getElementById('aging-search-input');
+            if (sSt) sSt.value = 'all';
+            if (sDy) sDy.value = 'all';
+            if (sCt) sCt.value = 'all';
+            if (sSr) sSr.value = '';
+        }
+
+        let filtered = currentCompAgingList.filter(row => {
+            // Filtro de status na marca
+            if (compAgingFilterStatus !== 'all' && row.brandStatus !== compAgingFilterStatus) return false;
+
+            // Filtro de faixa de dias
+            if (compAgingFilterDays !== 'all' && row.daysRangeKey !== compAgingFilterDays) return false;
+
+            // Filtro de carteira
+            if (compAgingFilterCarteira === 'with_orders' && (row.extV <= 0 && row.extQ <= 0)) return false;
+            if (compAgingFilterCarteira === 'without_orders' && (row.extV > 0 || row.extQ > 0)) return false;
+
+            // Busca por texto
+            if (compAgingSearchQuery) {
+                const q = compAgingSearchQuery;
+                const matchCnpj = (row.cnpjClean && row.cnpjClean.includes(q)) || (row.cnpjFormatted && row.cnpjFormatted.toLowerCase().includes(q));
+                const matchFant = row.fantasia && row.fantasia.toLowerCase().includes(q);
+                const matchRaz = row.razao && row.razao.toLowerCase().includes(q);
+                const matchRede = row.rede && row.rede.toLowerCase().includes(q);
+                if (!matchCnpj && !matchFant && !matchRaz && !matchRede) return false;
+            }
+
+            return true;
+        });
+
+        // OrdenÃ£o
+        filtered.sort((a, b) => {
+            let res = 0;
+            if (compAgingSortCol === 'days') {
+                const daysA = (a.daysWithoutBilling === null) ? -1 : a.daysWithoutBilling;
+                const daysB = (b.daysWithoutBilling === null) ? -1 : b.daysWithoutBilling;
+                res = daysA - daysB;
+            } else if (compAgingSortCol === 'extV') {
+                res = (a.extV || 0) - (b.extV || 0);
+            } else if (compAgingSortCol === 'extQ') {
+                res = (a.extQ || 0) - (b.extQ || 0);
+            } else if (compAgingSortCol === 'fatV') {
+                res = (a.fatV || 0) - (b.fatV || 0);
+            } else if (compAgingSortCol === 'fantasia' || compAgingSortCol === 'name') {
+                res = (a.fantasia || '').localeCompare(b.fantasia || '', 'pt-BR');
+            } else if (compAgingSortCol === 'rede') {
+                res = (a.rede || '').localeCompare(b.rede || '', 'pt-BR');
+            } else if (compAgingSortCol === 'status') {
+                const order = { 'ATIVO': 1, 'NAO_FIDELIZADO': 2, 'INATIVO': 3, 'SEM_CADASTRO': 4 };
+                res = (order[a.brandStatus] || 5) - (order[b.brandStatus] || 5);
+            } else if (compAgingSortCol === 'cnpj') {
+                res = (a.cnpjClean || '').localeCompare(b.cnpjClean || '');
+            } else if (compAgingSortCol === 'lastDate') {
+                const tA = a.latestDateObj ? a.latestDateObj.getTime() : 0;
+                const tB = b.latestDateObj ? b.latestDateObj.getTime() : 0;
+                res = tA - tB;
+            } else if (compAgingSortCol === 'lastNf') {
+                res = (a.latestNf || '').localeCompare(b.latestNf || '');
+            }
+            return (compAgingSortDir === 'desc') ? -res : res;
+        });
+
+        renderAgingChart(filtered);
+        renderAgingTable(filtered);
+    }
+
+    function renderAgingChart(filteredList) {
+        if (!window.Chart) return;
+        const canvas = document.getElementById('chart-comp-aging');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        if (chartCompAgingInstance) {
+            chartCompAgingInstance.destroy();
+            chartCompAgingInstance = null;
+        }
+
+        const limitControls = document.getElementById('aging-chart-limit-controls');
+        const chartContainer = document.getElementById('aging-chart-container');
+
+        if (compAgingViewMode === 'rank') {
+            if (limitControls) limitControls.style.display = 'flex';
+
+            const validList = filteredList.filter(row => row.daysWithoutBilling !== null);
+            validList.sort((a, b) => (b.daysWithoutBilling || 0) - (a.daysWithoutBilling || 0));
+
+            let limit = validList.length;
+            if (compAgingRankLimit !== 'all') {
+                limit = parseInt(compAgingRankLimit, 10) || 15;
+            }
+            const items = validList.slice(0, limit);
+
+            if (chartContainer) {
+                const dynamicHeight = Math.max(140, items.length * 28 + 60);
+                chartContainer.style.height = `${dynamicHeight}px`;
+            }
+
+            const labels = items.map(it => {
+                const name = it.fantasia || it.razao || it.cnpjFormatted;
+                return name.length > 25 ? name.substring(0, 23) + '...' : name;
+            });
+            const dataVals = items.map(it => it.daysWithoutBilling || 0);
+
+            const bgColors = items.map(it => {
+                if (it.brandStatus === 'ATIVO') return 'rgba(16, 185, 129, 0.85)';
+                if (it.brandStatus === 'NAO_FIDELIZADO') return 'rgba(245, 158, 11, 0.85)';
+                if (it.brandStatus === 'INATIVO') return 'rgba(239, 68, 68, 0.85)';
+                return 'rgba(148, 163, 184, 0.85)';
+            });
+
+            const borderColors = items.map(it => {
+                if (it.brandStatus === 'ATIVO') return '#10b981';
+                if (it.brandStatus === 'NAO_FIDELIZADO') return '#f59e0b';
+                if (it.brandStatus === 'INATIVO') return '#ef4444';
+                return '#94a3b8';
+            });
+
+            chartCompAgingInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Dias sem Faturar',
+                        maxBarThickness: 24,
+                        barPercentage: 0.8,
+                        categoryPercentage: 0.9,
+                        data: dataVals,
+                        backgroundColor: bgColors,
+                        borderColor: borderColors,
+                        borderWidth: 1.5,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    resizeDelay: 100,
+                    onClick: function(evt, elements) {
+                        if (!elements || elements.length === 0) return;
+                        const idx = elements[0].index;
+                        const it = items[idx];
+                        if (it) {
+                            window.openAgingClientDetail(it.cnpjClean || it.key);
+                        }
+                    },
+                    onHover: function(evt, elements) {
+                        const targetCanvas = evt.native ? evt.native.target : (evt.chart && evt.chart.canvas);
+                        if (targetCanvas) {
+                            targetCanvas.style.cursor = (elements && elements.length > 0) ? 'pointer' : 'default';
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    const it = items[context[0].dataIndex];
+                                    return (it.fantasia || it.razao) + (it.cnpjFormatted ? ` (${it.cnpjFormatted})` : '') + ' • [Clique p/ ver Ficha]';
+                                },
+                                label: function(context) {
+                                    const it = items[context.dataIndex];
+                                    const stMap = { 'ATIVO': 'Ativo', 'NAO_FIDELIZADO': 'Não Fidelizado', 'INATIVO': 'INATIVO', 'SEM_CADASTRO': 'Sem Cadastro' };
+                                    const lines = [
+                                        `Status na Marca: ${stMap[it.brandStatus] || it.brandStatus}`,
+                                        `Dias sem Faturar: ${it.daysWithoutBilling} dias`,
+                                        `Última NF: ${it.latestNf} em ${it.latestDateStr || '-'}`,
+                                        `Faturamento Realizado: ${formatBRL(it.fatV)} (${it.fatQ} pçs)`
+                                    ];
+                                    if (it.extV > 0 || it.extQ > 0) {
+                                        lines.push(`Saldo a Entregar: ${formatBRL(it.extV)} (${it.extQ} pçs em carteira)`);
+                                    }
+                                    return lines;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Quantidade de Dias sem Faturamento',
+                                color: '#94a3b8',
+                                font: { size: 11, weight: '600' }
+                            },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8', font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: {
+                                color: '#f8fafc',
+                                font: { size: 11, weight: '600' },
+                                autoSkip: false
+                            }
+                        }
+                    }
+                }
+            });
+        } else {
+            if (limitControls) limitControls.style.display = 'none';
+            if (chartContainer) chartContainer.style.height = '360px';
+
+            const buckets = {
+                '0_30': { label: '≤ 30 dias (Recente)', count: 0, extV: 0, extQ: 0, color: 'rgba(16, 185, 129, 0.85)', border: '#10b981' },
+                '31_60': { label: '31 a 60 dias (Atenção)', count: 0, extV: 0, extQ: 0, color: 'rgba(245, 158, 11, 0.85)', border: '#f59e0b' },
+                '61_90': { label: '61 a 90 dias (Alerta)', count: 0, extV: 0, extQ: 0, color: 'rgba(249, 115, 22, 0.85)', border: '#fb923c' },
+                '90_plus': { label: '> 90 dias (Crítico)', count: 0, extV: 0, extQ: 0, color: 'rgba(239, 68, 68, 0.85)', border: '#ef4444' },
+                'no_billing': { label: 'Sem Emissão Registrada', count: 0, extV: 0, extQ: 0, color: 'rgba(148, 163, 184, 0.85)', border: '#94a3b8' }
+            };
+
+            filteredList.forEach(row => {
+                const b = buckets[row.daysRangeKey] || buckets['no_billing'];
+                b.count++;
+                b.extV += (row.extV || 0);
+                b.extQ += (row.extQ || 0);
+            });
+
+            const keys = ['0_30', '31_60', '61_90', '90_plus', 'no_billing'];
+            const labels = keys.map(k => buckets[k].label);
+            const dataVals = keys.map(k => buckets[k].count);
+            const bgColors = keys.map(k => buckets[k].color);
+            const borderColors = keys.map(k => buckets[k].border);
+
+            const totalStores = filteredList.length;
+
+            chartCompAgingInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Número de Lojas',
+                        data: dataVals,
+                        backgroundColor: bgColors,
+                        borderColor: borderColors,
+                        borderWidth: 1.5,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    resizeDelay: 100,
+                    onClick: function(evt, elements) {
+                        if (!elements || elements.length === 0) return;
+                        const idx = elements[0].index;
+                        const clickedKey = keys[idx];
+                        if (clickedKey) {
+                            const sDy = document.getElementById('aging-filter-days');
+                            if (sDy) sDy.value = clickedKey;
+                            compAgingFilterDays = clickedKey;
+                            applyAgingFiltersAndRender(false);
+                        }
+                    },
+                    onHover: function(evt, elements) {
+                        const targetCanvas = evt.native ? evt.native.target : (evt.chart && evt.chart.canvas);
+                        if (targetCanvas) {
+                            targetCanvas.style.cursor = (elements && elements.length > 0) ? 'pointer' : 'default';
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const k = keys[context.dataIndex];
+                                    const b = buckets[k];
+                                    const pct = totalStores > 0 ? (b.count / totalStores * 100).toFixed(1) : 0;
+                                    const lines = [
+                                        `Lojas nesta faixa: ${b.count} (${pct}%) • [Clique p/ filtrar]`
+                                    ];
+                                    if (b.extV > 0) {
+                                        lines.push(`Saldo a Entregar nesta faixa: ${formatBRL(b.extV)} (${b.extQ.toLocaleString('pt-BR')} pçs)`);
+                                    }
+                                    return lines;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#f8fafc', font: { size: 11, weight: '600' } }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Quantidade de Lojas',
+                                color: '#94a3b8',
+                                font: { size: 11, weight: '600' }
+                            },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8', font: { size: 11 } },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function renderAgingTable(filteredList) {
+        const tbody = document.getElementById('aging-tbody');
+        const tfoot = document.getElementById('aging-tfoot');
+        if (!tbody) return;
+
+        if (!filteredList || filteredList.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="11" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-secondary);">
+                        <i class='bx bx-search-alt' style="font-size: 2rem; color: rgba(255,255,255,0.2); display: block; margin-bottom: 0.5rem;"></i>
+                        Nenhuma loja encontrada com os filtros selecionados.
+                    </td>
+                </tr>
+            `;
+            if (tfoot) tfoot.innerHTML = '';
+            return;
+        }
+
+        let sumFatV = 0, sumFatQ = 0, sumExtV = 0, sumExtQ = 0;
+        let sumDays = 0, countWithDays = 0;
+
+        let html = '';
+        filteredList.forEach(row => {
+            sumFatV += (row.fatV || 0);
+            sumFatQ += (row.fatQ || 0);
+            sumExtV += (row.extV || 0);
+            sumExtQ += (row.extQ || 0);
+            if (row.daysWithoutBilling !== null) {
+                sumDays += row.daysWithoutBilling;
+                countWithDays++;
+            }
+
+            const clientTitle = row.fantasia || row.razao || 'Loja sem nome';
+            const clientSub = (row.razao && row.fantasia && row.razao.toUpperCase() !== row.fantasia.toUpperCase()) ? row.razao : '';
+
+            html += `
+                <tr class="comp-row" style="cursor: default;">
+                    <td class="font-mono text-accent" style="font-weight: 600; font-size: 0.78rem; white-space: nowrap;">
+                        ${escapeHTML(row.cnpjFormatted)}
+                    </td>
+                    <td>
+                        <div style="font-weight: 600; color: var(--text-primary); font-size: 0.8rem;">
+                            ${escapeHTML(clientTitle)}
+                        </div>
+                        ${clientSub ? `<div style="font-size: 0.70rem; color: var(--text-secondary);">${escapeHTML(clientSub)}</div>` : ''}
+                    </td>
+                    <td style="font-size: 0.76rem;">
+                        <div style="font-weight: 500; color: #cbd5e1;">${escapeHTML(row.rede || '-')}</div>
+                        ${row.cidade ? `<div style="font-size: 0.70rem; color: var(--text-secondary);">${escapeHTML(row.cidade)}</div>` : ''}
+                    </td>
+                    <td style="text-align: center;">
+                        ${getBrandStatusBadgeHtml(row.brandStatus)}
+                    </td>
+                    <td style="text-align: center; font-size: 0.76rem;" class="font-mono">
+                        ${isCleanValidNf(row.latestNf) ? `
+                            <span class="nf-cell-link" onclick="openNfItemsModal('${escapeHTML(row.latestNf)}', '${escapeHTML(row.fantasia || row.razao || '')}', '${escapeHTML(row.latestDateStr || '')}')" title="Clique para ver os produtos da NF ${escapeHTML(row.latestNf)}">
+                                <i class='bx bx-receipt'></i> ${escapeHTML(row.latestNf)}
+                            </span>
+                        ` : '<span style="color: var(--text-secondary);">-</span>'}
+                    </td>
+                    <td style="text-align: center; font-size: 0.76rem;" class="font-mono">
+                        ${escapeHTML(row.latestDateStr || '-')}
+                    </td>
+                    <td style="text-align: center;">
+                        ${getDaysBadgeHtml(row.daysWithoutBilling)}
+                    </td>
+                    <td style="text-align: right; font-weight: 600; color: #34d399; font-size: 0.78rem;" class="font-mono">
+                        ${formatBRL(row.fatV)}
+                    </td>
+                    <td style="text-align: right; font-weight: 600; color: #60a5fa; font-size: 0.78rem;" class="font-mono">
+                        ${row.extV > 0 ? formatBRL(row.extV) : '<span style="color: var(--text-secondary);">-</span>'}
+                    </td>
+                    <td style="text-align: right; font-size: 0.78rem; color: #94a3b8;" class="font-mono">
+                        ${row.extQ > 0 ? row.extQ.toLocaleString('pt-BR') : '-'}
+                    </td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn-comp-detail btn-icon-only" onclick="window.openAgingClientDetail('${row.cnpjClean || row.key}', '${escapeHTML(row.fantasia || '')}', '${escapeHTML(row.razao || '')}')" title="Ver ficha cadastral completa da loja">
+                            <i class='bx bx-id-card'></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+
+        // Rodapé com Totais Consolidados da Tabela
+        if (tfoot) {
+            const avgD = countWithDays > 0 ? Math.round(sumDays / countWithDays) : 0;
+            tfoot.innerHTML = `
+                <tr class="comp-row comp-master-summary-row" style="background: rgba(59, 130, 246, 0.12); border-top: 2px solid rgba(59, 130, 246, 0.35);">
+                    <td class="font-mono" style="font-weight: 800; font-size: 0.80rem; white-space: nowrap; color: #fbbf24;">
+                        <i class='bx bx-calculator' style="color: #fbbf24; margin-right: 4px;"></i> TOTAL
+                    </td>
+                    <td>
+                        <div style="font-weight: 700; color: #fbbf24; font-size: 0.78rem;">${filteredList.length} ${filteredList.length === 1 ? 'Loja Filtrada' : 'Lojas Filtradas'}</div>
+                        <div style="font-size: 0.70rem; color: var(--text-secondary);">Consolidado da seleção</div>
+                    </td>
+                    <td style="font-size: 0.76rem; font-weight: 600;">
+                        <span class="badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24; padding: 2px 7px; border-radius: 4px;">RESUMO</span>
+                    </td>
+                    <td style="text-align: center; font-size: 0.74rem; color: var(--text-secondary);">
+                        ${countWithDays} c/ emissão
+                    </td>
+                    <td style="text-align: center; color: var(--text-secondary); font-size: 0.74rem;">-</td>
+                    <td style="text-align: center; color: var(--text-secondary); font-size: 0.74rem;">Média:</td>
+                    <td style="text-align: center;">
+                        <span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 800; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem;">${avgD} dias (méd.)</span>
+                    </td>
+                    <td style="text-align: right; font-weight: 700; color: #34d399; font-size: 0.78rem;" class="font-mono">${formatBRL(sumFatV)}</td>
+                    <td style="text-align: right; font-weight: 700; color: #60a5fa; font-size: 0.78rem;" class="font-mono">${sumExtV > 0 ? formatBRL(sumExtV) : '-'}</td>
+                    <td style="text-align: right; font-size: 0.78rem; font-weight: 700; color: #cbd5e1;" class="font-mono">${sumExtQ > 0 ? sumExtQ.toLocaleString('pt-BR') : '-'}</td>
+                    <td style="text-align: center; color: var(--text-secondary);">-</td>
+                </tr>
+            `;
+        }
+    }
+
+    window.exportAgingToExcel = function() {
+        if (!window.XLSX) {
+            window.showNotification('Biblioteca Excel indisponível.', 'error');
+            return;
+        }
+
+        try {
+            const wb = XLSX.utils.book_new();
+
+            const stMap = { 'ATIVO': 'Ativo', 'NAO_FIDELIZADO': 'Não Fidelizado', 'INATIVO': 'INATIVO', 'SEM_CADASTRO': 'Sem Cadastro' };
+            const rangeMap = {
+                '0_30': 'Até 30 dias (Recente)',
+                '31_60': '31 a 60 dias (Atenção)',
+                '61_90': '61 a 90 dias (Alerta)',
+                '90_plus': 'Mais de 90 dias (Crítico)',
+                'no_billing': 'Sem faturamento registrado'
+            };
+
+            const exportRows = currentCompAgingList.map(c => ({
+                'CNPJ': c.cnpjFormatted,
+                'Nome Fantasia': c.fantasia,
+                'Razão Social': c.razao,
+                'Cidade': c.cidade || '',
+                'Rede / Grupo': c.rede || '',
+                'Status na Marca': stMap[c.brandStatus] || c.brandStatus,
+                'Última NF': c.latestNf,
+                'Data da Última NF': c.latestDateStr || 'Sem emissão',
+                'Dias sem Faturar': c.daysWithoutBilling !== null ? c.daysWithoutBilling : 'Sem emissão',
+                'Faixa de Inatividade': rangeMap[c.daysRangeKey] || c.daysRangeKey,
+                'Faturamento no Período (R$)': c.fatV,
+                'Peças Faturadas': c.fatQ,
+                'A Entregar / Carteira (R$)': c.extV,
+                'Peças A Entregar': c.extQ
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(exportRows);
+            XLSX.utils.book_append_sheet(wb, ws, 'Dias sem Faturar');
+
+            const now = new Date();
+            const dateSuffix = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}`;
+            XLSX.writeFile(wb, `NEW_ERA_DIAS_SEM_FATURAR_CLIENTES_${dateSuffix}.xlsx`);
+            window.showNotification('Relatório de Dias sem Faturar exportado com sucesso!', 'success');
+        } catch (err) {
+            console.error('Erro ao exportar dias sem faturar para Excel:', err);
+            window.showNotification('Erro ao exportar: ' + err.message, 'error');
+        }
+    };
 
     // Auto-inicialização imediata caso a página tenha carregado ou sido recarregada na aba Indicadores
     try {

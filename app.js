@@ -678,8 +678,11 @@ function setupGlobalListeners() {
         if (doc.exists && doc.data().list && Array.isArray(doc.data().list)) {
             let remoteList = doc.data().list;
             if (remoteList.length > 0) {
+                const deletedSet = getDeletedClientsCnpjs();
+                const initialRemoteLen = remoteList.length;
+                remoteList = remoteList.filter(c => !deletedSet.has(cleanDigits(c['CNPJ'])));
                 // Mesclagem com INITIAL_CLIENTS_DATA para preservar códigos NEW ERA e novos clientes cadastrados
-                let needsSyncBack = false;
+                let needsSyncBack = (remoteList.length < initialRemoteLen);
                 if (window.INITIAL_CLIENTS_DATA && Array.isArray(window.INITIAL_CLIENTS_DATA)) {
                     const mapByCnpj = new Map();
                     remoteList.forEach(c => {
@@ -688,6 +691,7 @@ function setupGlobalListeners() {
                     });
                     window.INITIAL_CLIENTS_DATA.forEach(initC => {
                         const cleanC = cleanDigits(initC['CNPJ']);
+                        if (!cleanC || deletedSet.has(cleanC)) return;
                         if (cleanC && mapByCnpj.has(cleanC)) {
                             const existing = mapByCnpj.get(cleanC);
                             CLIENT_BRAND_COLS.forEach(b => {
@@ -728,7 +732,7 @@ function setupGlobalListeners() {
                 window.clientsMasterData = clientsMasterData;
                 localStorage.setItem('empresa_clients_custom_data', JSON.stringify(clientsMasterData));
 
-                // Se houve mesclagem de novos dados da base mestre, atualizar o Firestore para que todos os usuários recebam
+                // Se houve mesclagem de novos dados da base mestre ou expurgo de clientes excluídos, atualizar o Firestore
                 if (needsSyncBack && window.db) {
                     try {
                         window.db.collection('settings').doc('clients').set({
@@ -748,6 +752,42 @@ function setupGlobalListeners() {
                 }
                 if (sessionStorage.getItem('last_active_tab') === 'clients') {
                     applyClientsFilter();
+                }
+            }
+        }
+    });
+
+    window.db.collection('settings').doc('deleted_clients').onSnapshot((doc) => {
+        if (doc.exists && doc.data().cnpjs && Array.isArray(doc.data().cnpjs)) {
+            const remoteDeleted = doc.data().cnpjs;
+            const currentDeleted = getDeletedClientsCnpjs();
+            let changed = false;
+            remoteDeleted.forEach(c => {
+                const clean = cleanDigits(c);
+                if (clean && !currentDeleted.has(clean)) {
+                    currentDeleted.add(clean);
+                    changed = true;
+                }
+            });
+            if (changed) {
+                try {
+                    localStorage.setItem('empresa_deleted_clients_cnpjs', JSON.stringify(Array.from(currentDeleted)));
+                } catch(e) {}
+                if (clientsMasterData && clientsMasterData.length > 0) {
+                    const beforeLen = clientsMasterData.length;
+                    clientsMasterData = clientsMasterData.filter(c => !currentDeleted.has(cleanDigits(c['CNPJ'])));
+                    if (clientsMasterData.length !== beforeLen) {
+                        window.clientsMasterData = clientsMasterData;
+                        try {
+                            localStorage.setItem('empresa_clients_custom_data', JSON.stringify(clientsMasterData));
+                        } catch(e) {}
+                        const sidebarBadge = document.getElementById('sidebar-clients-count');
+                        if (sidebarBadge) sidebarBadge.textContent = clientsMasterData.length;
+                        populateClientsDatalists();
+                        if (sessionStorage.getItem('last_active_tab') === 'clients') {
+                            applyClientsFilter();
+                        }
+                    }
                 }
             }
         }
@@ -3909,11 +3949,73 @@ let currentModalClient = null;
 let clientsSortCol = null;
 let clientsSortDir = 'asc';
 
+// --------------------------------------------------------------------------
+// CONTROLE DE CLIENTES EXCLUÍDOS (Lista Negra Permanente)
+// Evita que clientes excluídos sejam ressuscitados pelo INITIAL_CLIENTS_DATA
+// --------------------------------------------------------------------------
+function getDeletedClientsCnpjs() {
+    let set = new Set();
+    set.add('07696181000181');
+    try {
+        const raw = localStorage.getItem('empresa_deleted_clients_cnpjs');
+        if (raw) {
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr)) {
+                arr.forEach(c => {
+                    const cl = cleanDigits(c);
+                    if (cl) set.add(cl);
+                });
+            }
+        }
+    } catch(e) {}
+    return set;
+}
+
+function recordDeletedClientCnpj(cnpj) {
+    const clean = cleanDigits(cnpj);
+    if (!clean) return;
+    const deletedSet = getDeletedClientsCnpjs();
+    deletedSet.add(clean);
+    try {
+        localStorage.setItem('empresa_deleted_clients_cnpjs', JSON.stringify(Array.from(deletedSet)));
+    } catch(e) {}
+    if (isFirebaseConnected && window.db) {
+        try {
+            window.db.collection('settings').doc('deleted_clients').set({
+                cnpjs: Array.from(deletedSet),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }).catch(err => console.warn('Erro ao salvar deleted_clients:', err));
+        } catch(e) {}
+    }
+}
+
+function unmarkDeletedClientCnpj(cnpj) {
+    const clean = cleanDigits(cnpj);
+    if (!clean) return;
+    const deletedSet = getDeletedClientsCnpjs();
+    if (deletedSet.has(clean)) {
+        deletedSet.delete(clean);
+        try {
+            localStorage.setItem('empresa_deleted_clients_cnpjs', JSON.stringify(Array.from(deletedSet)));
+        } catch(e) {}
+        if (isFirebaseConnected && window.db) {
+            try {
+                window.db.collection('settings').doc('deleted_clients').set({
+                    cnpjs: Array.from(deletedSet),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true }).catch(err => console.warn('Erro ao atualizar deleted_clients:', err));
+            } catch(e) {}
+        }
+    }
+}
+
 window.initClientsModule = function() {
     try {
         const savedCustom = localStorage.getItem('empresa_clients_custom_data');
         if (savedCustom) {
             clientsMasterData = JSON.parse(savedCustom);
+            const deletedSet = getDeletedClientsCnpjs();
+            clientsMasterData = clientsMasterData.filter(c => !deletedSet.has(cleanDigits(c['CNPJ'])));
             // Sincroniza/Mescla com INITIAL_CLIENTS_DATA para carregar novos clientes e códigos inseridos
             if (window.INITIAL_CLIENTS_DATA && Array.isArray(window.INITIAL_CLIENTS_DATA)) {
                 const mapByCnpj = new Map();
@@ -3937,6 +4039,7 @@ window.initClientsModule = function() {
                 });
                 window.INITIAL_CLIENTS_DATA.forEach(initC => {
                     const cleanC = cleanDigits(initC['CNPJ']);
+                    if (!cleanC || deletedSet.has(cleanC)) return;
                     if (cleanC && mapByCnpj.has(cleanC)) {
                         const existing = mapByCnpj.get(cleanC);
                         CLIENT_BRAND_COLS.forEach(b => {
@@ -3962,7 +4065,8 @@ window.initClientsModule = function() {
                 localStorage.setItem('empresa_clients_custom_data', JSON.stringify(clientsMasterData));
             }
         } else if (window.INITIAL_CLIENTS_DATA && Array.isArray(window.INITIAL_CLIENTS_DATA)) {
-            clientsMasterData = [...window.INITIAL_CLIENTS_DATA];
+            const deletedSet = getDeletedClientsCnpjs();
+            clientsMasterData = window.INITIAL_CLIENTS_DATA.filter(c => !deletedSet.has(cleanDigits(c['CNPJ'])));
         } else {
             clientsMasterData = [];
         }
@@ -3971,8 +4075,11 @@ window.initClientsModule = function() {
         clientsMasterData = window.INITIAL_CLIENTS_DATA || [];
     }
     if ((!clientsMasterData || clientsMasterData.length === 0) && window.INITIAL_CLIENTS_DATA && Array.isArray(window.INITIAL_CLIENTS_DATA)) {
-        clientsMasterData = [...window.INITIAL_CLIENTS_DATA];
+        const deletedSet = getDeletedClientsCnpjs();
+        clientsMasterData = window.INITIAL_CLIENTS_DATA.filter(c => !deletedSet.has(cleanDigits(c['CNPJ'])));
     }
+    const finalDeletedSet = getDeletedClientsCnpjs();
+    clientsMasterData = (clientsMasterData || []).filter(c => !finalDeletedSet.has(cleanDigits(c['CNPJ'])));
     window.clientsMasterData = clientsMasterData;
 
     const sidebarBadge = document.getElementById('sidebar-clients-count');
@@ -4437,11 +4544,58 @@ function renderClientsTable() {
 // MODAL DETALHE DO CLIENTE
 // --------------------------------------------------------------------------
 
-window.openClientDetailModal = function(clientIndex) {
-    const client = clientsFilteredData[clientIndex];
-    if (!client) return;
+window.openClientDetailModal = function(clientParam) {
+    let client = null;
+    let clientIndex = -1;
+
+    let list = window.clientsMasterData || clientsMasterData || [];
+    if (!list || list.length === 0) {
+        if (typeof window.initClientsModule === 'function') {
+            window.initClientsModule();
+            list = window.clientsMasterData || clientsMasterData || [];
+        }
+    }
+    if ((!list || list.length === 0) && window.INITIAL_CLIENTS_DATA) {
+        list = window.INITIAL_CLIENTS_DATA;
+    }
+
+    if (typeof clientParam === 'object' && clientParam !== null) {
+        client = clientParam;
+        clientIndex = list.indexOf(client);
+        if (clientIndex === -1 && client['CNPJ']) {
+            const clean = cleanDigits(client['CNPJ']);
+            const clean14 = clean ? clean.padStart(14, '0') : '';
+            clientIndex = list.findIndex(c => {
+                const cClean = cleanDigits(c['CNPJ']);
+                return cClean === clean || (cClean && cClean.padStart(14, '0') === clean14);
+            });
+        }
+    } else if (typeof clientParam === 'string') {
+        const clean = cleanDigits(clientParam);
+        const clean14 = clean ? clean.padStart(14, '0') : '';
+        clientIndex = list.findIndex(c => {
+            const cClean = cleanDigits(c['CNPJ']);
+            return cClean === clean || (cClean && cClean.padStart(14, '0') === clean14);
+        });
+        if (clientIndex !== -1) client = list[clientIndex];
+    } else if (typeof clientParam === 'number') {
+        clientIndex = clientParam;
+        client = (clientsFilteredData && clientsFilteredData[clientIndex]) || list[clientIndex];
+    }
+    if (!client) {
+        console.warn('openClientDetailModal: cliente não encontrado', clientParam);
+        if (typeof window.showNotification === 'function') {
+            window.showNotification('Ficha cadastral não localizada na base.', 'info');
+        }
+        return;
+    }
 
     currentModalClient = client;
+
+    const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = (val !== undefined && val !== null && val !== '') ? val : '-';
+    };
 
     // Header
     const fantasiaEl = document.getElementById('cdm-fantasia');
@@ -4451,7 +4605,7 @@ window.openClientDetailModal = function(clientIndex) {
     if (fantasiaEl) fantasiaEl.textContent = client['FANTASIA'] || client['RAZAO SOCIAL'] || 'Cliente';
     if (razaoEl) razaoEl.textContent = client['RAZAO SOCIAL'] || '-';
 
-    const clientStatus = window.getClientGeneralStatus(client);
+    const clientStatus = (typeof window.getClientGeneralStatus === 'function') ? window.getClientGeneralStatus(client) : (client['CLIENTE ATIVO?'] || 'ATIVO');
     if (statusBadgeEl) {
         let badgeClass = 'status-inativo';
         let badgeIcon = 'bx-store-alt';
@@ -4474,9 +4628,9 @@ window.openClientDetailModal = function(clientIndex) {
     }
 
     // Card 1: Identificação
-    document.getElementById('cdm-cnpj').textContent = client['CNPJ'] || '-';
-    document.getElementById('cdm-grupo').textContent = client['GRUPO'] || '-';
-    document.getElementById('cdm-grupo-real').textContent = client['GRUPO REAL'] || '-';
+    setText('cdm-cnpj', client['CNPJ']);
+    setText('cdm-grupo', client['GRUPO']);
+    setText('cdm-grupo-real', client['GRUPO REAL']);
 
     // Card 2: Endereço
     const ruaStr = client['RUA'] || '';
@@ -4532,15 +4686,15 @@ window.openClientDetailModal = function(clientIndex) {
         }
     }
 
-    document.getElementById('cdm-cidade-uf').textContent = cidadeUf;
-    document.getElementById('cdm-cep').textContent = client['CEP'] || '-';
-    document.getElementById('cdm-status-endereco').textContent = client['ENDERECO?'] || '-';
+    setText('cdm-cidade-uf', cidadeUf);
+    setText('cdm-cep', client['CEP']);
+    setText('cdm-status-endereco', client['ENDERECO?']);
 
     // Card 3: Contato & Proprietário
-    document.getElementById('cdm-proprietario').textContent = client['PROPRIETARIO'] || '-';
+    setText('cdm-proprietario', client['PROPRIETARIO']);
     
     const tel = client['TELEFONE'] ? client['TELEFONE'].toString() : '';
-    document.getElementById('cdm-telefone').textContent = tel || '-';
+    setText('cdm-telefone', tel);
 
     const waLink = document.getElementById('cdm-whatsapp-link');
     if (waLink) {
@@ -4553,7 +4707,7 @@ window.openClientDetailModal = function(clientIndex) {
         }
     }
 
-    document.getElementById('cdm-aniversario').textContent = client['ANIVERSARIO'] || '-';
+    setText('cdm-aniversario', client['ANIVERSARIO']);
 
     // Card 4: Marcas
     const brandsListContainer = document.getElementById('cdm-brands-list');
@@ -4611,6 +4765,48 @@ window.closeClientDetailModal = function() {
     const modal = document.getElementById('client-detail-modal');
     if (modal) modal.classList.add('hidden');
     currentModalClient = null;
+};
+
+window.openClientDetailByCnpj = function(cnpj) {
+    if (!cnpj) return;
+    const clean = cleanDigits(cnpj);
+    let list = window.clientsMasterData || clientsMasterData || [];
+    if (!list || list.length === 0) {
+        if (typeof window.initClientsModule === 'function') {
+            window.initClientsModule();
+            list = window.clientsMasterData || clientsMasterData || [];
+        }
+    }
+    if ((!list || list.length === 0) && window.INITIAL_CLIENTS_DATA) {
+        list = window.INITIAL_CLIENTS_DATA;
+    }
+
+    let client = null;
+    if (clean) {
+        const clean14 = clean.padStart(14, '0');
+        client = list.find(c => {
+            const cClean = cleanDigits(c['CNPJ']);
+            return cClean === clean || (cClean && cClean.padStart(14, '0') === clean14);
+        });
+    }
+
+    // Se não localizou por CNPJ, tenta correspondência por Razão Social ou Fantasia
+    if (!client && typeof cnpj === 'string') {
+        const q = cnpj.trim().toLowerCase();
+        client = list.find(c => {
+            return (c['FANTASIA'] && c['FANTASIA'].toLowerCase() === q) ||
+                   (c['RAZAO SOCIAL'] && c['RAZAO SOCIAL'].toLowerCase() === q) ||
+                   (c['CLIFOR'] && c['CLIFOR'].toString() === q);
+        });
+    }
+
+    if (client) {
+        window.openClientDetailModal(client);
+    } else {
+        if (typeof window.showNotification === 'function') {
+            window.showNotification(`Ficha cadastral não encontrada para ${cnpj}.`, 'info');
+        }
+    }
 };
 
 window.createTaskForClient = function(clientIndex) {
@@ -5390,6 +5586,10 @@ window.saveClientFormData = async function() {
         ...clientBrandsObj
     };
 
+    if (cnpjVal) {
+        unmarkDeletedClientCnpj(cnpjVal);
+    }
+
     if (isNew) {
         // Proteção contra duplicação: se o CNPJ informado já existir na base, atualiza o existente
         if (cnpjVal) {
@@ -5422,10 +5622,28 @@ window.saveClientFormData = async function() {
 
 window.deleteCurrentClient = async function() {
     const indexVal = document.getElementById('cfm-client-index')?.value;
-    if (indexVal === '' || indexVal === null || indexVal === undefined) return;
+    const formCnpj = document.getElementById('cfm-cnpj')?.value;
 
-    const idx = parseInt(indexVal, 10);
-    const client = clientsMasterData[idx];
+    let client = null;
+    let idx = -1;
+    if (indexVal !== '' && indexVal !== null && indexVal !== undefined) {
+        idx = parseInt(indexVal, 10);
+        if (idx >= 0 && idx < clientsMasterData.length) {
+            client = clientsMasterData[idx];
+        }
+    }
+    if (!client && formCnpj) {
+        const cleanFormCnpj = cleanDigits(formCnpj);
+        idx = clientsMasterData.findIndex(c => cleanDigits(c['CNPJ']) === cleanFormCnpj);
+        if (idx !== -1) client = clientsMasterData[idx];
+    }
+    if (!client && currentModalClient) {
+        client = currentModalClient;
+        const cleanCurrCnpj = cleanDigits(client['CNPJ']);
+        if (cleanCurrCnpj) {
+            idx = clientsMasterData.findIndex(c => cleanDigits(c['CNPJ']) === cleanCurrCnpj);
+        }
+    }
     if (!client) return;
 
     const name = client['FANTASIA'] || client['RAZAO SOCIAL'] || 'este cliente';
@@ -5433,7 +5651,16 @@ window.deleteCurrentClient = async function() {
         return;
     }
 
-    clientsMasterData.splice(idx, 1);
+    const targetCnpj = cleanDigits(client['CNPJ']) || cleanDigits(formCnpj);
+    if (targetCnpj) {
+        recordDeletedClientCnpj(targetCnpj);
+        clientsMasterData = clientsMasterData.filter(c => cleanDigits(c['CNPJ']) !== targetCnpj);
+    } else if (idx !== -1) {
+        clientsMasterData.splice(idx, 1);
+    }
+    window.clientsMasterData = clientsMasterData;
+    currentModalClient = null;
+
     await persistClientsData(`excluiu o cliente "${name}"`);
     closeClientFormModal();
     closeClientDetailModal();
