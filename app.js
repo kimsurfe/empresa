@@ -4219,7 +4219,7 @@ window.applyClientsFilter = function() {
             }
         }
 
-        // Filtro de Status Geral (Ativo, NÃ£o Fidelizado, Inativo, Loja Fechada)
+        // Filtro de Status Geral (Ativo, Não Fidelizado, Inativo, Loja Fechada)
         if (clientsActiveStatus !== 'all') {
             const clientStatus = window.getClientGeneralStatus(client);
             if (clientStatus !== clientsActiveStatus) {

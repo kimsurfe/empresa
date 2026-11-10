@@ -2830,7 +2830,7 @@ body:not(.is-admin) .admin-only {
     border: 1px solid rgba(239, 68, 68, 0.35) !important;
 }
 
-/* CNPJ sempre em uma Ãºnica linha */
+/* CNPJ sempre em uma única linha */
 .client-cnpj-cell {
     white-space: nowrap !important;
     font-variant-numeric: tabular-nums;
@@ -3585,7 +3585,7 @@ select.cfm-input option {
     padding: 0.4rem;
 }
 
-/* Caixa de CÃ³digo do Cliente */
+/* Caixa de Código do Cliente */
 .cfm-brand-card-bottom {
     display: flex;
     align-items: center;
@@ -3783,7 +3783,7 @@ select.cfm-input option {
 
 .indicators-filter-grid-secondary {
     display: grid;
-    grid-template-columns: 1.5fr 1fr 1fr 1fr 1.15fr 1.05fr auto;
+    grid-template-columns: 1.35fr 0.9fr 0.9fr 0.9fr 1.05fr 1.05fr 0.95fr auto;
     gap: 0.9rem;
     align-items: flex-end;
     margin-top: 0.85rem;
@@ -5497,7 +5497,7 @@ select.cfm-input option {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-/* Layout especÃ­fico do Grid de 4 Cards de KPIs de Produtos no Confronto */
+/* Layout específico do Grid de 4 Cards de KPIs de Produtos no Confronto */
 #std-product-kpis-grid,
 #comp-product-kpis-grid {
     display: grid !important;
@@ -6091,6 +6091,34 @@ select.cfm-input option {
 .ranking-row-item.nf-clickable:hover {
     background: rgba(30, 41, 59, 0.8) !important;
     border-color: rgba(59, 130, 246, 0.4) !important;
+}
+
+.badge-ped-link {
+    background: rgba(99, 102, 241, 0.15);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.badge-ped-ext {
+    background: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
 }
 
 /* ==========================================================================

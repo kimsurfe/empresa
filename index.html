@@ -22,6 +22,43 @@
     
     <!-- CSS Customizado -->
     <link rel="stylesheet" href="style.css?v=90">
+    <!-- Global Error Boundary & Resilience System -->
+    <script>
+        window.__APP_ERRORS__ = [];
+        window.addEventListener("error", function(e) {
+            console.error("[GlobalErrorCatcher]", e);
+            window.__APP_ERRORS__.push({
+                type: "error",
+                message: e.message || "Erro de execucao de script",
+                filename: (e.filename || "").split("/").pop(),
+                lineno: e.lineno,
+                colno: e.colno
+            });
+            showResilienceBanner(e.message, (e.filename || "").split("/").pop(), e.lineno);
+        });
+        window.addEventListener("unhandledrejection", function(e) {
+            console.error("[UnhandledRejection]", e.reason);
+            window.__APP_ERRORS__.push({
+                type: "unhandledrejection",
+                message: (e.reason && e.reason.message) || String(e.reason)
+            });
+        });
+        function showResilienceBanner(msg, file, line) {
+            if (document.getElementById("app-resilience-banner")) return;
+            var b = document.createElement("div");
+            b.id = "app-resilience-banner";
+            b.style.cssText = "position:fixed;bottom:20px;right:20px;max-width:380px;background:#1e293b;border:1px solid #ef4444;color:#f8fafc;padding:12px 16px;border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,0.6);z-index:999999;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:13px;line-height:1.4;";
+            b.innerHTML = "<div style=\"display:flex;align-items:flex-start;gap:10px;\">" +
+                "<i class=\"bx bx-error-circle\" style=\"color:#ef4444;font-size:20px;flex-shrink:0;margin-top:1px;\"></i>" +
+                "<div style=\"flex:1;\">" +
+                "<strong style=\"color:#f87171;display:block;margin-bottom:2px;\">Aviso de Sistema</strong>" +
+                "<span style=\"font-size:12px;color:#cbd5e1;\">Houve uma falha ao processar " + (file ? ("<strong>" + file + (line ? ":" + line : "") + "</strong>") : "um script") + ". A interface continuou funcionando em modo seguro.</span>" +
+                "</div>" +
+                "<button onclick=\"this.parentElement.parentElement.remove()\" style=\"background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:16px;padding:0 2px;\">&times;</button>" +
+                "</div>";
+            (document.body || document.documentElement).appendChild(b);
+        }
+    </script>
 </head>
 <body>
     <div class="app-container">
@@ -809,6 +846,9 @@
                 </div>
                 <!-- SCRIPT DE RESILIÊNCIA DOS FILTROS (Garante abertura imediata mesmo antes do carregamento total) -->
                 <script>
+                    window.filterIndCMSOptions = window.filterIndCMSOptions || function(dim, q) {};
+                    window.indCMSSelectAll = window.indCMSSelectAll || function(dim, sel) {};
+                    window.onIndCMSCheckboxChange = window.onIndCMSCheckboxChange || function(dim, val, chk) {};
                     window.toggleIndCMS = window.toggleIndCMS || function(containerId, event) {
                         if (event) event.stopPropagation();
                         var container = document.getElementById(containerId);
@@ -1031,6 +1071,30 @@
                                         <input type="text" class="ind-cms-search-input" placeholder="Pesquisar referência ou produto..." oninput="filterIndCMSOptions('ref', this.value)">
                                     </div>
                                     <div class="ind-cms-options-list" id="ind-cms-ref-list">
+                                        <!-- Preenchido dinamicamente -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtro Pedido (Multi-Select com Busca - Unificado Pedido Interno & Externo) -->
+                        <div class="ind-input-group">
+                            <label id="ind-filter-ped-label-title"><i class='bx bx-purchase-tag'></i> Pedido</label>
+                            <div class="ind-cms" id="ind-cms-ped">
+                                <button type="button" class="ind-cms-btn" onclick="toggleIndCMS('ind-cms-ped', event)">
+                                    <span class="ind-cms-label" id="ind-cms-ped-label">Todos os Pedidos</span>
+                                    <i class='bx bx-chevron-down'></i>
+                                </button>
+                                <div class="ind-cms-dropdown hidden" id="ind-cms-ped-dropdown" style="min-width: 290px;">
+                                    <div class="ind-cms-tools">
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('ped', true)">Todos</button>
+                                        <button type="button" class="ind-cms-tool-btn" onclick="indCMSSelectAll('ped', false)">Limpar</button>
+                                    </div>
+                                    <div class="ind-cms-search-box">
+                                        <i class='bx bx-search'></i>
+                                        <input type="text" class="ind-cms-search-input" placeholder="Buscar pedido interno ou externo..." oninput="filterIndCMSOptions('ped', this.value)">
+                                    </div>
+                                    <div class="ind-cms-options-list" id="ind-cms-ped-list">
                                         <!-- Preenchido dinamicamente -->
                                     </div>
                                 </div>
@@ -2878,13 +2942,13 @@
     <script src="billing-data.js?v=48"></script>
 
     <!-- Dados do Extrato de Pedidos a Entregar (NEW ERA) -->
-    <script src="extrato-pedidos-data.js?v=55" charset="UTF-8"></script>
+    <script src="extrato-pedidos-data.js?v=56" charset="UTF-8"></script>
 
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js?v=28"></script>
-    <script src="indicators.js?v=125" charset="UTF-8"></script>
+    <script src="indicators.js?v=129" charset="UTF-8"></script>
     <script src="dashboard.js?v=1" charset="UTF-8"></script>
     <script src="app.js?v=85"></script>
 </body>

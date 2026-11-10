@@ -10,7 +10,7 @@
     let availableYears = [];
     let rankingDisplayLimit = 10;
     let currentDatasetType = localStorage.getItem('empresa_indicators_dataset_type') || 'extrato';
-    const CURRENT_BILLING_VERSION = '20261105_extrato_v10';
+    const CURRENT_BILLING_VERSION = '20261109_extrato_ped_v11';
     let currentKpiDisplayMode = localStorage.getItem('empresa_indicators_kpi_mode') || 'both';
     if (!['both', 'values', 'pieces'].includes(currentKpiDisplayMode)) {
         currentKpiDisplayMode = 'both';
@@ -133,7 +133,7 @@
     let currentCompProductSort = 'total_desc';
 
     // --------------------------------------------------------------------------
-    // ESTADO E PLUGINS DE DATALABELS / VALORES COMPACTOS NOS GRÃFICOS
+    // ESTADO E PLUGINS DE DATALABELS / VALORES COMPACTOS NOS GRÁFICOS
     // --------------------------------------------------------------------------
     let showCompMonthlyValues = false;
     window.toggleCompMonthlyValues = function() {
@@ -197,6 +197,40 @@
         const str = nfStr.toString().trim();
         if (!str || str === '-' || /programad/i.test(str)) return false;
         return /\d/.test(str);
+    }
+
+    // Helper para cruzar Nota Fiscal com Pedido Interno e Pedido Externo da NEW ERA
+    function getPedidoInfoForNf(nfNum) {
+        if (!nfNum) return null;
+        const clean = nfNum.toString().trim();
+        if (!clean) return null;
+        const map = window.NEW_ERA_NF_TO_PED;
+        if (!map) return null;
+
+        // Correspondência direta (ex: "0332964")
+        if (map[clean]) return { ped: map[clean][0] || '', pedExt: map[clean][1] || '' };
+
+        // Correspondência sem zeros à esquerda (ex: "332964")
+        const unpadded = clean.replace(/^0+/, '');
+        if (unpadded && map[unpadded]) return { ped: map[unpadded][0] || '', pedExt: map[unpadded][1] || '' };
+
+        // Correspondência com 7 dígitos padded (padrão NEW ERA)
+        const padded7 = unpadded ? unpadded.padStart(7, '0') : '';
+        if (padded7 && map[padded7]) return { ped: map[padded7][0] || '', pedExt: map[padded7][1] || '' };
+
+        return null;
+    }
+
+    // Helper para obter Pedido Externo a partir do Pedido Interno
+    function getPedidoExtForPed(pedNum) {
+        if (!pedNum) return '';
+        const clean = pedNum.toString().trim();
+        if (!clean) return '';
+        const extMap = window.NEW_ERA_PED_EXT_MAP;
+        if (extMap && extMap[clean]) return extMap[clean];
+        const unpadded = clean.replace(/^0+/, '');
+        if (extMap && extMap[unpadded]) return extMap[unpadded];
+        return '';
     }
 
     function getCleanNfNumber(item) {
@@ -385,7 +419,7 @@
         renderCompCnpjTable();
     };
 
-    // Estado de OrdenÃ£o e Agrupamento das Tabelas de Confronto
+    // Estado de Ordenão e Agrupamento das Tabelas de Confronto
     let compDateSortCol = 'date';
     let compDateSortDir = 'asc'; // 'asc' (crescente do mês/data) ou 'desc'
     let compDateGroupByMonth = true; // Por padrão agrupa pelo mês
@@ -396,7 +430,7 @@
     let compCnpjSortDir = 'desc';
 
     // --------------------------------------------------------------------------
-    // ARMAZEnÃ£o ROBUSTO INDEXEDDB (Byp\u00E7ssa o limite de 5MB do localStorage)
+    // ARMAZEnão ROBUSTO INDEXEDDB (Bypassa o limite de 5MB do localStorage)
     // --------------------------------------------------------------------------
     const IDB_NAME = 'EmpresaIndicatorsDB';
     const IDB_VERSION = 1;
@@ -519,6 +553,13 @@
                     const recNf = getCleanNfNumber(item);
                     item.nf = isCleanValidNf(recNf) ? recNf : '';
                 }
+                if (!item.ped && item.nf) {
+                    const pInfo = getPedidoInfoForNf(item.nf);
+                    if (pInfo) {
+                        item.ped = pInfo.ped;
+                        item.pedExt = pInfo.pedExt;
+                    }
+                }
             });
         }
         return data;
@@ -542,7 +583,7 @@
     }
 
         // --------------------------------------------------------------------------
-    // nÃ£o ENTRE SUB-ABAS DOS INDICADORES
+    // não ENTRE SUB-ABAS DOS INDICADORES
     // --------------------------------------------------------------------------
     window.switchIndicatorsSubTab = function(tabKey) {
         const validTabs = ['overview', 'confronto', 'recorrencia', 'produtos', 'auditoria'];
@@ -594,7 +635,7 @@
             }
         }
 
-        // Redimensionar grÃ¡ficos das sub-abas para evitar achatamento do canvas ap\u00E7s display: none
+        // Redimensionar gráficos das sub-abas para evitar achatamento do canvas após display: none
         setTimeout(() => {
             try {
                 if (tabKey === 'overview') {
@@ -612,7 +653,7 @@
                     }
                 }
             } catch (errResize) {
-                console.warn('[Indicators] Erro ao redimensionar grÃ¡ficos da sub-aba:', errResize);
+                console.warn('[Indicators] Erro ao redimensionar gráficos da sub-aba:', errResize);
             }
         }, 60);
     };
@@ -1168,8 +1209,18 @@
         }
     });
 
+    const indCMSSelectedSets = {
+        'ped': new Set(),
+        'nf': new Set(),
+        'ref': new Set()
+    };
+
     window.filterIndCMSOptions = function(dim, query) {
-        const list = document.getElementById(`ind-cms-${dim}-list`);
+        if (indCMSSelectedSets[dim]) {
+            renderDynamicIndCMSList(dim, query);
+            return;
+        }
+        const list = document.getElementById('ind-cms-' + dim + '-list');
         if (!list) return;
         const q = (query || '').toLowerCase().trim();
         const cleanQ = cleanDigits(q);
@@ -1177,18 +1228,17 @@
         options.forEach(opt => {
             const text = opt.textContent.toLowerCase();
             const cnpjs = (opt.getAttribute('data-cnpjs') || '').toLowerCase();
+            const searchData = (opt.getAttribute('data-search') || '').toLowerCase();
             const cleanCnpjs = cleanDigits(cnpjs);
 
             let matches = false;
             if (!q) {
                 matches = true;
-            } else if (text.includes(q)) {
+            } else if (text.includes(q) || (searchData && searchData.includes(q))) {
                 matches = true;
             } else if (cnpjs && cnpjs.includes(q)) {
-                // Busca por CNPJ formatado com pontos, traços e barras
                 matches = true;
             } else if (cleanQ && cleanCnpjs && cleanCnpjs.includes(cleanQ)) {
-                // Busca por CNPJ digitando somente números
                 matches = true;
             }
 
@@ -1219,14 +1269,33 @@
                         endMonthDay = '12-31';
                     }
                 }
-                startInput.value = `${minYear}-${startMonthDay}`;
-                endInput.value = `${maxYear}-${endMonthDay}`;
+                startInput.value = minYear + '-' + startMonthDay;
+                endInput.value = maxYear + '-' + endMonthDay;
             }
         }
     }
 
     window.indCMSSelectAll = function(dim, selectAll) {
-        const list = document.getElementById(`ind-cms-${dim}-list`);
+        if (indCMSSelectedSets[dim]) {
+            if (!selectAll) {
+                indCMSSelectedSets[dim].clear();
+            } else {
+                const list = document.getElementById('ind-cms-' + dim + '-list');
+                if (list) {
+                    list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                        cb.checked = true;
+                        indCMSSelectedSets[dim].add(cb.value);
+                    });
+                }
+            }
+            updateIndCMSLabel(dim);
+            applyIndicatorsFilter();
+            const searchInput = document.querySelector('#ind-cms-' + dim + '-dropdown .ind-cms-search-input');
+            renderDynamicIndCMSList(dim, searchInput ? searchInput.value : '');
+            return;
+        }
+
+        const list = document.getElementById('ind-cms-' + dim + '-list');
         if (!list) return;
         const checkboxes = list.querySelectorAll('input[type="checkbox"]:not(:disabled)');
         checkboxes.forEach(cb => {
@@ -1237,40 +1306,50 @@
             syncDatesWithSelectedYears();
         }
         if (dim === 'client' || dim === 'group' || dim === 'group-real') {
+            populatePedIndCMS(true);
             populateNfIndCMS(true);
+            populateRefIndCMS(true);
         }
         applyIndicatorsFilter();
     };
 
-    window.onIndCMSCheckboxChange = function(dim) {
+    window.onIndCMSCheckboxChange = function(dim, val, isChecked) {
+        if (indCMSSelectedSets[dim]) {
+            if (val !== undefined && isChecked !== undefined) {
+                if (isChecked) indCMSSelectedSets[dim].add(val.toString().trim());
+                else indCMSSelectedSets[dim].delete(val.toString().trim());
+            } else if (typeof event !== 'undefined' && event && event.target) {
+                const tVal = event.target.value.toString().trim();
+                if (event.target.checked) indCMSSelectedSets[dim].add(tVal);
+                else indCMSSelectedSets[dim].delete(tVal);
+            }
+        }
         if (dim === 'year' || dim === 'semester') {
             syncDatesWithSelectedYears();
         }
         if (dim === 'client' || dim === 'group' || dim === 'group-real') {
+            populatePedIndCMS(true);
             populateNfIndCMS(true);
+            populateRefIndCMS(true);
         }
         updateIndCMSLabel(dim);
         applyIndicatorsFilter();
     };
 
     function getIndCMSSelectedValues(dim) {
-        const list = document.getElementById(`ind-cms-${dim}-list`);
+        if (indCMSSelectedSets[dim]) {
+            return Array.from(indCMSSelectedSets[dim]);
+        }
+        const list = document.getElementById('ind-cms-' + dim + '-list');
         if (!list) return [];
         const checkboxes = list.querySelectorAll('input[type="checkbox"]:checked');
         return Array.from(checkboxes).map(cb => cb.value);
     }
 
     function updateIndCMSLabel(dim) {
-        const labelEl = document.getElementById(`ind-cms-${dim}-label`);
-        const list = document.getElementById(`ind-cms-${dim}-list`);
-        if (!labelEl || !list) return;
+        const labelEl = document.getElementById('ind-cms-' + dim + '-label');
+        if (!labelEl) return;
 
-        const allCheckboxes = list.querySelectorAll('input[type="checkbox"]:not(:disabled)');
-        const checkedCheckboxes = list.querySelectorAll('input[type="checkbox"]:checked');
-        const count = checkedCheckboxes.length;
-        const total = allCheckboxes.length;
-
-        const isExtrato = (currentDatasetType === 'extrato');
         const defaultLabels = {
             'brand': 'Todas as Marcas',
             'year': 'Todos os Anos',
@@ -1280,8 +1359,46 @@
             'group-real': 'Todos os Grupos Reais',
             'class': 'Todas as Divisões',
             'ref': 'Todas as Referências',
-            'nf': isExtrato ? 'Todos os Pedidos' : 'Todas as NFs'
+            'ped': 'Todos os Pedidos',
+            'nf': 'Todas as NFs'
         };
+
+        if (indCMSSelectedSets[dim]) {
+            const count = indCMSSelectedSets[dim].size;
+            if (count === 0) {
+                labelEl.textContent = defaultLabels[dim] || 'Todos';
+                labelEl.title = defaultLabels[dim] || 'Todos';
+            } else if (count === 1) {
+                const singleVal = Array.from(indCMSSelectedSets[dim])[0];
+                if (dim === 'ped') {
+                    const ext = getPedidoExtForPed(singleVal);
+                    labelEl.textContent = ext ? ('Ped: ' + singleVal + ' (Ext: ' + ext + ')') : ('Ped: ' + singleVal);
+                } else if (dim === 'nf') {
+                    labelEl.textContent = 'NF ' + singleVal;
+                } else {
+                    labelEl.textContent = singleVal;
+                }
+                labelEl.title = labelEl.textContent;
+            } else {
+                if (dim === 'ped') {
+                    labelEl.innerHTML = count + ' pedidos <span class="ind-cms-badge">' + count + '</span>';
+                } else if (dim === 'nf') {
+                    labelEl.innerHTML = count + ' NFs <span class="ind-cms-badge">' + count + '</span>';
+                } else if (dim === 'ref') {
+                    labelEl.innerHTML = count + ' referências <span class="ind-cms-badge">' + count + '</span>';
+                }
+                labelEl.title = count + ' itens selecionados';
+            }
+            return;
+        }
+
+        const list = document.getElementById('ind-cms-' + dim + '-list');
+        if (!list) return;
+
+        const allCheckboxes = list.querySelectorAll('input[type="checkbox"]:not(:disabled)');
+        const checkedCheckboxes = list.querySelectorAll('input[type="checkbox"]:checked');
+        const count = checkedCheckboxes.length;
+        const total = allCheckboxes.length;
 
         if (count === 0 || count === total) {
             labelEl.textContent = defaultLabels[dim] || 'Todos';
@@ -1292,10 +1409,6 @@
                 const semText = val === '1' ? '1\u00BA Semestre' : '2\u00BA Semestre';
                 labelEl.textContent = semText;
                 labelEl.title = semText;
-            } else if (dim === 'ref') {
-                const codeVal = checkedCheckboxes[0].value;
-                labelEl.textContent = codeVal;
-                labelEl.title = codeVal;
             } else {
                 const span = checkedCheckboxes[0].closest('label').querySelector('.ind-cms-option-label') || checkedCheckboxes[0].closest('label');
                 const fullText = span.textContent.trim();
@@ -1303,32 +1416,25 @@
                 labelEl.title = fullText;
             }
         } else {
-            // Mais de 1 selecionÃ£o: exibe contagem limpa e elegante sem estourar o layout
             if (dim === 'client') {
-                labelEl.innerHTML = `${count} lojas selecionadas <span class="ind-cms-badge">${count}</span>`;
-            } else if (dim === 'nf') {
-                const labelText = isExtrato ? `${count} pedidos` : `${count} NFs`;
-                labelEl.innerHTML = `${labelText} <span class="ind-cms-badge">${count}</span>`;
-            } else if (dim === 'ref') {
-                labelEl.innerHTML = `${count} referências <span class="ind-cms-badge">${count}</span>`;
+                labelEl.innerHTML = count + ' lojas selecionadas <span class="ind-cms-badge">' + count + '</span>';
             } else if (dim === 'year') {
                 const yearVals = Array.from(checkedCheckboxes).map(c => c.value).sort();
                 labelEl.textContent = yearVals.join(', ');
             } else if (dim === 'semester') {
                 labelEl.textContent = 'Todos os Semestres';
             } else if (dim === 'group' || dim === 'group-real') {
-                labelEl.innerHTML = `${count} grupos <span class="ind-cms-badge">${count}</span>`;
+                labelEl.innerHTML = count + ' grupos <span class="ind-cms-badge">' + count + '</span>';
             } else if (dim === 'class') {
-                labelEl.innerHTML = `${count} divisões <span class="ind-cms-badge">${count}</span>`;
+                labelEl.innerHTML = count + ' divisões <span class="ind-cms-badge">' + count + '</span>';
             } else {
-                labelEl.innerHTML = `${defaultLabels[dim] || 'Filtro'} <span class="ind-cms-badge">${count}</span>`;
+                labelEl.innerHTML = (defaultLabels[dim] || 'Filtro') + ' <span class="ind-cms-badge">' + count + '</span>';
             }
-            labelEl.title = `${count} itens selecionados`;
+            labelEl.title = count + ' itens selecionados';
         }
     }
 
-    // Retorna a junção de Razão Social e Nome Fantasia da base central da empresa
-    function getClientCombinedName(item, clientsMap) {
+        function getClientCombinedName(item, clientsMap) {
         const clientMatch = resolveClientForItem(item, clientsMap);
         let fantasia = '';
         let razao = '';
@@ -1532,90 +1638,27 @@
         // 8. REFERÊNCIA (PRODUTO)
         populateRefIndCMS(false);
 
-        // 9. NOTA FISCAL / PEDIDO (FILTRADO DINAMICAMENTE)
+        // 9. PEDIDO (UNIFICADO INTERNO E EXTERNO - ON DEMAND)
+        populatePedIndCMS(false);
+
+        // 10. NOTA FISCAL (ON DEMAND)
         populateNfIndCMS(false);
     }
 
     // Popula o filtro de Referências (SKU / Produto)
-    function populateRefIndCMS(preserveSelection = false) {
-        const refList = document.getElementById('ind-cms-ref-list');
-        if (!refList) return;
-
-        const prevSelectedRefs = preserveSelection ? getIndCMSSelectedValues('ref') : [];
-
-        const refsMap = new Map();
-        (billingMasterData || []).forEach(item => {
-            const p = (item.p || '').toString().trim();
-            if (!p || p === '-' || p === 'None') return;
-            if (!refsMap.has(p)) {
-                refsMap.set(p, {
-                    code: p,
-                    desc: (item.desc || '').toString().trim()
-                });
-            } else if (!refsMap.get(p).desc && item.desc) {
-                refsMap.get(p).desc = item.desc.toString().trim();
-            }
-        });
-
-        const sortedRefs = Array.from(refsMap.values()).sort((a, b) => a.code.localeCompare(b.code, 'pt-BR'));
-        let refHtml = '';
-        if (sortedRefs.length === 0) {
-            refHtml = `
-                <div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; padding: 0.85rem 0.5rem;">
-                    Nenhuma referência encontrada.
-                </div>
-            `;
-        } else {
-            sortedRefs.forEach(r => {
-                const isChecked = prevSelectedRefs.includes(r.code);
-                const descDisplay = r.desc ? ` - ${r.desc}` : '';
-                const fullTitle = `${r.code}${descDisplay}`;
-                refHtml += `
-                    <label class="ind-cms-option font-mono" title="${escapeHTML(fullTitle)}">
-                        <input type="checkbox" value="${escapeHTML(r.code)}" ${isChecked ? 'checked' : ''} onchange="onIndCMSCheckboxChange('ref')">
-                        <span class="ind-cms-option-label" style="display: flex; flex-direction: column; gap: 1px; font-family: inherit;">
-                            <span style="font-weight: 700; color: #f8fafc;">${escapeHTML(r.code)}</span>
-                            ${r.desc ? `<span style="font-size: 0.70rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">${escapeHTML(r.desc)}</span>` : ''}
-                        </span>
-                    </label>
-                `;
-            });
-        }
-        refList.innerHTML = refHtml;
-        updateIndCMSLabel('ref');
-    }
-
-    // Popula o filtro de Nota Fiscal / Pedido, filtrando dinamicamente pelos clientes selecionados
-    function populateNfIndCMS(preserveSelection = false) {
-        const nfList = document.getElementById('ind-cms-nf-list');
-        if (!nfList) return;
-
-        const isExtrato = (currentDatasetType === 'extrato');
-
-        // Atualizar cabeçalho do filtro de NF/Pedido
-        const nfFilterTitle = document.getElementById('ind-filter-nf-label-title');
-        if (nfFilterTitle) {
-            nfFilterTitle.innerHTML = `<i class='bx bx-receipt'></i> ${isExtrato ? 'Pedido' : 'Nota Fiscal'}`;
-        }
-        const nfSearchInput = document.querySelector('#ind-cms-nf-dropdown .ind-cms-search-input');
-        if (nfSearchInput) {
-            nfSearchInput.placeholder = isExtrato ? 'Pesquisar pedido...' : 'Pesquisar número de NF...';
-        }
-
+    function getDynamicCandidateItems() {
         const selectedClients = getIndCMSSelectedValues('client');
         const selectedGroups = getIndCMSSelectedValues('group');
         const selectedGroupReals = getIndCMSSelectedValues('group-real');
-        const clientsMap = buildClientsMap();
+        const clientsMap = (typeof buildClientsMap === 'function') ? buildClientsMap() : null;
 
         let candidateItems = billingMasterData || [];
-
-        // Ao selecionar 1 ou mais clientes, filtra as notas fiscais / pedidos estritamente para esses clientes
-        if (selectedClients.length > 0) {
+        if (selectedClients.length > 0 && clientsMap) {
             candidateItems = candidateItems.filter(item => {
                 const itemCombined = getClientCombinedName(item, clientsMap);
                 return selectedClients.includes(itemCombined);
             });
-        } else if (selectedGroups.length > 0 || selectedGroupReals.length > 0) {
+        } else if ((selectedGroups.length > 0 || selectedGroupReals.length > 0) && clientsMap) {
             candidateItems = candidateItems.filter(item => {
                 const clientMatch = resolveClientForItem(item, clientsMap);
                 const itemGrupo = (clientMatch && clientMatch['GRUPO']) ? clientMatch['GRUPO'].trim() : (item.g || item.r || 'Outros');
@@ -1627,44 +1670,323 @@
                 return true;
             });
         }
-
-        const prevSelectedNfs = preserveSelection ? getIndCMSSelectedValues('nf') : [];
-
-        const nfsSet = new Set();
-        candidateItems.forEach(item => {
-            const nfVal = (item.nf || '').toString().trim();
-            if (nfVal) {
-                nfsSet.add(nfVal);
-            }
-        });
-
-        const sortedNfs = Array.from(nfsSet).sort((a, b) => b.localeCompare(a));
-        let nfHtml = '';
-        if (sortedNfs.length === 0) {
-            nfHtml = `
-                <div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; padding: 0.85rem 0.5rem;">
-                    <i class='bx bx-info-circle' style="font-size: 1.1rem; display: block; margin-bottom: 0.25rem; opacity: 0.6;"></i>
-                    ${isExtrato ? 'Nenhum pedido encontrado para o(s) cliente(s) selecionado(s).' : 'Nenhuma NF encontrada para o(s) cliente(s) selecionado(s).'}
-                </div>
-            `;
-        } else {
-            sortedNfs.forEach(nf => {
-                const isChecked = prevSelectedNfs.includes(nf);
-                const optText = isExtrato ? escapeHTML(nf) : `NF ${escapeHTML(nf)}`;
-                nfHtml += `
-                    <label class="ind-cms-option font-mono" title="${optText}">
-                        <input type="checkbox" value="${escapeHTML(nf)}" ${isChecked ? 'checked' : ''} onchange="onIndCMSCheckboxChange('nf')">
-                        <span class="ind-cms-option-label">${optText}</span>
-                    </label>
-                `;
-            });
-        }
-        nfList.innerHTML = nfHtml;
-        updateIndCMSLabel('nf');
+        return candidateItems;
     }
 
-    // Chamado ao abrir a aba Indicadores
-    window.renderIndicatorsView = function() {
+    function renderDynamicIndCMSList(dim, query) {
+        const list = document.getElementById('ind-cms-' + dim + '-list');
+        if (!list) return;
+
+        const q = (query || '').toLowerCase().trim();
+        const selectedSet = indCMSSelectedSets[dim] || new Set();
+        const candidateItems = getDynamicCandidateItems();
+
+        let html = '';
+
+        if (dim === 'ped') {
+            const ordersMap = new Map();
+            candidateItems.forEach(item => {
+                let pedNum = (item.ped || '').toString().trim();
+                let pedExt = (item.pedExt || '').toString().trim();
+                const pedCli = (item.pedCli || '').toString().trim();
+
+                if (!pedNum && item.nf) {
+                    const pInfo = getPedidoInfoForNf(item.nf);
+                    if (pInfo) {
+                        pedNum = pInfo.ped || '';
+                        pedExt = pInfo.pedExt || '';
+                    }
+                }
+                if (!pedExt && pedNum) {
+                    pedExt = getPedidoExtForPed(pedNum);
+                }
+                if (!pedNum && !pedExt) return;
+
+                const primaryVal = pedNum || pedExt;
+                if (!ordersMap.has(primaryVal)) {
+                    ordersMap.set(primaryVal, {
+                        ped: pedNum,
+                        pedExt: pedExt,
+                        pedCli: pedCli,
+                        primaryVal: primaryVal
+                    });
+                } else {
+                    const existing = ordersMap.get(primaryVal);
+                    if (!existing.pedExt && pedExt) existing.pedExt = pedExt;
+                    if (!existing.pedCli && pedCli) existing.pedCli = pedCli;
+                }
+            });
+
+            if (!q) {
+                if (selectedSet.size > 0) {
+                    html += '<div style="font-size: 0.70rem; color: #a5b4fc; font-weight: 700; text-transform: uppercase; padding: 4px 6px; letter-spacing: 0.5px;">Selecionados (' + selectedSet.size + '):</div>';
+                    selectedSet.forEach(val => {
+                        const ord = ordersMap.get(val) || { ped: val, pedExt: getPedidoExtForPed(val), primaryVal: val };
+                        const displayText = ord.pedExt ? ('Ped: ' + ord.ped + ' (Ext: ' + ord.pedExt + ')') : ('Ped: ' + ord.ped);
+                        html += '<label class="ind-cms-option font-mono" style="background: rgba(99, 102, 241, 0.12); border-color: rgba(99, 102, 241, 0.3);">' +
+                            '<input type="checkbox" value="' + escapeHTML(val) + '" checked onchange="onIndCMSCheckboxChange(\'ped\', \'' + escapeHTML(val) + '\', this.checked)">' +
+                            '<span class="ind-cms-option-label" style="color: #ffffff; font-weight: 600;">' + escapeHTML(displayText) + '</span>' +
+                            '</label>';
+                    });
+                    html += '<div style="text-align: center; padding: 1rem 0.5rem; color: var(--text-secondary); font-size: 0.75rem; border-top: 1px dashed rgba(255,255,255,0.08); margin-top: 0.35rem;">' +
+                        '<i class=\'bx bx-search\' style="font-size: 1.1rem; display: block; margin-bottom: 0.2rem; opacity: 0.5;"></i>' +
+                        'Digite o número do pedido acima para buscar e adicionar mais pedidos.' +
+                        '</div>';
+                } else {
+                    html = '<div style="text-align: center; padding: 1.6rem 0.6rem; color: var(--text-secondary); font-size: 0.78rem;">' +
+                        '<i class=\'bx bx-search\' style="font-size: 1.6rem; display: block; margin-bottom: 0.35rem; color: #60a5fa; opacity: 0.8;"></i>' +
+                        'Digite o número do <strong>pedido interno</strong> ou <strong>externo</strong> acima para pesquisar.' +
+                        '</div>';
+                }
+                list.innerHTML = html;
+                return;
+            }
+
+            const matches = [];
+            for (const ord of ordersMap.values()) {
+                const p = ord.ped.toLowerCase();
+                const pe = ord.pedExt.toLowerCase();
+                const pc = ord.pedCli.toLowerCase();
+                if (p.includes(q) || pe.includes(q) || (pc && pc.includes(q))) {
+                    matches.push(ord);
+                }
+            }
+
+            matches.sort((a, b) => {
+                const numA = parseInt(a.ped || a.pedExt || 0, 10);
+                const numB = parseInt(b.ped || b.pedExt || 0, 10);
+                if (numA !== numB) return numB - numA;
+                return (a.ped || a.pedExt || '').localeCompare(b.ped || b.pedExt || '');
+            });
+
+            if (matches.length === 0) {
+                html = '<div style="text-align: center; padding: 1.4rem 0.5rem; color: var(--text-secondary); font-size: 0.76rem;">' +
+                    '<i class=\'bx bx-info-circle\' style="font-size: 1.3rem; display: block; margin-bottom: 0.25rem; opacity: 0.5;"></i>' +
+                    'Nenhum pedido encontrado para "<strong>' + escapeHTML(q) + '</strong>".' +
+                    '</div>';
+            } else {
+                const limit = 50;
+                const displayed = matches.slice(0, limit);
+                displayed.forEach(ord => {
+                    const isChecked = selectedSet.has(ord.primaryVal);
+                    let displayText = '';
+                    if (ord.ped && ord.pedExt) {
+                        displayText = '<strong style="color: #f8fafc;">Ped: ' + escapeHTML(ord.ped) + '</strong> <span style="color: #818cf8; font-size: 0.74rem; margin-left: 4px;">(Ext: ' + escapeHTML(ord.pedExt) + ')</span>';
+                    } else if (ord.ped) {
+                        displayText = '<strong style="color: #f8fafc;">Ped: ' + escapeHTML(ord.ped) + '</strong>';
+                    } else {
+                        displayText = '<strong style="color: #818cf8;">Ped. Ext: ' + escapeHTML(ord.pedExt) + '</strong>';
+                    }
+                    html += '<label class="ind-cms-option font-mono" title="Pedido: ' + escapeHTML(ord.ped) + (ord.pedExt ? (' | Ext: ' + escapeHTML(ord.pedExt)) : '') + '">' +
+                        '<input type="checkbox" value="' + escapeHTML(ord.primaryVal) + '" ' + (isChecked ? 'checked' : '') + ' onchange="onIndCMSCheckboxChange(\'ped\', \'' + escapeHTML(ord.primaryVal) + '\', this.checked)">' +
+                        '<span class="ind-cms-option-label">' + displayText + '</span>' +
+                        '</label>';
+                });
+                if (matches.length > limit) {
+                    html += '<div style="text-align: center; padding: 0.45rem 0.5rem; font-size: 0.70rem; color: var(--text-secondary); border-top: 1px dashed rgba(255,255,255,0.08); margin-top: 0.25rem;">' +
+                        'Exibindo os primeiros 50 de <strong>' + matches.length + '</strong> pedidos. Digite mais dígitos para refinar.' +
+                        '</div>';
+                }
+            }
+            list.innerHTML = html;
+            return;
+        }
+
+        if (dim === 'nf') {
+            const nfsMap = new Map();
+            candidateItems.forEach(item => {
+                const nfVal = (item.nf || '').toString().trim();
+                if (!nfVal || !isCleanValidNf(nfVal)) return;
+                if (!nfsMap.has(nfVal)) {
+                    const pInfo = getPedidoInfoForNf(nfVal);
+                    nfsMap.set(nfVal, {
+                        nf: nfVal,
+                        ped: pInfo ? pInfo.ped : (item.ped || ''),
+                        pedExt: pInfo ? pInfo.pedExt : (item.pedExt || '')
+                    });
+                }
+            });
+
+            if (!q) {
+                if (selectedSet.size > 0) {
+                    html += '<div style="font-size: 0.70rem; color: #a5b4fc; font-weight: 700; text-transform: uppercase; padding: 4px 6px; letter-spacing: 0.5px;">Selecionadas (' + selectedSet.size + '):</div>';
+                    selectedSet.forEach(val => {
+                        const it = nfsMap.get(val) || { nf: val, ped: '', pedExt: '' };
+                        const pedText = it.ped ? (' (Ped: ' + it.ped + ')') : '';
+                        html += '<label class="ind-cms-option font-mono" style="background: rgba(99, 102, 241, 0.12); border-color: rgba(99, 102, 241, 0.3);">' +
+                            '<input type="checkbox" value="' + escapeHTML(val) + '" checked onchange="onIndCMSCheckboxChange(\'nf\', \'' + escapeHTML(val) + '\', this.checked)">' +
+                            '<span class="ind-cms-option-label" style="color: #ffffff; font-weight: 600;">NF ' + escapeHTML(val) + escapeHTML(pedText) + '</span>' +
+                            '</label>';
+                    });
+                    html += '<div style="text-align: center; padding: 1rem 0.5rem; color: var(--text-secondary); font-size: 0.75rem; border-top: 1px dashed rgba(255,255,255,0.08); margin-top: 0.35rem;">' +
+                        '<i class=\'bx bx-search\' style="font-size: 1.1rem; display: block; margin-bottom: 0.2rem; opacity: 0.5;"></i>' +
+                        'Digite o número da nota fiscal acima para pesquisar mais NFs.' +
+                        '</div>';
+                } else {
+                    html = '<div style="text-align: center; padding: 1.6rem 0.6rem; color: var(--text-secondary); font-size: 0.78rem;">' +
+                        '<i class=\'bx bx-search\' style="font-size: 1.6rem; display: block; margin-bottom: 0.35rem; color: #60a5fa; opacity: 0.8;"></i>' +
+                        'Digite o número da <strong>Nota Fiscal</strong> ou <strong>Pedido</strong> acima para pesquisar.' +
+                        '</div>';
+                }
+                list.innerHTML = html;
+                return;
+            }
+
+            const matches = [];
+            for (const it of nfsMap.values()) {
+                const nfStr = it.nf.toLowerCase();
+                const pedStr = (it.ped || '').toLowerCase();
+                const pedExtStr = (it.pedExt || '').toLowerCase();
+                if (nfStr.includes(q) || pedStr.includes(q) || pedExtStr.includes(q)) {
+                    matches.push(it);
+                }
+            }
+
+            matches.sort((a, b) => b.nf.localeCompare(a.nf));
+
+            if (matches.length === 0) {
+                html = '<div style="text-align: center; padding: 1.4rem 0.5rem; color: var(--text-secondary); font-size: 0.76rem;">' +
+                    '<i class=\'bx bx-info-circle\' style="font-size: 1.3rem; display: block; margin-bottom: 0.25rem; opacity: 0.5;"></i>' +
+                    'Nenhuma NF encontrada para "<strong>' + escapeHTML(q) + '</strong>".' +
+                    '</div>';
+            } else {
+                const limit = 50;
+                const displayed = matches.slice(0, limit);
+                displayed.forEach(it => {
+                    const isChecked = selectedSet.has(it.nf);
+                    const pedTag = it.ped ? (' <span style="color: #94a3b8; font-size: 0.72rem; margin-left: 4px;">(Ped: ' + escapeHTML(it.ped) + ')</span>') : '';
+                    html += '<label class="ind-cms-option font-mono" title="NF ' + escapeHTML(it.nf) + (it.ped ? (' • Pedido: ' + escapeHTML(it.ped)) : '') + '">' +
+                        '<input type="checkbox" value="' + escapeHTML(it.nf) + '" ' + (isChecked ? 'checked' : '') + ' onchange="onIndCMSCheckboxChange(\'nf\', \'' + escapeHTML(it.nf) + '\', this.checked)">' +
+                        '<span class="ind-cms-option-label">NF ' + escapeHTML(it.nf) + pedTag + '</span>' +
+                        '</label>';
+                });
+                if (matches.length > limit) {
+                    html += '<div style="text-align: center; padding: 0.45rem 0.5rem; font-size: 0.70rem; color: var(--text-secondary); border-top: 1px dashed rgba(255,255,255,0.08); margin-top: 0.25rem;">' +
+                        'Exibindo as primeiras 50 de <strong>' + matches.length + '</strong> notas. Digite mais dígitos para refinar.' +
+                        '</div>';
+                }
+            }
+            list.innerHTML = html;
+            return;
+        }
+
+        if (dim === 'ref') {
+            const refsMap = new Map();
+            candidateItems.forEach(item => {
+                const p = (item.p || '').toString().trim();
+                if (!p || p === '-' || p === 'None') return;
+                if (!refsMap.has(p)) {
+                    refsMap.set(p, {
+                        code: p,
+                        desc: (item.desc || '').toString().trim()
+                    });
+                } else if (!refsMap.get(p).desc && item.desc) {
+                    refsMap.get(p).desc = item.desc.toString().trim();
+                }
+            });
+
+            if (!q) {
+                if (selectedSet.size > 0) {
+                    html += '<div style="font-size: 0.70rem; color: #a5b4fc; font-weight: 700; text-transform: uppercase; padding: 4px 6px; letter-spacing: 0.5px;">Selecionadas (' + selectedSet.size + '):</div>';
+                    selectedSet.forEach(val => {
+                        const r = refsMap.get(val) || { code: val, desc: '' };
+                        html += '<label class="ind-cms-option font-mono" style="background: rgba(99, 102, 241, 0.12); border-color: rgba(99, 102, 241, 0.3);">' +
+                            '<input type="checkbox" value="' + escapeHTML(val) + '" checked onchange="onIndCMSCheckboxChange(\'ref\', \'' + escapeHTML(val) + '\', this.checked)">' +
+                            '<span class="ind-cms-option-label" style="display: flex; flex-direction: column; gap: 1px;">' +
+                                '<span style="font-weight: 700; color: #ffffff;">' + escapeHTML(r.code) + '</span>' +
+                                (r.desc ? ('<span style="font-size: 0.70rem; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">' + escapeHTML(r.desc) + '</span>') : '') +
+                            '</span>' +
+                            '</label>';
+                    });
+                    html += '<div style="text-align: center; padding: 1rem 0.5rem; color: var(--text-secondary); font-size: 0.75rem; border-top: 1px dashed rgba(255,255,255,0.08); margin-top: 0.35rem;">' +
+                        '<i class=\'bx bx-search\' style="font-size: 1.1rem; display: block; margin-bottom: 0.2rem; opacity: 0.5;"></i>' +
+                        'Digite o código ou nome do produto acima para buscar e adicionar mais referências.' +
+                        '</div>';
+                } else {
+                    html = '<div style="text-align: center; padding: 1.6rem 0.6rem; color: var(--text-secondary); font-size: 0.78rem;">' +
+                        '<i class=\'bx bx-search\' style="font-size: 1.6rem; display: block; margin-bottom: 0.35rem; color: #60a5fa; opacity: 0.8;"></i>' +
+                        'Digite o <strong>código da referência</strong> ou <strong>descrição</strong> acima para pesquisar.' +
+                        '</div>';
+                }
+                list.innerHTML = html;
+                return;
+            }
+
+            const matches = [];
+            for (const r of refsMap.values()) {
+                const codeStr = r.code.toLowerCase();
+                const descStr = r.desc.toLowerCase();
+                if (codeStr.includes(q) || descStr.includes(q)) {
+                    matches.push(r);
+                }
+            }
+
+            matches.sort((a, b) => a.code.localeCompare(b.code, 'pt-BR'));
+
+            if (matches.length === 0) {
+                html = '<div style="text-align: center; padding: 1.4rem 0.5rem; color: var(--text-secondary); font-size: 0.76rem;">' +
+                    '<i class=\'bx bx-info-circle\' style="font-size: 1.3rem; display: block; margin-bottom: 0.25rem; opacity: 0.5;"></i>' +
+                    'Nenhuma referência encontrada para "<strong>' + escapeHTML(q) + '</strong>".' +
+                    '</div>';
+            } else {
+                const limit = 50;
+                const displayed = matches.slice(0, limit);
+                displayed.forEach(r => {
+                    const isChecked = selectedSet.has(r.code);
+                    const descDisplay = r.desc ? (' - ' + r.desc) : '';
+                    html += '<label class="ind-cms-option font-mono" title="' + escapeHTML(r.code + descDisplay) + '">' +
+                        '<input type="checkbox" value="' + escapeHTML(r.code) + '" ' + (isChecked ? 'checked' : '') + ' onchange="onIndCMSCheckboxChange(\'ref\', \'' + escapeHTML(r.code) + '\', this.checked)">' +
+                        '<span class="ind-cms-option-label" style="display: flex; flex-direction: column; gap: 1px;">' +
+                            '<span style="font-weight: 700; color: #f8fafc;">' + escapeHTML(r.code) + '</span>' +
+                            (r.desc ? ('<span style="font-size: 0.70rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">' + escapeHTML(r.desc) + '</span>') : '') +
+                        '</span>' +
+                        '</label>';
+                });
+                if (matches.length > limit) {
+                    html += '<div style="text-align: center; padding: 0.45rem 0.5rem; font-size: 0.70rem; color: var(--text-secondary); border-top: 1px dashed rgba(255,255,255,0.08); margin-top: 0.25rem;">' +
+                        'Exibindo as primeiras 50 de <strong>' + matches.length + '</strong> referências. Digite mais letras/números para refinar.' +
+                        '</div>';
+                }
+            }
+            list.innerHTML = html;
+            return;
+        }
+    }
+
+    // Popula o filtro de Referências (SKU / Produto) - Sob Demanda
+    function populateRefIndCMS(preserveSelection = false) {
+        if (!preserveSelection) indCMSSelectedSets['ref'].clear();
+        updateIndCMSLabel('ref');
+        const searchInput = document.querySelector('#ind-cms-ref-dropdown .ind-cms-search-input');
+        renderDynamicIndCMSList('ref', searchInput ? searchInput.value : '');
+    }
+
+    // Popula o filtro de Pedidos unindo Pedido Interno e Pedido Externo da NEW ERA - Sob Demanda
+    function populatePedIndCMS(preserveSelection = false) {
+        if (!preserveSelection) indCMSSelectedSets['ped'].clear();
+        updateIndCMSLabel('ped');
+        const searchInput = document.querySelector('#ind-cms-ped-dropdown .ind-cms-search-input');
+        renderDynamicIndCMSList('ped', searchInput ? searchInput.value : '');
+    }
+
+    // Popula o filtro de Nota Fiscal - Sob Demanda
+    function populateNfIndCMS(preserveSelection = false) {
+        if (!preserveSelection) indCMSSelectedSets['nf'].clear();
+        const nfFilterTitle = document.getElementById('ind-filter-nf-label-title');
+        if (nfFilterTitle) {
+            nfFilterTitle.innerHTML = "<i class='bx bx-receipt'></i> Nota Fiscal";
+        }
+        const nfSearchInput = document.querySelector('#ind-cms-nf-dropdown .ind-cms-search-input');
+        if (nfSearchInput) {
+            nfSearchInput.placeholder = 'Pesquisar número de NF ou pedido...';
+        }
+        updateIndCMSLabel('nf');
+        const searchInput = document.querySelector('#ind-cms-nf-dropdown .ind-cms-search-input');
+        renderDynamicIndCMSList('nf', searchInput ? searchInput.value : '');
+    }
+
+
+        window.renderIndicatorsView = function() {
         if (!isIndicatorsModuleInitialized || !billingMasterData || billingMasterData.length === 0) {
             window.initIndicatorsModule();
         }
@@ -1712,7 +2034,7 @@
         }
 
         // Reset demais multi-selects para todos desmarcados (significa TODOS)
-        ['client', 'group', 'group-real', 'class', 'ref', 'nf'].forEach(dim => {
+        ['client', 'group', 'group-real', 'class', 'ref', 'ped', 'nf'].forEach(dim => {
             const list = document.getElementById(`ind-cms-${dim}-list`);
             if (list) {
                 list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
@@ -1722,6 +2044,7 @@
             }
         });
 
+        populatePedIndCMS(false);
         populateNfIndCMS(false);
         applyIndicatorsFilter();
     };
@@ -1830,6 +2153,7 @@
         const selectedGroupReals = getIndCMSSelectedValues('group-real');
         const selectedClasses = getIndCMSSelectedValues('class');
         const selectedRefs = getIndCMSSelectedValues('ref');
+        const selectedPeds = getIndCMSSelectedValues('ped');
         const selectedNFs = getIndCMSSelectedValues('nf');
         const startDateVal = document.getElementById('filter-ind-start-date')?.value || '';
         const endDateVal = document.getElementById('filter-ind-end-date')?.value || '';
@@ -1878,6 +2202,31 @@
 
             const itemRef = (item.p || '').toString().trim();
             if (selectedRefs.length > 0 && !selectedRefs.includes(itemRef)) return false;
+
+            if (selectedPeds.length > 0) {
+                let itemPed = (item.ped || '').toString().trim();
+                let itemPedExt = (item.pedExt || '').toString().trim();
+
+                if (!itemPed && item.nf) {
+                    const pInfo = getPedidoInfoForNf(item.nf);
+                    if (pInfo) {
+                        itemPed = pInfo.ped || '';
+                        itemPedExt = pInfo.pedExt || '';
+                    }
+                }
+                if (itemPed && !itemPedExt) {
+                    itemPedExt = getPedidoExtForPed(itemPed);
+                }
+
+                const matchesPed = selectedPeds.some(sel => {
+                    if (!sel) return false;
+                    const cleanSel = sel.toString().trim();
+                    if (itemPed && (cleanSel === itemPed || cleanSel.replace(/^0+/, '') === itemPed.replace(/^0+/, ''))) return true;
+                    if (itemPedExt && (cleanSel === itemPedExt || cleanSel.replace(/^0+/, '') === itemPedExt.replace(/^0+/, ''))) return true;
+                    return false;
+                });
+                if (!matchesPed) return false;
+            }
 
             const itemNf = (item.nf || '').trim();
             if (selectedNFs.length > 0 && !selectedNFs.includes(itemNf)) return false;
@@ -1973,8 +2322,9 @@
         const selectedClients = getIndCMSSelectedValues('client');
         const selectedGroups = getIndCMSSelectedValues('group');
         const selectedGroupReals = getIndCMSSelectedValues('group-real');
+        const selectedPeds = getIndCMSSelectedValues('ped');
         const selectedNFs = getIndCMSSelectedValues('nf');
-        return (selectedClients.length > 0 || selectedGroups.length > 0 || selectedGroupReals.length > 0 || selectedNFs.length > 0);
+        return (selectedClients.length > 0 || selectedGroups.length > 0 || selectedGroupReals.length > 0 || selectedPeds.length > 0 || selectedNFs.length > 0);
     }
 
     function computeCommercialConditions(items, clientsMap) {
@@ -3482,7 +3832,7 @@
         const isSkuMode = (stdProductGroupMode === 'sku');
         const isExtrato = (currentDatasetType === 'extrato');
 
-        // Atualizar textos dos cabeÃ§alhos conforme dataset
+        // Atualizar textos dos cabeçalhos conforme dataset
         const titleEl = document.getElementById('products-ranking-title-text');
         const subEl = document.getElementById('products-ranking-subtitle');
         if (titleEl) {
@@ -3595,7 +3945,7 @@
                 </div>
             </div>
 
-            <!-- KPI 2: Volume FÃ­sico de Pe\u00E7as -->
+            <!-- KPI 2: Volume Físico de Pe\u00E7as -->
             <div class="kpi-card highlight-amber">
                 <div class="kpi-header">
                     <span class="kpi-title">${isExtrato ? 'Saldo de Pe\u00E7as a Entregar' : 'Volume de Pe\u00E7as Faturadas'}</span>
@@ -3622,7 +3972,7 @@
                 ${heroValHtml}
             </div>
 
-            <!-- KPI 4: Produto LÃ­der em Pe\u00E7as -->
+            <!-- KPI 4: Produto Líder em Pe\u00E7as -->
             <div class="kpi-card highlight-blue">
                 <div class="kpi-header">
                     <span class="kpi-title">${isExtrato ? 'Produto Mais Demandado' : 'Maior Volume em Pe\u00E7as'}</span>
@@ -3636,13 +3986,13 @@
         const totalRevenue = data.reduce((acc, curr) => acc + (curr.v || 0), 0);
         const totalPieces = data.reduce((acc, curr) => acc + (curr.q || 0), 0);
 
-        renderTopClients(data, clientsMap, totalRevenue, totalPieces);
-        renderTopNetworks(data, clientsMap, totalRevenue, totalPieces);
-        renderTopGroups(data, clientsMap, totalRevenue, totalPieces);
-        renderTopProducts(data, totalRevenue, totalPieces);
-        renderTopSubGroups(data, totalRevenue, totalPieces);
-        renderTopClasses(data, totalRevenue, totalPieces);
-        renderTopNFs(data, clientsMap, totalRevenue, totalPieces);
+        try { renderTopClients(data, clientsMap, totalRevenue, totalPieces); } catch (e) { console.error('[Ranking:Clients]', e); }
+        try { renderTopNetworks(data, clientsMap, totalRevenue, totalPieces); } catch (e) { console.error('[Ranking:Networks]', e); }
+        try { renderTopGroups(data, clientsMap, totalRevenue, totalPieces); } catch (e) { console.error('[Ranking:Groups]', e); }
+        try { renderTopProducts(data, totalRevenue, totalPieces); } catch (e) { console.error('[Ranking:Products]', e); }
+        try { renderTopSubGroups(data, totalRevenue, totalPieces); } catch (e) { console.error('[Ranking:SubGroups]', e); }
+        try { renderTopClasses(data, totalRevenue, totalPieces); } catch (e) { console.error('[Ranking:Classes]', e); }
+        try { renderTopNFs(data, clientsMap, totalRevenue, totalPieces); } catch (e) { console.error('[Ranking:NFs]', e); }
     }
 
     // Mapeamento de produtos com variantes conhecidas caso a planilha original não possua coluna COR
@@ -3844,7 +4194,22 @@
         // 1. Tentar encontrar nos registros de faturamento (Nota Fiscal)
         let matched = allRecords.filter(item => {
             const itNf = (getCleanNfNumber(item) || item.nf || '').toString().trim();
-            if (!itNf) return false;
+            if (itNf) {
+                if (itNf === cleanDoc || itNf.replace(/^0+/, '') === cleanDoc.replace(/^0+/, '')) return true;
+                if (cleanDigitsOnly && itNf.replace(/\D/g, '') === cleanDigitsOnly) return true;
+            }
+            const itPed = (item.ped || '').toString().trim();
+            const itPedExt = (item.pedExt || '').toString().trim();
+            if (itPed && (itPed === cleanDoc || itPed.replace(/^0+/, '') === cleanDoc.replace(/^0+/, ''))) return true;
+            if (itPedExt && (itPedExt === cleanDoc || itPedExt.replace(/^0+/, '') === cleanDoc.replace(/^0+/, ''))) return true;
+            if (itNf) {
+                const pInfo = getPedidoInfoForNf(itNf);
+                if (pInfo) {
+                    if (pInfo.ped && (pInfo.ped === cleanDoc || pInfo.ped.replace(/^0+/, '') === cleanDoc.replace(/^0+/, ''))) return true;
+                    if (pInfo.pedExt && (pInfo.pedExt === cleanDoc || pInfo.pedExt.replace(/^0+/, '') === cleanDoc.replace(/^0+/, ''))) return true;
+                }
+            }
+            return false;
             if (itNf === cleanDoc) return true;
             if (itNf.replace(/^0+/, '') === cleanDoc.replace(/^0+/, '')) return true;
             if (cleanDigitsOnly && itNf.replace(/\D/g, '') === cleanDigitsOnly) return true;
@@ -3852,10 +4217,13 @@
         });
 
         let isExtratoDoc = false;
-        // 2. Se nÃ£o achou no faturamento, busca no extrato (Pedido em Carteira)
+        // 2. Se não achou no faturamento, busca no extrato (Pedido em Carteira)
         if (matched.length === 0) {
             matched = extratoRecords.filter(item => {
                 const itDoc = (item.ped || item.pedido || item.nf || '').toString().trim();
+                const itPedExt = (item.pedExt || '').toString().trim();
+                if (itPedExt && (itPedExt === cleanDoc || itPedExt.replace(/^0+/, '') === cleanDoc.replace(/^0+/, ''))) return true;
+                if (cleanDigitsOnly && itPedExt && itPedExt.replace(/\D/g, '') === cleanDigitsOnly) return true;
                 if (!itDoc) return false;
                 if (itDoc === cleanDoc) return true;
                 if (itDoc.replace(/^0+/, '') === cleanDoc.replace(/^0+/, '')) return true;
@@ -3865,7 +4233,7 @@
             if (matched.length > 0) isExtratoDoc = true;
         }
 
-        // 3. Fallback de resiliÃªncia: se nÃ£o achou por cÃ³digo direto mas temos loja e data
+        // 3. Fallback de resiliência: se não achou por código direto mas temos loja e data
         if (matched.length === 0 && (clientName || dateStr)) {
             const clientsMap = (typeof buildClientsMap === 'function') ? buildClientsMap() : {};
             matched = allRecords.filter(item => {
@@ -3916,7 +4284,32 @@
         const firstItem = matched[0];
         const storeName = clientName || (firstItem ? (firstItem.f || firstItem.z || 'Loja') : 'Loja');
         const dateIssued = dateStr || (firstItem ? (firstItem.d || '-') : '-');
-        if (subEl) subEl.innerHTML = `Loja: <strong>${escapeHTML(storeName)}</strong> &bull; Emissão: <strong>${escapeHTML(dateIssued)}</strong>`;
+        let pedBadgesHtml = '';
+        if (isExtratoDoc) {
+            const firstPed = firstItem ? (firstItem.ped || cleanDoc) : cleanDoc;
+            let firstPedExt = firstItem ? (firstItem.pedExt || '') : '';
+            if (!firstPedExt && firstPed) firstPedExt = getPedidoExtForPed(firstPed);
+
+            pedBadgesHtml = `Pedido: <strong style="color: #60a5fa;">${escapeHTML(firstPed)}</strong>`;
+            if (firstPedExt) {
+                pedBadgesHtml += ` &bull; Pedido Externo: <strong style="color: #a5b4fc;">${escapeHTML(firstPedExt)}</strong>`;
+            }
+        } else {
+            const pInfo = getPedidoInfoForNf(cleanDoc);
+            const pedVal = pInfo ? pInfo.ped : (firstItem && firstItem.ped ? firstItem.ped : '');
+            let pedExtVal = pInfo ? pInfo.pedExt : (firstItem && firstItem.pedExt ? firstItem.pedExt : '');
+            if (!pedExtVal && pedVal) pedExtVal = getPedidoExtForPed(pedVal);
+
+            pedBadgesHtml = `NF: <strong style="color: #34d399;">${escapeHTML(cleanDoc)}</strong>`;
+            if (pedVal) {
+                pedBadgesHtml += ` &bull; Pedido: <strong style="color: #60a5fa;">${escapeHTML(pedVal)}</strong>`;
+            }
+            if (pedExtVal) {
+                pedBadgesHtml += ` &bull; Pedido Externo: <strong style="color: #a5b4fc;">${escapeHTML(pedExtVal)}</strong>`;
+            }
+        }
+
+        if (subEl) subEl.innerHTML = `${pedBadgesHtml} &bull; Loja: <strong>${escapeHTML(storeName)}</strong> &bull; Emissão: <strong>${escapeHTML(dateIssued)}</strong>`;
 
         if (matched.length === 0) {
             tbodyEl.innerHTML = `
@@ -4335,6 +4728,7 @@
             if (parts.length > 0) {
                 badges.push(`<span style="color: #94a3b8; font-size: 0.74rem;">${escapeHTML(parts.join(' \u2022 '))}</span>`);
             }
+
             if (it.prazo) {
                 badges.push(`<span class="badge-prazo" style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class='bx bx-time'></i> Prazo: ${escapeHTML(it.prazo)}</span>`);
             }
@@ -4528,7 +4922,22 @@
                     ? (clientMatch['FANTASIA'] || clientMatch['NOME FANTASIA']) 
                     : (item.f || item.z || 'Cliente');
 
+                let itPed = (item.ped || '').toString().trim();
+                let itPedExt = (item.pedExt || '').toString().trim();
+                if (!itPed && nfNum) {
+                    const pInfo = getPedidoInfoForNf(nfNum);
+                    if (pInfo) {
+                        itPed = pInfo.ped || '';
+                        itPedExt = pInfo.pedExt || '';
+                    }
+                }
+                if (itPed && !itPedExt) {
+                    itPedExt = getPedidoExtForPed(itPed);
+                }
+
                 nfTotals[key] = {
+                    ped: itPed,
+                    pedExt: itPedExt,
                     name: nfNum ? (prefixName + nfNum) : (isExtrato ? 'Pedido s/ Número' : 'NF s/ Número'),
                     rawNf: nfNum,
                     date: item.d || '-',
@@ -4569,6 +4978,16 @@
             const badges = [];
             if (parts.length > 0) {
                 badges.push('<span style="color: #94a3b8; font-size: 0.74rem;">' + escapeHTML(parts.join(' \u2022 ')) + '</span>');
+            }
+            if (isExtrato) {
+                if (it.pedExt) {
+                    badges.push('<span class="badge-ped-ext" title="Pedido Externo: ' + escapeHTML(it.pedExt) + '"><i class=\'bx bx-link-external\'></i> Ext: ' + escapeHTML(it.pedExt) + '</span>');
+                }
+            } else {
+                if (it.ped) {
+                    const extLabel = it.pedExt ? (' &bull; Ext: ' + escapeHTML(it.pedExt)) : '';
+                    badges.push('<span class="badge-ped-link" title="Pedido Interno: ' + escapeHTML(it.ped) + (it.pedExt ? ' | Pedido Externo: ' + escapeHTML(it.pedExt) : '') + '"><i class=\'bx bx-purchase-tag\'></i> Ped: ' + escapeHTML(it.ped) + extLabel + '</span>');
+                }
             }
             if (it.prazo) {
                 badges.push('<span class="badge-prazo" style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;"><i class=\'bx bx-time\'></i> Prazo: ' + escapeHTML(it.prazo) + '</span>');
@@ -4812,13 +5231,13 @@
                 // Sub-grupo: aceita 'grupo produto' ou 'sub-grupo'
                 const kSub = findKey('grupo produto') || findKey('grupo de produto') || findKey('sub-grupo') || findKey('subgrupo') || findKey('sub grupo');
                 const kClasse = findKey('classe produto') || findKey('classe') || findKey('divis');
-                const kPrazo = findKey('condiÃ§Ã£o de pgto') || findKey('condicao de pgto') || findKey('condiÃ§Ã£o') || findKey('condicao') || findKey('pgto') || findKey('prazo') || findKey('pagamento');
+                const kPrazo = findKey('condição de pgto') || findKey('condicao de pgto') || findKey('condição') || findKey('condicao') || findKey('pgto') || findKey('prazo') || findKey('pagamento');
                 const kDesconto = findKey('% desconto') || findKey('desconto item') || findKey('desconto');
                 const kQtdeCanc = findKey('qtde cancelada') || findKey('qtd cancelada') || findKey('cancelada');
                 const kValCanc = findKey('valor cancelado') || findKey('val cancelado');
                 const kQtdeEmb = findKey('qtde embalado') || findKey('qtd embalado') || findKey('embalado');
                 const kValEmb = findKey('valor embalado') || findKey('val embalado');
-                const kCorNome = findKey('nome cor') || findKey('descriÃ§Ã£o cor') || findKey('descricao cor') || findKey('cor desc');
+                const kCorNome = findKey('nome cor') || findKey('descrição cor') || findKey('descricao cor') || findKey('cor desc');
 
                 const parsed = [];
                 rawJson.forEach(row => {
@@ -6284,7 +6703,7 @@
         const tbody = document.getElementById('comp-tbody-cnpj');
         if (!tbody) return;
 
-        // Sincronizar select de ordenÃ£o
+        // Sincronizar select de ordenão
         const sortSelect = document.getElementById('comp-sort-select');
         if (sortSelect) {
             if (compCnpjSortCol === 'totalV' && compCnpjSortDir === 'desc') sortSelect.value = 'total_desc';
@@ -6312,7 +6731,7 @@
 
         let filtered = [...currentCompCnpjList];
 
-        // Comparador de ordenÃ£o dinâmico
+        // Comparador de ordenão dinâmico
         const compareItems = (a, b) => {
             let res = 0;
             if (['cnpj', 'fantasia', 'rede'].includes(compCnpjSortCol)) {
@@ -6528,9 +6947,17 @@
                 statusBadge = `<span class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 1px 5px; border-radius: 3px; font-size: 0.68rem;">A Entregar</span>`;
             }
 
+            const pInfo = !isExtrato ? getPedidoInfoForNf(docNum) : null;
+            const pedDisplay = isExtrato 
+                ? (it.pedExt ? `<span style="font-size:0.68rem; color:#818cf8; display:block;">Ext: ${escapeHTML(it.pedExt)}</span>` : '')
+                : (pInfo && pInfo.ped ? `<span style="font-size:0.68rem; color:#818cf8; display:block;" title="Pedido: ${pInfo.ped}${pInfo.pedExt ? ' | Ext: ' + pInfo.pedExt : ''}">Ped: ${pInfo.ped}${pInfo.pedExt ? ' (Ext: ' + pInfo.pedExt + ')' : ''}</span>` : '');
+
             const docCell = docNum ? `
                 <span class="nf-cell-link" onclick="openNfItemsModal('${escapeHTML(docNum)}', '${escapeHTML(it.f || it.z || '')}', '${escapeHTML(dateStr)}')" title="Clique para abrir detalhamento da NF com fotos, referências, quantidades e valores">
                     <i class='bx bx-receipt'></i> ${escapeHTML(docNum)}
+                </span>
+                ${pedDisplay}
+                <span style="display:none;">
                 </span>
             ` : '-';
 
@@ -6688,7 +7115,7 @@
         tbody.innerHTML = html;
     }
 
-    // OrdenÃ£o e Agrupamento da Tabela por Data
+    // Ordenão e Agrupamento da Tabela por Data
     window.sortCompDateTable = function(col) {
         if (compDateSortCol === col) {
             compDateSortDir = (compDateSortDir === 'desc') ? 'asc' : 'desc';
@@ -7205,7 +7632,7 @@
         const badge = document.getElementById('comp-product-summary-badge');
         if (!tbody) return;
 
-        // Atualizar headers visuais de ordenÃ£o
+        // Atualizar headers visuais de ordenão
         document.querySelectorAll('#comp-table-product th.sortable').forEach(th => {
             th.classList.remove('active-sort');
             const icon = th.querySelector('.th-sort-icon i');
@@ -7518,6 +7945,10 @@
                 sorted.forEach((item, idx) => {
                     const pos = idx + 1;
                     const posBadgeClass = pos === 1 ? 'pos-1' : (pos === 2 ? 'pos-2' : (pos === 3 ? 'pos-3' : 'pos-other'));
+                    const pInfo = getPedidoInfoForNf(item.rawNf || item.name);
+                    const pedBadge = (pInfo && pInfo.ped) 
+                        ? `<span class="badge-ped-link" style="margin-left: 6px;"><i class='bx bx-purchase-tag'></i> Ped: ${escapeHTML(pInfo.ped)}${pInfo.pedExt ? ' (Ext: ' + escapeHTML(pInfo.pedExt) + ')' : ''}</span>`
+                        : '';
                     const urls = getProductImageUrls(item.code, item.cor);
                     const thumbHtml = urls.primaryUrl ? `
                         <div class="ranking-product-thumb-container" onclick="openProductImageModal('${escapeHTML(item.code)}', '${escapeHTML(item.cor || '')}', '${escapeHTML(item.desc)}')" title="Clique para ampliar foto">
@@ -7747,6 +8178,10 @@
                 allOrders.forEach((item, idx) => {
                     const pos = idx + 1;
                     const posBadgeClass = pos === 1 ? 'pos-1' : (pos === 2 ? 'pos-2' : (pos === 3 ? 'pos-3' : 'pos-other'));
+                    const pInfo = getPedidoInfoForNf(item.rawNf || item.name);
+                    const pedBadge = (pInfo && pInfo.ped) 
+                        ? `<span class="badge-ped-link" style="margin-left: 6px;"><i class='bx bx-purchase-tag'></i> Ped: ${escapeHTML(pInfo.ped)}${pInfo.pedExt ? ' (Ext: ' + escapeHTML(pInfo.pedExt) + ')' : ''}</span>`
+                        : '';
                     html += `
                         <div class="ranking-row-item nf-clickable" onclick="openNfItemsModal('${escapeHTML(item.rawNf || item.name)}', '${escapeHTML(item.client)}', '${escapeHTML(item.date)}')" title="Clique para ver os produtos, fotos, quantidades e valores desta nota fiscal">
                             <div class="ranking-row-top">
@@ -7754,7 +8189,7 @@
                                     <span class="ranking-pos-badge ${posBadgeClass}">${pos}º</span>
                                     <div class="ranking-item-info">
                                         <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                            <span class="ranking-item-name" style="color: #60a5fa; cursor: pointer;"><i class='bx bx-receipt' style="font-size:0.95em; vertical-align:middle; margin-right:2px;"></i>${escapeHTML(item.name)}</span>
+                                            <span class="ranking-item-name" style="color: #60a5fa; cursor: pointer;"><i class='bx bx-receipt' style="font-size:0.95em; vertical-align:middle; margin-right:2px;"></i>${escapeHTML(item.name)}</span>${pedBadge}
                                         </div>
                                         <span class="ranking-item-sub">${escapeHTML(item.date)} &bull; ${escapeHTML(item.client)}</span>
                                     </div>
@@ -7986,7 +8421,7 @@
         if (!bData) bData = lastCompFilteredBilling || [];
         if (!eData) eData = lastCompFilteredExtrato || [];
 
-        // 1. Mapear todas as NFs histÃ³ricas do faturamento bruto para identificar a data mÃ¡xima por CNPJ, CLI e Fantasia
+        // 1. Mapear todas as NFs históricas do faturamento bruto para identificar a data máxima por CNPJ, CLI e Fantasia
         const rawBilling = getBillingData();
         const histLatestBillingMap = new Map();
         rawBilling.forEach(it => {
@@ -8239,7 +8674,7 @@
             return true;
         });
 
-        // OrdenÃ£o
+        // Ordenão
         filtered.sort((a, b) => {
             let res = 0;
             if (compAgingSortCol === 'days') {
@@ -8570,6 +9005,14 @@
                         ${isCleanValidNf(row.latestNf) ? `
                             <span class="nf-cell-link" onclick="openNfItemsModal('${escapeHTML(row.latestNf)}', '${escapeHTML(row.fantasia || row.razao || '')}', '${escapeHTML(row.latestDateStr || '')}')" title="Clique para ver os produtos da NF ${escapeHTML(row.latestNf)}">
                                 <i class='bx bx-receipt'></i> ${escapeHTML(row.latestNf)}
+                            </span>
+                            ${(() => {
+                                const pInfo = getPedidoInfoForNf(row.latestNf);
+                                if (!pInfo || !pInfo.ped) return '';
+                                const extText = pInfo.pedExt ? (' (Ext: ' + pInfo.pedExt + ')') : '';
+                                return `<div style="font-size:0.68rem; color:#818cf8; margin-top:2px;" title="Pedido: ${escapeHTML(pInfo.ped)}${escapeHTML(extText)}">Ped: ${escapeHTML(pInfo.ped)}</div>`;
+                            })()}
+                            <span style="display:none;">
                             </span>
                         ` : '<span style="color: var(--text-secondary);">-</span>'}
                     </td>
