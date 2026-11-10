@@ -1187,34 +1187,7 @@
 
                 <!-- CARDS DE INDICADORES PRINCIPAIS (KPIS - EDITÁVEIS COM DRAG & DROP) -->
                 <div class="indicators-kpis-grid">
-                    <!-- KPI 1: Booking Total / Faturamento Total / Faturamento Realizado -->
-                    <div class="kpi-card highlight-emerald" id="kpi-card-total">
-                        <div class="kpi-header">
-                            <span class="kpi-title" id="kpi-total-title">Faturamento Total</span>
-                            <div class="kpi-icon-badge" id="kpi-total-icon"><i class='bx bx-dollar-circle'></i></div>
-                        </div>
-                        <div class="kpi-value-container">
-                            <div class="kpi-value" id="kpi-total-revenue">R$ 0,00</div>
-                            <div class="kpi-sub-badge" id="kpi-total-sub" style="display: none;"></div>
-                        </div>
-                        <div class="kpi-footer">
-                            <span id="kpi-total-orders">0 pedidos faturados</span>
-                        </div>
-                    </div>
-
-                    <!-- KPI 2: Peças a Entregar / A Entregar (Carteira) -->
-                    <div class="kpi-card highlight-blue" id="kpi-card-pieces">
-                        <div class="kpi-header">
-                            <span class="kpi-title" id="kpi-pieces-title">Peças a Entregar</span>
-                            <div class="kpi-icon-badge"><i class='bx bx-package'></i></div>
-                        </div>
-                        <div class="kpi-value-container"><div class="kpi-value font-mono" id="kpi-total-pieces-val">R$ 0,00</div><div class="kpi-sub-badge" id="kpi-pieces-sub" style="display: none;"></div></div>
-                        <div class="kpi-footer">
-                            <span id="kpi-pieces-footer">volume total programado</span>
-                        </div>
-                    </div>
-
-                    <!-- KPI 3: Pedidos em Carteira / Total Geral Previsto -->
+                    <!-- KPI 1: Total Planejado / Pedidos em Carteira -->
                     <div class="kpi-card highlight-amber" id="kpi-card-orders">
                         <div class="kpi-header">
                             <span class="kpi-title" id="kpi-orders-title">Total Planejado</span>
@@ -1229,91 +1202,34 @@
                         </div>
                     </div>
 
-                    <!-- KPI 4 (Solicitado logo após TOTAL GERAL PREVISTO): % Realizado vs Carteira / Ticket Médio -->
-                    <div class="kpi-card" id="kpi-card-ticket">
+                    <!-- KPI 2: Booking Total / Faturamento Total / Faturamento Realizado -->
+                    <div class="kpi-card highlight-emerald" id="kpi-card-total">
                         <div class="kpi-header">
-                            <span class="kpi-title" id="kpi-ticket-title">Ticket Médio</span>
-                            <div class="kpi-icon-badge" id="kpi-ticket-icon"><i class='bx bx-receipt'></i></div>
+                            <span class="kpi-title" id="kpi-total-title">Faturamento Total</span>
+                            <div class="kpi-icon-badge" id="kpi-total-icon"><i class='bx bx-dollar-circle'></i></div>
                         </div>
                         <div class="kpi-value-container">
-                            <div class="kpi-value font-mono" id="kpi-avg-ticket">R$ 0,00</div>
-                            <div class="kpi-sub-badge" id="kpi-ticket-sub" style="display: none;"></div>
+                            <div class="kpi-value" id="kpi-total-revenue">R$ 0,00</div>
+                            <div class="kpi-sub-badge" id="kpi-total-sub" style="display: none;"></div>
                         </div>
                         <div class="kpi-footer">
-                            <span id="kpi-ticket-footer">por cliente</span>
+                            <span id="kpi-total-orders">0 pedidos faturados</span>
                         </div>
                     </div>
 
-                    <!-- KPI 5: Clientes Faturados / Clientes Booking / Lojas Faturadas -->
-                    <div class="kpi-card" id="kpi-card-clients">
+                    <!-- KPI 3: Peças a Entregar / A Entregar (Carteira) -->
+                    <div class="kpi-card highlight-blue" id="kpi-card-pieces">
                         <div class="kpi-header">
-                            <span class="kpi-title" id="kpi-clients-title">Clientes Faturados</span>
-                            <div class="kpi-icon-badge"><i class='bx bx-store-alt'></i></div>
+                            <span class="kpi-title" id="kpi-pieces-title">Peças a Entregar</span>
+                            <div class="kpi-icon-badge"><i class='bx bx-package'></i></div>
                         </div>
-                        <div class="kpi-value font-mono" id="kpi-active-clients">0</div>
+                        <div class="kpi-value-container"><div class="kpi-value font-mono" id="kpi-total-pieces-val">R$ 0,00</div><div class="kpi-sub-badge" id="kpi-pieces-sub" style="display: none;"></div></div>
                         <div class="kpi-footer">
-                            <span id="kpi-clients-coverage">lojas com compras ativas</span>
+                            <span id="kpi-pieces-footer">volume total programado</span>
                         </div>
                     </div>
 
-                    <!-- KPI 6: Redes / Grupos / Lojas em Carteira -->
-                    <div class="kpi-card" id="kpi-card-groups">
-                        <div class="kpi-header">
-                            <span class="kpi-title" id="kpi-groups-title">Redes / Grupos</span>
-                            <div class="kpi-icon-badge"><i class='bx bx-sitemap'></i></div>
-                        </div>
-                        <div class="kpi-value font-mono" id="kpi-active-groups">0</div>
-                        <div class="kpi-footer">
-                            <span id="kpi-groups-coverage">redes corporativas</span>
-                        </div>
-                    </div>
-
-                    <!-- KPI 7: Dias sem Faturamento -->
-                    <div class="kpi-card" id="kpi-card-days-no-billing">
-                        <div class="kpi-header">
-                            <span class="kpi-title" id="kpi-days-no-billing-title">Dias sem Faturamento</span>
-                            <div class="kpi-icon-badge" id="kpi-days-no-billing-icon"><i class='bx bx-time-five'></i></div>
-                        </div>
-                        <div class="kpi-value-container">
-                            <div class="kpi-value font-mono" id="kpi-days-no-billing-val">0 dias</div>
-                            <div class="kpi-sub-badge" id="kpi-days-no-billing-sub" style="display: none;"></div>
-                        </div>
-                        <div class="kpi-footer">
-                            <span id="kpi-days-no-billing-footer">última NF emitida</span>
-                        </div>
-                    </div>
-
-                    <!-- KPI 8: Cobertura de Carteira -->
-                    <div class="kpi-card" id="kpi-card-coverage">
-                        <div class="kpi-header">
-                            <span class="kpi-title" id="kpi-coverage-title">Cobertura de Carteira</span>
-                            <div class="kpi-icon-badge" id="kpi-coverage-icon"><i class='bx bx-pie-chart-alt-2'></i></div>
-                        </div>
-                        <div class="kpi-value-container">
-                            <div class="kpi-value font-mono" id="kpi-coverage-val">0,0%</div>
-                            <div class="kpi-sub-badge" id="kpi-coverage-sub" style="display: none;"></div>
-                        </div>
-                        <div class="kpi-footer">
-                            <span id="kpi-coverage-footer">da base de clientes positivada</span>
-                        </div>
-                    </div>
-
-                    <!-- KPI 9: Embalado (Pronto para Faturar) -->
-                    <div class="kpi-card highlight-cyan" id="kpi-card-packaged" style="display: none;">
-                        <div class="kpi-header">
-                            <span class="kpi-title" id="kpi-packaged-title">Embalado (Pronto p/ Faturar)</span>
-                            <div class="kpi-icon-badge" id="kpi-packaged-icon"><i class='bx bx-check-shield'></i></div>
-                        </div>
-                        <div class="kpi-value-container">
-                            <div class="kpi-value font-mono" id="kpi-packaged-val">R$ 0,00</div>
-                            <div class="kpi-sub-badge" id="kpi-packaged-sub" style="display: none;"></div>
-                        </div>
-                        <div class="kpi-footer">
-                            <span id="kpi-packaged-footer">pronto para expedição</span>
-                        </div>
-                    </div>
-
-                    <!-- KPI 10: Pedidos Cancelados -->
+                    <!-- KPI 4: Pedidos Cancelados -->
                     <div class="kpi-card highlight-red" id="kpi-card-canceled" style="display: none;">
                         <div class="kpi-header">
                             <span class="kpi-title" id="kpi-canceled-title">Pedidos Cancelados</span>
@@ -1328,7 +1244,37 @@
                         </div>
                     </div>
 
-                    <!-- KPI 11: Prazo & Desconto (Condição Comercial) -->
+                    <!-- KPI 5: Embalado (Pronto para Faturar) -->
+                    <div class="kpi-card highlight-cyan" id="kpi-card-packaged" style="display: none;">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-packaged-title">Embalado (Pronto p/ Faturar)</span>
+                            <div class="kpi-icon-badge" id="kpi-packaged-icon"><i class='bx bx-check-shield'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value font-mono" id="kpi-packaged-val">R$ 0,00</div>
+                            <div class="kpi-sub-badge" id="kpi-packaged-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-packaged-footer">pronto para expedição</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 6: % Realizado vs Carteira / Ticket Médio -->
+                    <div class="kpi-card" id="kpi-card-ticket">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-ticket-title">Ticket Médio</span>
+                            <div class="kpi-icon-badge" id="kpi-ticket-icon"><i class='bx bx-receipt'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value font-mono" id="kpi-avg-ticket">R$ 0,00</div>
+                            <div class="kpi-sub-badge" id="kpi-ticket-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-ticket-footer">por cliente</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 7: Prazo & Desconto (Condição Comercial) -->
                     <div class="kpi-card highlight-indigo" id="kpi-card-commercial" style="display: none;">
                         <div class="kpi-header">
                             <span class="kpi-title" id="kpi-commercial-title">Prazo & Desconto</span>
@@ -1342,6 +1288,62 @@
                             <span id="kpi-commercial-footer">condição de pagamento</span>
                         </div>
                     </div>
+
+                    <!-- KPI 8: Clientes Faturados / Clientes Booking / Lojas Faturadas -->
+                    <div class="kpi-card" id="kpi-card-clients">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-clients-title">Clientes Faturados</span>
+                            <div class="kpi-icon-badge"><i class='bx bx-store-alt'></i></div>
+                        </div>
+                        <div class="kpi-value font-mono" id="kpi-active-clients">0</div>
+                        <div class="kpi-footer">
+                            <span id="kpi-clients-coverage">lojas com compras ativas</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 9: Redes / Grupos / Lojas em Carteira -->
+                    <div class="kpi-card" id="kpi-card-groups">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-groups-title">Redes / Grupos</span>
+                            <div class="kpi-icon-badge"><i class='bx bx-sitemap'></i></div>
+                        </div>
+                        <div class="kpi-value font-mono" id="kpi-active-groups">0</div>
+                        <div class="kpi-footer">
+                            <span id="kpi-groups-coverage">redes corporativas</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 10: Dias sem Faturamento -->
+                    <div class="kpi-card" id="kpi-card-days-no-billing">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-days-no-billing-title">Dias sem Faturamento</span>
+                            <div class="kpi-icon-badge" id="kpi-days-no-billing-icon"><i class='bx bx-time-five'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value font-mono" id="kpi-days-no-billing-val">0 dias</div>
+                            <div class="kpi-sub-badge" id="kpi-days-no-billing-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-days-no-billing-footer">última NF emitida</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 11: Cobertura de Carteira -->
+                    <div class="kpi-card" id="kpi-card-coverage">
+                        <div class="kpi-header">
+                            <span class="kpi-title" id="kpi-coverage-title">Cobertura de Carteira</span>
+                            <div class="kpi-icon-badge" id="kpi-coverage-icon"><i class='bx bx-pie-chart-alt-2'></i></div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value font-mono" id="kpi-coverage-val">0,0%</div>
+                            <div class="kpi-sub-badge" id="kpi-coverage-sub" style="display: none;"></div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span id="kpi-coverage-footer">da base de clientes positivada</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI 12: Faturamento no Mês (Faturamento) -->
                     <div class="kpi-card highlight-emerald" id="kpi-card-month" style="display: none;">
                         <div class="kpi-header">
                             <span class="kpi-title" id="kpi-month-title">Faturamento no Mês</span>
@@ -1356,7 +1358,7 @@
                         </div>
                     </div>
 
-                    <!-- KPI Suplementar (Modo Faturamento apenas): Faturamento do Dia -->
+                    <!-- KPI 13: Faturamento do Dia (Faturamento) -->
                     <div class="kpi-card highlight-amber" id="kpi-card-day" style="display: none;">
                         <div class="kpi-header">
                             <span class="kpi-title" id="kpi-day-title">Faturamento do Dia</span>
@@ -2250,6 +2252,50 @@
 </main>
     </div>
 
+    <!-- Modal: Condições Comerciais do Grupo / Lojas -->
+    <div id="modal-commercial-terms" class="modal-overlay hidden" style="z-index: 10001;" onclick="if(event.target === this) window.closeCommercialTermsModal()">
+        <div class="modal-content" style="max-width: 860px; width: 92%; max-height: 88vh;">
+            <div class="modal-header">
+                <div>
+                    <h2 style="font-size: 1.25rem; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                        <i class='bx bx-credit-card' style="color: #6366f1;"></i> Condi&ccedil;&otilde;es Comerciais por Loja
+                    </h2>
+                    <span id="modal-comm-terms-subtitle" style="color: var(--text-secondary); font-size: 0.82rem; margin-top: 2px; display: block;">
+                        Detalhamento de prazo e desconto cadastrados por CNPJ
+                    </span>
+                </div>
+                <button type="button" class="close-modal-btn" onclick="window.closeCommercialTermsModal()" title="Fechar"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body" style="padding: 1.25rem; overflow-y: auto;">
+                <!-- Resumo Rápido em Cards / Badges -->
+                <div id="modal-comm-terms-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem;">
+                    <!-- Preenchido dinamicamente via JS -->
+                </div>
+
+                <!-- Tabela com as lojas -->
+                <div class="comp-table-wrapper custom-scrollbar" style="border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; overflow-x: auto;">
+                    <table class="comp-table" style="width: 100%; font-size: 0.82rem;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left; padding: 10px 12px;">Loja / Fantasia</th>
+                                <th style="text-align: left; padding: 10px 12px;">Raz&atilde;o Social / CNPJ</th>
+                                <th style="text-align: center; padding: 10px 12px;">Prazo</th>
+                                <th style="text-align: right; padding: 10px 12px;">Desconto M&eacute;dio</th>
+                                <th style="text-align: right; padding: 10px 12px;">Lan&ccedil;amentos</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-comm-terms-tbody">
+                            <!-- Linhas geradas dinamicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; padding: 0.85rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.08);">
+                <button type="button" class="btn-indicators-secondary" onclick="window.closeCommercialTermsModal()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Nova Tarefa -->
     <div id="task-modal" class="modal-overlay hidden">
         <div class="modal-content">
@@ -2948,7 +2994,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js?v=28"></script>
-    <script src="indicators.js?v=129" charset="UTF-8"></script>
+    <script src="indicators.js?v=132" charset="UTF-8"></script>
     <script src="dashboard.js?v=1" charset="UTF-8"></script>
     <script src="app.js?v=85"></script>
 </body>

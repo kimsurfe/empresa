@@ -582,8 +582,8 @@
         }
     }
 
-        // --------------------------------------------------------------------------
-    // não ENTRE SUB-ABAS DOS INDICADORES
+    // --------------------------------------------------------------------------
+    // NAVEGAÇÃO ENTRE SUB-ABAS DOS INDICADORES
     // --------------------------------------------------------------------------
     window.switchIndicatorsSubTab = function(tabKey) {
         const validTabs = ['overview', 'confronto', 'recorrencia', 'produtos', 'auditoria'];
@@ -632,6 +632,19 @@
             } else {
                 stdProdSec.style.display = 'block';
                 compProdSec.style.display = 'none';
+            }
+        }
+
+        // Se abriu a sub-aba de Confronto, assegurar renderização imediata com os dados filtrados
+        if (tabKey === 'confronto') {
+            if (currentCompSubTab === 'cnpj') {
+                if (typeof renderCompCnpjTable === 'function') renderCompCnpjTable();
+            } else if (currentCompSubTab === 'month') {
+                if (typeof renderCompMonthTable === 'function') renderCompMonthTable();
+            } else if (currentCompSubTab === 'date') {
+                if (typeof renderCompDateTable === 'function') renderCompDateTable();
+            } else if (currentCompSubTab === 'product') {
+                if (typeof renderCompProductTable === 'function') renderCompProductTable();
             }
         }
 
@@ -713,20 +726,20 @@
         }
 
         computeLatestReportDate();
-        const def = getDefaultPeriod();
+
+        // Preservar datas já definidas pelo usuário caso existam
         const startInput = document.getElementById('filter-ind-start-date');
         const endInput = document.getElementById('filter-ind-end-date');
-        if (startInput) startInput.value = def.start;
-        if (endInput) endInput.value = def.end;
-
-        const semList = document.getElementById('ind-cms-semester-list');
-        if (semList) {
-            semList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                cb.checked = true;
-            });
-            updateIndCMSLabel('semester');
+        if (startInput && !startInput.value) {
+            const def = getDefaultPeriod();
+            startInput.value = def.start;
+        }
+        if (endInput && !endInput.value) {
+            const def = getDefaultPeriod();
+            endInput.value = def.end;
         }
 
+        // Popula as opções preservando rigorosamente as escolhas do usuário
         populateAllIndCMS(false);
         applyIndicatorsFilter();
     };
@@ -878,7 +891,15 @@
         let savedOrder = null;
         try {
             const raw = localStorage.getItem('empresa_indicators_kpi_order');
-            if (raw) savedOrder = JSON.parse(raw);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                // Se for a ordem incorreta anterior que começava com kpi-card-total ou sem kpi-card-orders/commercial, limpa e restaura o padrão Saldo X Faturamento
+                if (Array.isArray(parsed) && (parsed[0] === 'kpi-card-total' || !parsed.includes('kpi-card-orders') || !parsed.includes('kpi-card-commercial'))) {
+                    localStorage.removeItem('empresa_indicators_kpi_order');
+                } else if (Array.isArray(parsed) && parsed.length > 0) {
+                    savedOrder = parsed;
+                }
+            }
         } catch(e) {}
 
         const order = (Array.isArray(savedOrder) && savedOrder.length > 0) ? [...savedOrder] : [...DEFAULT_KPI_ORDER];
@@ -900,7 +921,7 @@
         localStorage.removeItem('empresa_indicators_kpi_order');
         window.applyKpiCardsOrder();
         if (window.showNotification) {
-            window.showNotification('Posição dos cards restaurada para o padrão!', 'info');
+            window.showNotification('Posição dos cards restaurada para o padrão original!', 'info');
         }
     };
 
@@ -1458,6 +1479,13 @@
         const def = getDefaultPeriod();
         const clientsMap = buildClientsMap();
 
+        // Capturar seleções ativas para preservá-las na recarga dos itens
+        const prevSelectedYears = getIndCMSSelectedValues('year');
+        const prevSelectedClients = getIndCMSSelectedValues('client');
+        const prevSelectedGroups = getIndCMSSelectedValues('group');
+        const prevSelectedGroupReals = getIndCMSSelectedValues('group-real');
+        const prevSelectedClasses = getIndCMSSelectedValues('class');
+
         // 1. ANOS
         const yearList = document.getElementById('ind-cms-year-list');
         if (yearList) {
@@ -1473,7 +1501,7 @@
             availableYears = Array.from(yearsSet).sort().reverse();
             let yearHtml = '';
             availableYears.forEach(y => {
-                const isChecked = isInitial ? (y === def.curYear) : false;
+                const isChecked = isInitial ? (y === def.curYear) : prevSelectedYears.includes(y);
                 yearHtml += `
                     <label class="ind-cms-option">
                         <input type="checkbox" value="${y}" ${isChecked ? 'checked' : ''} onchange="onIndCMSCheckboxChange('year')">
@@ -1553,9 +1581,10 @@
             let clientHtml = '';
             sortedClients.forEach(c => {
                 const cnpjsStr = Array.from(c.cnpjs).join(' ');
+                const isChecked = !isInitial && prevSelectedClients.includes(c.name);
                 clientHtml += `
                     <label class="ind-cms-option" title="${escapeHTML(c.name)}" data-cnpjs="${escapeHTML(cnpjsStr)}">
-                        <input type="checkbox" value="${escapeHTML(c.name)}" onchange="onIndCMSCheckboxChange('client')">
+                        <input type="checkbox" value="${escapeHTML(c.name)}" ${isChecked ? 'checked' : ''} onchange="onIndCMSCheckboxChange('client')">
                         <span class="ind-cms-option-label">${escapeHTML(c.name)}</span>
                     </label>
                 `;
@@ -1576,9 +1605,10 @@
             const sortedGroups = Array.from(groupsSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
             let groupHtml = '';
             sortedGroups.forEach(g => {
+                const isChecked = !isInitial && prevSelectedGroups.includes(g);
                 groupHtml += `
                     <label class="ind-cms-option" title="${escapeHTML(g)}">
-                        <input type="checkbox" value="${escapeHTML(g)}" onchange="onIndCMSCheckboxChange('group')">
+                        <input type="checkbox" value="${escapeHTML(g)}" ${isChecked ? 'checked' : ''} onchange="onIndCMSCheckboxChange('group')">
                         <span class="ind-cms-option-label">${escapeHTML(g)}</span>
                     </label>
                 `;
@@ -1601,9 +1631,10 @@
             const sortedGroupReals = Array.from(groupRealsSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
             let groupRealHtml = '';
             sortedGroupReals.forEach(gr => {
+                const isChecked = !isInitial && prevSelectedGroupReals.includes(gr);
                 groupRealHtml += `
                     <label class="ind-cms-option" title="${escapeHTML(gr)}">
-                        <input type="checkbox" value="${escapeHTML(gr)}" onchange="onIndCMSCheckboxChange('group-real')">
+                        <input type="checkbox" value="${escapeHTML(gr)}" ${isChecked ? 'checked' : ''} onchange="onIndCMSCheckboxChange('group-real')">
                         <span class="ind-cms-option-label">${escapeHTML(gr)}</span>
                     </label>
                 `;
@@ -1624,9 +1655,10 @@
             const sortedClasses = Array.from(classesSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
             let classHtml = '';
             sortedClasses.forEach(c => {
+                const isChecked = !isInitial && prevSelectedClasses.includes(c);
                 classHtml += `
                     <label class="ind-cms-option" title="${escapeHTML(c)}">
-                        <input type="checkbox" value="${escapeHTML(c)}" onchange="onIndCMSCheckboxChange('class')">
+                        <input type="checkbox" value="${escapeHTML(c)}" ${isChecked ? 'checked' : ''} onchange="onIndCMSCheckboxChange('class')">
                         <span class="ind-cms-option-label">${escapeHTML(c)}</span>
                     </label>
                 `;
@@ -2044,6 +2076,14 @@
             }
         });
 
+        // Reset dos sets de seleção on-demand (ped, nf, ref)
+        if (typeof indCMSSelectedSets !== 'undefined' && indCMSSelectedSets) {
+            Object.keys(indCMSSelectedSets).forEach(k => {
+                if (indCMSSelectedSets[k]) indCMSSelectedSets[k].clear();
+            });
+        }
+
+        populateRefIndCMS(false);
         populatePedIndCMS(false);
         populateNfIndCMS(false);
         applyIndicatorsFilter();
@@ -2236,14 +2276,20 @@
 
         const subtitleEl = document.getElementById('indicators-subtitle');
 
-        if (currentDatasetType === 'comparison') {
-            const rawBilling = getBillingData();
-            const rawExtrato = getExtratoData();
-            const bFiltered = rawBilling.filter(runItemFilter);
-            const eFiltered = rawExtrato.filter(runItemFilter);
+        // SEMPRE filtra ambos os datasets para que o Confronto de Lojas e Recorrência reflitam os filtros em QUALQUER modo
+        const rawBilling = getBillingData();
+        const rawExtrato = getExtratoData();
+        const bFiltered = rawBilling.filter(runItemFilter);
+        const eFiltered = rawExtrato.filter(runItemFilter);
 
-            lastCompFilteredBilling = bFiltered;
-            lastCompFilteredExtrato = eFiltered;
+        lastCompFilteredBilling = bFiltered;
+        lastCompFilteredExtrato = eFiltered;
+
+        // Atualizar Confronto de Lojas e Análise de Recorrência/Aging imediatamente
+        renderComparisonConfrontation(bFiltered, eFiltered, clientsMap);
+        renderComparisonAgingSection(bFiltered, eFiltered, clientsMap);
+
+        if (currentDatasetType === 'comparison') {
             billingFilteredData = [...bFiltered, ...eFiltered];
 
             if (subtitleEl) {
@@ -2252,48 +2298,28 @@
 
             updateComparisonKpis(bFiltered, eFiltered, clientsMap);
             renderComparisonCharts(bFiltered, eFiltered, clientsMap);
-            renderComparisonConfrontation(bFiltered, eFiltered, clientsMap);
-            renderComparisonAgingSection(bFiltered, eFiltered, clientsMap);
             renderRankings(billingFilteredData, clientsMap);
             renderAuditSection(billingFilteredData, clientsMap);
-            window.applyKpiCardsOrder();
-            setupKpiCardsDragAndDrop();
-            window.switchIndicatorsSubTab();
-            return;
-    
-        }
-
-        if (currentDatasetType === 'billing') {
-            if (!billingMasterData || billingMasterData.length === 0) {
-                billingMasterData = getBillingData();
-            }
-        } else if (currentDatasetType === 'extrato') {
-            if (!billingMasterData || billingMasterData.length === 0) {
-                billingMasterData = getExtratoData();
-            }
-        }
-
-        billingFilteredData = billingMasterData.filter(runItemFilter);
-        if (currentDatasetType === 'billing') {
-            lastCompFilteredBilling = billingFilteredData;
-        } else if (currentDatasetType === 'extrato') {
-            lastCompFilteredExtrato = billingFilteredData;
-        }
-
-        // Atualizar subtítulo com indicação da métrica e data do último relatório atualizado
-        if (subtitleEl) {
-            if (currentDatasetType === 'extrato') {
-                subtitleEl.innerHTML = `Saldo de Pedidos a Entregar &mdash; NEW ERA &nbsp;&bull;&nbsp; Base: <strong>Data Entrega</strong> &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
+        } else {
+            if (currentDatasetType === 'billing') {
+                billingFilteredData = bFiltered;
+                if (subtitleEl) {
+                    subtitleEl.innerHTML = `Faturamento (Valor Total) &mdash; NEW ERA &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
+                }
             } else {
-                subtitleEl.innerHTML = `Faturamento (Valor Total) &mdash; NEW ERA &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
+                billingFilteredData = eFiltered;
+                if (subtitleEl) {
+                    subtitleEl.innerHTML = `Saldo de Pedidos a Entregar &mdash; NEW ERA &nbsp;&bull;&nbsp; Base: <strong>Data Entrega</strong> &nbsp;&bull;&nbsp; Atualizado em: ${latestReportDate}`;
+                }
             }
+
+            // Atualizar todas as seções do dashboard no modo padrão
+            updateKpiCards(billingFilteredData, clientsMap);
+            renderCharts(billingFilteredData, clientsMap);
+            renderRankings(billingFilteredData, clientsMap);
+            renderAuditSection(billingFilteredData, clientsMap);
         }
 
-        // Atualizar todas as seções do dashboard
-        updateKpiCards(billingFilteredData, clientsMap);
-        renderCharts(billingFilteredData, clientsMap);
-        renderRankings(billingFilteredData, clientsMap);
-        renderAuditSection(billingFilteredData, clientsMap);
         window.applyKpiCardsOrder();
         setupKpiCardsDragAndDrop();
         window.switchIndicatorsSubTab();
@@ -2333,20 +2359,34 @@
 
         (items || []).forEach(it => {
             const cMatch = resolveClientForItem(it, cMap);
-            const cKey = cleanDigits(it.c || (cMatch && cMatch['CNPJ']) || '') || (it.cli ? `CLI_${it.cli}` : (it.f || 'GERAL'));
-            const cName = (cMatch && (cMatch['FANTASIA'] || cMatch['NOME FANTASIA'])) || it.f || it.z || cKey;
+            const rawCnpj = it.c || (cMatch && cMatch['CNPJ']) || '';
+            const cleanC = cleanDigits(rawCnpj);
+            const cKey = cleanC || (it.cli ? `CLI_${it.cli}` : (it.f || 'GERAL'));
+            const cFantasia = (cMatch && (cMatch['FANTASIA'] || cMatch['NOME FANTASIA'])) || it.f || cKey;
+            const cRazao = (cMatch && (cMatch['RAZAO SOCIAL'] || cMatch['RAZÃO SOCIAL'])) || it.z || '';
+            const cCidade = (cMatch && (cMatch['CIDADE'] || cMatch['MUNICÍPIO'])) || it.cid || '';
+            const cGrupo = (cMatch && cMatch['GRUPO']) || it.g || it.r || '';
 
             if (!clientMapTerms.has(cKey)) {
                 clientMapTerms.set(cKey, {
-                    clientName: cName,
+                    key: cKey,
+                    cnpjClean: cleanC,
+                    cnpjFormatted: cleanC ? formatCNPJMask(cleanC.padStart(14, '0')) : (it.cli ? `Cód ${it.cli}` : '-'),
+                    fantasia: cFantasia,
+                    razao: cRazao,
+                    cidade: cCidade,
+                    grupo: cGrupo,
+                    clientName: cFantasia || cRazao || cKey,
                     prazos: new Set(),
                     discountSum: 0,
                     discountCount: 0,
-                    totalItems: 0
+                    totalItems: 0,
+                    totalValue: 0
                 });
             }
             const entry = clientMapTerms.get(cKey);
             entry.totalItems++;
+            entry.totalValue += (it.v || 0);
 
             const p = (it.prazo || '').toString().trim();
             if (p && p !== '-' && p !== '0') {
@@ -2359,22 +2399,58 @@
             }
         });
 
+        let totalDiscountSum = 0;
+        let totalDiscountCount = 0;
+        const allStoreAvgs = [];
+
         const clientTermsList = Array.from(clientMapTerms.values()).map(entry => {
-            const prazosArr = Array.from(entry.prazos);
+            const prazosArr = Array.from(entry.prazos).sort();
             const prazoLabel = prazosArr.length > 0 ? prazosArr.join(' / ') : '-';
+            let avgDesc = 0;
             let discountLabel = '0%';
             if (entry.discountCount > 0) {
-                const avg = entry.discountSum / entry.discountCount;
-                discountLabel = `${avg.toFixed(2).replace('.', ',')}%`;
+                avgDesc = entry.discountSum / entry.discountCount;
+                discountLabel = `${avgDesc.toFixed(2).replace('.', ',')}%`;
+                totalDiscountSum += entry.discountSum;
+                totalDiscountCount += entry.discountCount;
+                allStoreAvgs.push(avgDesc);
             }
             return {
-                clientName: entry.clientName,
+                ...entry,
                 prazoLabel,
+                avgDesc,
                 discountLabel
             };
         });
 
-        return { clientTermsList };
+        // Ordenar lojas alfabeticamente por Fantasia
+        clientTermsList.sort((a, b) => (a.fantasia || a.clientName).localeCompare(b.fantasia || b.clientName, 'pt-BR'));
+
+        // Prazos únicos cadastrados entre as lojas
+        const uniquePrazos = Array.from(new Set(
+            clientTermsList.map(c => c.prazoLabel).filter(p => p && p !== '-' && p !== '0')
+        ));
+
+        // Desconto médio geral e range (mínimo e máximo)
+        let overallAvgDiscount = 0;
+        let minDiscount = 0;
+        let maxDiscount = 0;
+        if (allStoreAvgs.length > 0) {
+            overallAvgDiscount = totalDiscountCount > 0 
+                ? (totalDiscountSum / totalDiscountCount) 
+                : (allStoreAvgs.reduce((a, b) => a + b, 0) / allStoreAvgs.length);
+            minDiscount = Math.min(...allStoreAvgs);
+            maxDiscount = Math.max(...allStoreAvgs);
+        }
+
+        return {
+            clientTermsList,
+            uniquePrazos,
+            overallAvgDiscount,
+            minDiscount,
+            maxDiscount,
+            totalStores: clientTermsList.length
+        };
     }
 
     function renderCommercialKpiCard(items, clientsMap) {
@@ -2390,50 +2466,167 @@
             if (elCommVal) elCommVal.textContent = '—';
             if (elCommSub) elCommSub.style.display = 'none';
             if (elCommFoot) elCommFoot.innerHTML = 'selecione um cliente nos filtros';
+            window.currentCommercialTermsData = null;
             return;
         }
 
-        const { clientTermsList } = computeCommercialConditions(items, clientsMap);
+        const data = computeCommercialConditions(items, clientsMap);
+        window.currentCommercialTermsData = data;
+        const { clientTermsList, uniquePrazos, overallAvgDiscount, minDiscount, maxDiscount, totalStores } = data;
 
-        if (clientTermsList.length === 0) {
+        if (totalStores === 0) {
             if (elCommVal) elCommVal.textContent = '—';
             if (elCommSub) elCommSub.style.display = 'none';
             if (elCommFoot) elCommFoot.innerHTML = 'sem condição comercial na carteira';
             return;
         }
 
-        if (clientTermsList.length === 1) {
+        const formatPct = val => `${val.toFixed(2).replace('.', ',')}%`;
+
+        if (totalStores === 1) {
             const single = clientTermsList[0];
-            if (elCommVal) elCommVal.textContent = single.prazoLabel;
+            if (elCommVal) {
+                elCommVal.textContent = single.prazoLabel || '—';
+                elCommVal.title = `Prazo cadastrado: ${single.prazoLabel || 'Não informado'}`;
+            }
             if (elCommSub) {
-                elCommSub.innerHTML = `<i class='bx bx-purchase-tag'></i> Desc: ${single.discountLabel}`;
+                elCommSub.innerHTML = `<i class='bx bx-purchase-tag'></i> Desc: <strong>${single.discountLabel}</strong>`;
                 elCommSub.style.display = 'inline-flex';
+                elCommSub.title = `Desconto cadastrado: ${single.discountLabel}`;
             }
             if (elCommFoot) {
-                elCommFoot.innerHTML = escapeHTML(single.clientName);
+                elCommFoot.innerHTML = `<span style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHTML(single.clientName)} (${escapeHTML(single.cnpjFormatted)})">${escapeHTML(single.clientName)}</span>`;
             }
         } else {
-            const prazosRespectively = clientTermsList.map(c => c.prazoLabel).join(' | ');
-            const descsRespectively = clientTermsList.map(c => c.discountLabel).join(' | ');
-            if (elCommVal) elCommVal.textContent = prazosRespectively;
-            if (elCommSub) {
-                elCommSub.innerHTML = `<i class='bx bx-purchase-tag'></i> Desc: ${descsRespectively}`;
-                elCommSub.style.display = 'inline-flex';
+            // MULTI-LOJAS / GRUPO (ex: SUNPEAK com 5 lojas)
+            // 1. VALOR PRINCIPAL (PRAZO UNIFICADO E DEDUPLICADO)
+            if (elCommVal) {
+                if (uniquePrazos.length === 0) {
+                    elCommVal.textContent = '—';
+                    elCommVal.title = 'Nenhum prazo cadastrado nas lojas do grupo';
+                } else if (uniquePrazos.length === 1) {
+                    // Todas as lojas compartilham o mesmo prazo! Ex: 35/63/91
+                    elCommVal.textContent = uniquePrazos[0];
+                    elCommVal.title = `Prazo padrão do grupo (${totalStores} lojas): ${uniquePrazos[0]}`;
+                } else if (uniquePrazos.length === 2) {
+                    elCommVal.textContent = uniquePrazos.join(' | ');
+                    elCommVal.title = `Prazos no grupo: ${uniquePrazos.join(', ')}`;
+                } else {
+                    elCommVal.textContent = `Múltiplos (${uniquePrazos.length})`;
+                    elCommVal.title = `Prazos no grupo (${uniquePrazos.length} variações): ${uniquePrazos.join(', ')}`;
+                }
             }
+
+            // 2. SUB-BADGE (DESCONTO MÉDIO COMPACTO - SEM TRANSBORDAR)
+            if (elCommSub) {
+                if (overallAvgDiscount > 0) {
+                    if (Math.abs(maxDiscount - minDiscount) < 0.01) {
+                        elCommSub.innerHTML = `<i class='bx bx-purchase-tag'></i> Desc: <strong>${formatPct(overallAvgDiscount)}</strong>`;
+                        elCommSub.title = `Desconto idêntico em todas as lojas: ${formatPct(overallAvgDiscount)}`;
+                    } else {
+                        elCommSub.innerHTML = `<i class='bx bx-purchase-tag'></i> Média: <strong>${formatPct(overallAvgDiscount)}</strong>`;
+                        elCommSub.title = `Desconto Médio: ${formatPct(overallAvgDiscount)} | Variação entre as ${totalStores} lojas: ${formatPct(minDiscount)} a ${formatPct(maxDiscount)}`;
+                    }
+                    elCommSub.style.display = 'inline-flex';
+                } else {
+                    elCommSub.innerHTML = `<i class='bx bx-purchase-tag'></i> Sem desconto`;
+                    elCommSub.title = 'Sem desconto cadastrado nas lojas do grupo';
+                    elCommSub.style.display = 'inline-flex';
+                }
+            }
+
+            // 3. RODAPÉ (BOTÃO COMPACTO E ELEGANTE DE DETALHAMENTO DE LOJAS DO GRUPO)
             if (elCommFoot) {
                 elCommFoot.innerHTML = `
-                    <div class="kpi-comm-multi-list custom-scrollbar">
-                        ${clientTermsList.map(c => `
-                            <div class="kpi-comm-multi-row" title="${escapeHTML(c.clientName)} — Prazo: ${escapeHTML(c.prazoLabel)} | Desc: ${escapeHTML(c.discountLabel)}">
-                                <span class="kpi-comm-cli-name">${escapeHTML(c.clientName)}</span>
-                                <span class="kpi-comm-cli-terms">${escapeHTML(c.prazoLabel)} &bull; <span style="color:#a5b4fc;">${escapeHTML(c.discountLabel)}</span></span>
-                            </div>
-                        `).join('')}
-                    </div>
+                    <button type="button" class="kpi-comm-group-btn" onclick="window.openCommercialTermsModal()" title="Clique para ver a condição comercial detalhada de cada uma das ${totalStores} lojas">
+                        <i class='bx bx-store-alt'></i>
+                        <span>${totalStores} lojas &bull; Ver detalhes</span>
+                        <i class='bx bx-chevron-right'></i>
+                    </button>
                 `;
             }
         }
     }
+
+    // Modal de Condições Comerciais por Loja / CNPJ
+    window.openCommercialTermsModal = function() {
+        const modal = document.getElementById('modal-commercial-terms');
+        if (!modal) return;
+
+        const data = window.currentCommercialTermsData;
+        if (!data || !data.clientTermsList || data.clientTermsList.length === 0) return;
+
+        const formatPct = val => `${val.toFixed(2).replace('.', ',')}%`;
+
+        const subEl = document.getElementById('modal-comm-terms-subtitle');
+        if (subEl) {
+            subEl.textContent = `Detalhamento de prazo e desconto cadastrados por CNPJ (${data.totalStores} lojas encontradas)`;
+        }
+
+        const sumEl = document.getElementById('modal-comm-terms-summary');
+        if (sumEl) {
+            const prazoSummary = data.uniquePrazos.length === 1 
+                ? data.uniquePrazos[0] 
+                : (data.uniquePrazos.length > 0 ? data.uniquePrazos.join(' | ') : 'Não informado');
+            
+            const descSummary = data.overallAvgDiscount > 0
+                ? (Math.abs(data.maxDiscount - data.minDiscount) < 0.01 
+                    ? formatPct(data.overallAvgDiscount) 
+                    : `${formatPct(data.overallAvgDiscount)} (${formatPct(data.minDiscount)} ~ ${formatPct(data.maxDiscount)})`)
+                : '0,00%';
+
+            sumEl.innerHTML = `
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 14px;">
+                    <span style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Prazo do Grupo</span>
+                    <div style="font-size: 1.15rem; font-weight: 700; color: #a5b4fc; font-family: monospace; margin-top: 2px;">${escapeHTML(prazoSummary)}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 14px;">
+                    <span style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Desconto Médio</span>
+                    <div style="font-size: 1.15rem; font-weight: 700; color: #34d399; margin-top: 2px;">${escapeHTML(descSummary)}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 14px;">
+                    <span style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Lojas Analisadas</span>
+                    <div style="font-size: 1.15rem; font-weight: 700; color: #f8fafc; margin-top: 2px;">${data.totalStores}</div>
+                </div>
+            `;
+        }
+
+        const tbody = document.getElementById('modal-comm-terms-tbody');
+        if (tbody) {
+            tbody.innerHTML = data.clientTermsList.map(c => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                    <td style="padding: 9px 12px; font-weight: 600; color: #f8fafc;">
+                        <div>${escapeHTML(c.fantasia || c.clientName)}</div>
+                        ${c.cidade ? `<span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: normal;">${escapeHTML(c.cidade)}</span>` : ''}
+                    </td>
+                    <td style="padding: 9px 12px; color: #cbd5e1; font-size: 0.78rem;">
+                        <div style="color: #94a3b8;">${escapeHTML(c.razao || '-')}</div>
+                        <div style="font-family: monospace; color: #64748b; font-size: 0.75rem;">${escapeHTML(c.cnpjFormatted)}</div>
+                    </td>
+                    <td style="padding: 9px 12px; text-align: center;">
+                        <span class="badge font-mono" style="background: rgba(99, 102, 241, 0.15); color: #c7d2fe; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">
+                            ${escapeHTML(c.prazoLabel)}
+                        </span>
+                    </td>
+                    <td style="padding: 9px 12px; text-align: right; font-weight: 600; color: #34d399;">
+                        ${escapeHTML(c.discountLabel)}
+                    </td>
+                    <td style="padding: 9px 12px; text-align: right; color: var(--text-secondary); font-size: 0.78rem;">
+                        ${c.totalItems}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        modal.classList.remove('hidden');
+    };
+
+    window.closeCommercialTermsModal = function() {
+        const modal = document.getElementById('modal-commercial-terms');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    };
 
     function updateKpiCards(data, clientsMap) {
         let totalRevenue = 0;

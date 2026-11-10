@@ -4385,6 +4385,71 @@ select.cfm-input option {
     flex-shrink: 0;
 }
 
+/* Botão interativo no rodapé do KPI de Prazo & Desconto para grupos */
+.kpi-comm-group-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 100%;
+    padding: 3px 6px;
+    background: rgba(99, 102, 241, 0.14);
+    border: 1px solid rgba(99, 102, 241, 0.32);
+    border-radius: 6px;
+    color: #c7d2fe;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    box-sizing: border-box;
+    overflow: hidden;
+    gap: 4px;
+}
+
+.kpi-comm-group-btn:hover {
+    background: rgba(99, 102, 241, 0.25);
+    border-color: rgba(99, 102, 241, 0.55);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+    transform: translateY(-1px);
+}
+
+.kpi-comm-group-btn i {
+    font-size: 0.88rem;
+    color: #818cf8;
+    flex-shrink: 0;
+}
+
+.kpi-comm-group-btn span {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.71rem;
+    line-height: 1.2;
+}
+
+#kpi-commercial-sub {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+#kpi-card-commercial .kpi-footer {
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.kpi-comm-range {
+    color: #a5b4fc;
+}
+
 /* Rodapé fixo da tabela de Análise Comparativa */
 .comp-table tfoot tr.comp-master-summary-row td {
     position: sticky;
